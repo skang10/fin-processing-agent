@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 1.0.2
+Version: 1.0.4
 
 Status: Approved
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-This index and `PRODUCT_AND_SCOPE.md` are approved. All other planned specifications remain pending until created and approved. The migration source remains the working behavioral baseline for subjects that do not yet have an approved owner.
+This index, `PRODUCT_AND_SCOPE.md`, and `SYSTEM_ARCHITECTURE.md` are approved. All other planned specifications remain pending until created and approved. The migration source remains the working behavioral baseline for subjects that do not yet have an approved owner.
 
 ## 3. Product Baseline
 
@@ -66,7 +66,7 @@ Normative product scope belongs to `PRODUCT_AND_SCOPE.md`. This section is an in
 |---:|---|---|---|---|
 | 1 | `INDEX.md` | `IDX` | Authority map, terminology, identifiers, lifecycle, and dependency order | Approved |
 | 2 | `PRODUCT_AND_SCOPE.md` | `PRD` | Users, use cases, V1 scope, exclusions, outcomes, and product acceptance | Approved |
-| 3 | `SYSTEM_ARCHITECTURE.md` | `ARC` | System boundaries, components, trust boundaries, processing flow, and cross-cutting architecture | Pending |
+| 3 | `SYSTEM_ARCHITECTURE.md` | `ARC` | System boundaries, components, trust boundaries, processing flow, and cross-cutting architecture | Approved |
 | 4 | `DATA_MODEL.md` | `DAT` | Domain entities, claims, evidence, processing runs, stages, corrections, audit references, and persistence semantics | Pending |
 | 5 | `components/DOCUMENT_PROCESSING.md` | `DOC` | Intake, inspection, rendering, page classification, logical-document grouping, native extraction, OCR, and table extraction | Pending |
 | 6 | `components/ADAPTIVE_EXTRACTION_AGENT.md` | `AGT` | Pi Agent boundary, extraction gaps, allowlisted tools, budgets, stopping, and escalation | Pending |
@@ -359,6 +359,8 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.0.4 | 2026-09-03 | Approved | Registered `SYSTEM_ARCHITECTURE.md` as Approved. |
+| 1.0.3 | 2026-09-03 | Approved | Registered `SYSTEM_ARCHITECTURE.md` as Draft for review. |
 | 1.0.2 | 2026-09-03 | Approved | Registered `PRODUCT_AND_SCOPE.md` as Approved. |
 | 1.0.1 | 2026-09-03 | Approved | Registered `PRODUCT_AND_SCOPE.md` as Draft for review. |
 | 1.0 | 2026-09-03 | Approved | Created and approved the formal specification index from the reviewed handoff and migration source. |
