@@ -1,0 +1,67 @@
+# Dependencies and package-manager state
+node_modules/
+.pnpm-store/
+
+# Build and test output
+dist/
+build/
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+*.tsbuildinfo
+
+# Runtime output
+logs/
+*.log
+tmp/
+temp/
+.cache/
+.data/
+uploads/
+artifacts/
+
+# Local databases and object-storage volumes
+postgres-data/
+minio-data/
+jaeger-data/
+*.sqlite
+*.sqlite3
+
+# Generated datasets and evaluation output
+datasets/generated/
+datasets/.cache/
+evaluation-results/
+reports/generated/
+
+# Model and native-runtime assets
+models/
+model-cache/
+.onnx/
+native-libs/
+
+# Environment files and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local tool and editor state
+.idea/
+.vscode/settings.json
+.vscode/launch.json
+.DS_Store
+Thumbs.db
+
+# Temporary patch and backup files
+*.swp
+*.swo
+*.tmp
+*.bak
+*~
+
