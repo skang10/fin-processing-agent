@@ -2,7 +2,7 @@
 
 Document ID: `ARC`
 
-Version: 1.0
+Version: 1.1.0
 
 Status: Approved
 
@@ -466,7 +466,7 @@ intake
 
 `ARC-REQ-086` A downstream stage must consume only committed outputs that satisfy its declared input contract.
 
-`ARC-REQ-087` A run with unresolved required evidence or incomplete required stages must not transition to `ready`.
+`ARC-REQ-087` A run with incomplete required stages must not transition to `completed`; a case with unresolved required evidence must not transition to `ready`.
 
 `ARC-REQ-088` A retry, fallback, review, or terminal-failure path must be selected from persisted error classification and workflow policy rather than free-form exception text.
 
@@ -669,4 +669,5 @@ These decisions may refine adapters, versions, thresholds, and budgets. They mus
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.1.0 | 2026-09-03 | Approved | Corrected the run-versus-case lifecycle boundary and adopted the processing-run status vocabulary defined by `INDEX.md`. |
 | 1.0 | 2026-09-03 | Approved | Approved the system architecture baseline, including the modular-monolith deployment, service communication, and database-ownership model. |
