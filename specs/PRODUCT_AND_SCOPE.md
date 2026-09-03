@@ -1,0 +1,431 @@
+# Financial Document AI Agent Product and Scope Specification
+
+Document ID: `PRD`
+
+Version: 1.0
+
+Status: Approved
+
+Last updated: 2026-09-03
+
+## 1. Purpose
+
+This specification defines the product intent, users, initial-release scope, supported scenario, expected outcomes, exclusions, product requirements, and acceptance criteria for Financial Document AI Agent.
+
+The product is an interview demonstration and production-shaped machine learning prototype. It demonstrates reliable document understanding and human review patterns without claiming to be a production banking system.
+
+## 2. Authority and Related Documents
+
+This document owns:
+
+1. Product purpose and value.
+2. Initial-release users and use cases.
+3. Supported scenario, inputs, languages, currencies, and document types.
+4. Product capability and authority boundaries.
+5. User-visible outcomes.
+6. Product-level acceptance criteria.
+
+Related authorities are:
+
+1. [`INDEX.md`](INDEX.md) for terminology, identifiers, controlled vocabularies, lifecycle, and document ownership.
+2. [`LIMITATIONS.md`](../LIMITATIONS.md) for production-readiness and fitness limitations.
+3. [`BACKLOG.md`](../BACKLOG.md) for accepted work awaiting implementation or evaluation evidence.
+4. `SYSTEM_ARCHITECTURE.md`, when created and approved, for component and trust boundaries.
+5. `ML_PIPELINE_AND_EVALUATION.md`, when created and approved, for datasets, metrics, confidence, and evaluation methodology.
+
+The [migration source specification](../Intelligent_Document_Processing_Agent_Specification.md) is non-authoritative for product and scope concerns after this document is approved.
+
+## 3. Product Statement
+
+Financial Document AI Agent converts a synthetic personal-loan document package into structured, evidence-linked claims and explainable document-review findings. It applies local extraction, selective model assistance, bounded Agent recovery, deterministic validation, and Human-in-the-Loop review to demonstrate how a machine learning document system can remain traceable and controlled.
+
+The product answers:
+
+1. What physical and logical documents were supplied?
+2. Which pages and extraction paths produced each material value?
+3. What applicant, identity, employment, income, account, and transaction claims were observed?
+4. Which supported claims appear consistent, conflicting, missing, expired, or inconclusive?
+5. Is the document package ready for a downstream system, missing documents, in need of human review, or blocked by processing failure?
+
+The product does not answer whether a customer should receive a loan or another regulated financial product.
+
+## 4. Product Goals
+
+`PRD-REQ-001` The product must demonstrate an end-to-end document-review workflow from case intake through automated processing and human review.
+
+`PRD-REQ-002` The product must produce structured claims that link to inspectable source evidence.
+
+`PRD-REQ-003` The product must use local document processing before external model processing when the local result is adequate for the requested task.
+
+`PRD-REQ-004` The product must demonstrate selective use of OCR, VLM processing, and bounded Agent recovery rather than sending every document through the most expensive path.
+
+`PRD-REQ-005` The product must demonstrate cross-document validation over a finite, versioned example rule set.
+
+`PRD-REQ-006` The product must provide a working Human Review Workbench for evidence inspection and correction.
+
+`PRD-REQ-007` The product must provide reproducible evaluation over versioned synthetic datasets.
+
+`PRD-REQ-008` The product must expose enough processing history, provenance, version, latency, and model-usage information to explain a demonstration result.
+
+`PRD-REQ-009` The product must distinguish implemented prototype controls from controls required before production use.
+
+## 5. Non-Goals
+
+`PRD-REQ-010` The initial release must not make or represent a lending approval, lending decline, creditworthiness, loan-pricing, loan-amount, or loan-term decision.
+
+`PRD-REQ-011` The initial release must not execute or expose an interface for fund disbursement, account opening, customer notification, or another core banking action.
+
+`PRD-REQ-012` The initial release must not make or represent a final AML or KYC disposition.
+
+`PRD-REQ-013` The initial release must not claim implementation of a real financial institution's policy.
+
+`PRD-REQ-014` The initial release must not claim regulatory approval, production readiness, a production SLA, or measured performance beyond its identified datasets and environments.
+
+`PRD-REQ-015` The initial release must not train a proprietary foundation model as a delivery requirement.
+
+`PRD-REQ-016` The initial release must not require a general-purpose business-rule DSL, knowledge graph, vector database, or enterprise data platform.
+
+## 6. Initial Scenario
+
+### 6.1 Scenario definition
+
+`PRD-REQ-017` The initial scenario must represent one natural person submitting a synthetic document package for German personal-loan document review.
+
+`PRD-REQ-018` A case must represent exactly one applicant, one primary bank-account holder, and no more than one current employer in the initial release.
+
+`PRD-REQ-019` Joint applicants, self-employed applicants, pension income, benefit income, beneficial ownership, and complex organization relationships must be treated as unsupported initial-release scenarios.
+
+`PRD-REQ-020` An unsupported scenario must be identified explicitly and must not be silently processed as a supported scenario.
+
+### 6.2 Demonstration context
+
+The German personal-loan context provides realistic multilingual, identity, payslip, bank-statement, table, and entity-matching examples. It does not assert that the example documents, rules, or workflow satisfy a German bank's product or regulatory requirements.
+
+## 7. Users and Responsibilities
+
+### 7.1 Submitter
+
+The submitter creates a demonstration case, supplies structured application data and documents, and monitors processing.
+
+`PRD-REQ-021` A submitter must be able to create a case and view its processing state and available result.
+
+`PRD-REQ-022` A submitter must not receive a product control that represents loan approval, decline, disbursement, account opening, or customer contact.
+
+### 7.2 Reviewer
+
+The reviewer examines document-processing results and corrects system output when required.
+
+`PRD-REQ-023` A reviewer must be able to inspect the document, highlighted evidence, extracted value, confidence metadata, and related validation finding together.
+
+`PRD-REQ-024` A reviewer must be able to correct an extracted value, and every correction must require a reason.
+
+`PRD-REQ-025` A reviewer must be able to confirm a document-review result or mark it for further review without making a lending or customer decision.
+
+`PRD-REQ-026` A reviewer must be able to inspect an audit timeline containing automated and human actions relevant to the case.
+
+### 7.3 Developer or evaluator
+
+The developer or evaluator generates synthetic data, runs the pipeline, compares model configurations, inspects traces, and produces evaluation reports.
+
+`PRD-REQ-027` A developer or evaluator must be able to run the primary demonstration paths without real customer data.
+
+`PRD-REQ-028` A developer or evaluator must be able to reproduce a reported result from identified dataset, input, workflow, model, prompt, schema, and rule-set versions.
+
+### 7.4 Administrator
+
+The prototype administrator inspects health and configuration versions. Runtime product administration is intentionally limited.
+
+`PRD-REQ-029` The initial release must not provide an administrator interface that edits prompts, models, validation-rule code, or disposition semantics at runtime.
+
+## 8. Supported Inputs
+
+### 8.1 File types
+
+`PRD-REQ-030` The initial release must accept PDF, JPEG, and PNG documents.
+
+`PRD-REQ-031` TIFF and all unlisted file types must be reported as unsupported.
+
+`PRD-REQ-032` The product must support both native-text PDFs and PDFs containing scanned pages.
+
+`PRD-REQ-033` The product must support a physical PDF containing more than one contiguous logical document.
+
+`PRD-REQ-034` The initial release must not promise automatic cross-file document merging or non-contiguous page reordering.
+
+### 8.2 Languages and currency
+
+`PRD-REQ-035` Product documentation, user-interface labels, API contracts, code identifiers, and reason codes must use English.
+
+`PRD-REQ-036` The evaluated input-document language set must include German and English documents and may include both languages within one case.
+
+`PRD-REQ-037` The initial validation currency must be EUR.
+
+`PRD-REQ-038` A foreign-currency value may be preserved as an extracted claim, but the product must not perform foreign-exchange conversion.
+
+`PRD-REQ-039` A case requiring unsupported currency validation must not receive `ready_for_downstream_processing` solely from the initial-release validation flow.
+
+### 8.3 Data classification
+
+`PRD-REQ-040` The initial release must be demonstrated and evaluated with synthetic or explicitly demo-safe data.
+
+`PRD-REQ-041` The project documentation must instruct users not to submit real personal, identity, banking, or financial data to the demo deployment.
+
+`PRD-REQ-042` Every synthetic document must be visibly identifiable as synthetic and must not reproduce official security features or real institution branding.
+
+## 9. Core Document and Data Types
+
+### 9.1 Structured application data
+
+`PRD-REQ-043` A case must accept structured application data containing, at minimum, an applicant name and may contain birth date, declared employer, declared monthly income, and currency.
+
+Structured application data is a source of claims and does not require an application-form document.
+
+### 9.2 Identity documents
+
+`PRD-REQ-044` The initial structured extraction scope must include synthetic German Personalausweis-style documents and synthetic German passport-style documents.
+
+`PRD-REQ-045` Core identity fields must include name, birth date, document number, expiry date, and nationality when present.
+
+`PRD-REQ-046` Other identity-document types may be classified as unsupported or routed to review but must not be represented as fully supported.
+
+`PRD-REQ-047` The product must not claim biometric verification, liveness detection, identity authenticity certification, or official-document validation.
+
+### 9.3 Payslips
+
+`PRD-REQ-048` Core payslip fields must include employee name, employer name, pay period, gross income, net income, and currency when present.
+
+### 9.4 Bank statements
+
+`PRD-REQ-049` Core bank-statement fields must include account holder, masked IBAN, statement period, and supported transaction-row fields when present.
+
+`PRD-REQ-050` Supported transaction-row fields must include date, description, amount, direction, currency, and source evidence.
+
+`PRD-REQ-051` The product may identify salary-payment candidates but must not represent a model candidate as a verified income fact without deterministic reconciliation or review.
+
+### 9.5 Additional documents
+
+`PRD-REQ-052` Address and employment evidence may be classified and displayed, but complete field-level extraction and validation for those documents are not initial-release acceptance requirements.
+
+## 10. Document Understanding Capabilities
+
+`PRD-REQ-053` The product must identify the physical file type and page count before semantic extraction.
+
+`PRD-REQ-054` The product must classify pages by supported business-document type and preserve uncertainty or alternatives when available.
+
+`PRD-REQ-055` The product must produce logical documents from contiguous page ranges and retain their physical-file and page lineage.
+
+`PRD-REQ-056` A low-confidence document type or boundary must remain reviewable and must not be silently converted into a final high-confidence result.
+
+`PRD-REQ-057` The product must extract native text before applying OCR to a page when adequate native text is available.
+
+`PRD-REQ-058` The product must apply OCR selectively to pages that require it.
+
+`PRD-REQ-059` The product may use a VLM for difficult pages, tables, layouts, or evidence regions after local processing leaves an unresolved task.
+
+`PRD-REQ-060` A VLM must receive only selected pages, bounded consecutive-page windows, or cropped regions rather than a complete case package.
+
+`PRD-REQ-061` The product must preserve the extraction method and processor version for every material extraction candidate.
+
+### 10.1 Adaptive extraction
+
+`PRD-REQ-062` The product must demonstrate a bounded Agent-in-the-Loop between fixed extraction fallback and Human-in-the-Loop review.
+
+`PRD-REQ-063` The Agent must operate only on an explicit extraction gap and within a fixed tool and execution budget.
+
+`PRD-REQ-064` The Agent may submit extraction candidates but must not determine a validation finding, recommended disposition, or business action.
+
+`PRD-REQ-065` An unresolved or budget-exhausted extraction gap must be visible to the reviewer.
+
+## 11. Evidence, Claims, and Confidence
+
+`PRD-REQ-066` Every material extracted claim must reference source evidence.
+
+`PRD-REQ-067` Page evidence must identify the physical document, page number, and page or region location at a granularity appropriate to the claim.
+
+`PRD-REQ-068` Evidence for structured application data must identify its structured-input location.
+
+`PRD-REQ-069` The product must preserve raw and normalized claim values separately.
+
+`PRD-REQ-070` The product must preserve conflicting observations rather than overwrite them with one unexplained canonical value.
+
+`PRD-REQ-071` The product must distinguish raw provider confidence from calibrated system confidence.
+
+`PRD-REQ-072` An uncalibrated score must not be presented as a statistically reliable probability.
+
+`PRD-REQ-073` A model's self-reported confidence must not be used as the sole basis for a ready disposition.
+
+## 12. Cross-Document Validation
+
+`PRD-REQ-074` Cross-document validation must operate on evidence-backed claims associated with explicit person or organization roles.
+
+`PRD-REQ-075` The initial demonstration must support comparison among the applicant, identity holder, employee, and account-holder roles.
+
+`PRD-REQ-076` The initial demonstration must support comparison among declared employer, payslip employer, and salary-payment-counterparty roles when those claims are present.
+
+`PRD-REQ-077` The initial release must implement only a finite, registered, versioned demonstration rule set.
+
+`PRD-REQ-078` The initial demonstration rule set must contain document completeness, applicant-name consistency, employer consistency, income consistency, and identity-document expiry validations.
+
+`PRD-REQ-079` A model may provide a constrained opinion for ambiguous entity matching, but deterministic versioned logic must produce the validation finding.
+
+`PRD-REQ-080` A validation result must distinguish pass, warning, failure, inconclusive input, and non-applicability.
+
+`PRD-REQ-081` Missing evidence or insufficient-confidence input must not be treated as an implicit match or pass.
+
+`PRD-REQ-082` The demonstration rules must not be described as a real German bank policy.
+
+## 13. Recommended Disposition
+
+`PRD-REQ-083` The product must produce exactly one current recommended disposition for a completed processing run.
+
+`PRD-REQ-084` The supported recommended dispositions must be the values defined in `INDEX.md`: `ready_for_downstream_processing`, `additional_documents_needed`, `human_review_required`, and `processing_blocked`.
+
+`PRD-REQ-085` A recommended disposition must describe document-processing state only.
+
+`PRD-REQ-086` Disposition derivation must remain separate from validation-rule evaluation.
+
+`PRD-REQ-087` A case with unresolved required evidence must not receive `ready_for_downstream_processing`.
+
+`PRD-REQ-088` `processing_blocked` must represent a technical, security, or required-evidence processing failure and must not be represented as a customer rejection.
+
+## 14. Human Review and Feedback
+
+`PRD-REQ-089` The Review Workbench must present case state, stage progress, logical documents, extracted claims, evidence, confidence metadata, validation findings, and recommended disposition.
+
+`PRD-REQ-090` The reviewer must be able to correct supported extracted fields without altering the original model output.
+
+`PRD-REQ-091` The product must preserve the actor, time, original value, corrected value, correction reason, and relevant evidence for each correction.
+
+`PRD-REQ-092` A reviewer correction may become a dataset candidate only through an explicit controlled step.
+
+`PRD-REQ-093` A reviewer correction must not automatically modify a prompt, model, rule, threshold, disposition policy, or golden truth.
+
+`PRD-REQ-094` The workbench must not expose controls for lending approval, lending decline, fund disbursement, account opening, or customer communication.
+
+## 15. Processing Transparency and Reproducibility
+
+`PRD-REQ-095` The product must retain immutable processing runs for a case.
+
+`PRD-REQ-096` Reprocessing after a material input, model, prompt, schema, workflow, or rule-set change must create a new comparable processing run.
+
+`PRD-REQ-097` A retry of the same stage with the same run inputs must remain traceable as a separate attempt within that run.
+
+`PRD-REQ-098` The product must retain successful partial results when safe, but it must visibly identify incomplete or failed stages.
+
+`PRD-REQ-099` The product must expose a processing timeline that correlates automated stages, model invocations, validation, disposition, and human actions.
+
+`PRD-REQ-100` A material runtime result must identify the component and configuration versions necessary to explain it.
+
+## 16. Evaluation Product Requirements
+
+`PRD-REQ-101` The project must provide a versioned curated golden set of twenty manually verified end-to-end synthetic cases.
+
+`PRD-REQ-102` The project must provide a fixed-seed generator that produces one hundred robustness cases by default.
+
+`PRD-REQ-103` The curated cases must cover native-text, scanned/OCR, mixed or multi-document, complex-table/VLM, and cross-document-conflict behavior.
+
+`PRD-REQ-104` Dataset tooling must support generation, truth validation, immutable dataset build, demo loading, evaluation, and reporting.
+
+`PRD-REQ-105` Golden truth must be generated from source templates where possible and manually confirmed before release.
+
+`PRD-REQ-106` The project must report measured quality, latency, usage, and estimated cost against identified dataset and runtime versions.
+
+`PRD-REQ-107` The project must not publish an unsupported fixed accuracy, automation-rate, severe-error, latency, or cost claim.
+
+`PRD-REQ-108` Default automated tests must be executable without a paid or external model call.
+
+`PRD-REQ-109` A live-model evaluation must be explicit, separately reported, and subject to a configured budget.
+
+## 17. Security and Trust Product Requirements
+
+`PRD-REQ-110` The product must treat document content as untrusted data rather than system instructions.
+
+`PRD-REQ-111` Document content must not expand model or Agent authority, modify a validation rule, alter disposition semantics, or trigger a core banking action.
+
+`PRD-REQ-112` The primary safety demonstration must include instruction-like document content and show that it cannot change authorized behavior.
+
+`PRD-REQ-113` The initial release must apply basic file-type, size, page, image-dimension, corruption, encryption, timeout, and processing-resource controls appropriate to the supported formats.
+
+`PRD-REQ-114` The product must not represent a file as malware-scanned unless an approved scanner actually processed it.
+
+`PRD-REQ-115` The project must disclose that enterprise malware scanning, CDR, production identity management, tamper-proof audit, and production data governance are not implemented.
+
+## 18. User-Visible Processing Progress
+
+`PRD-REQ-116` Case creation must return an identifier before asynchronous document processing completes.
+
+`PRD-REQ-117` A user must be able to query current case state and available stage progress.
+
+`PRD-REQ-118` The Review Workbench should receive incremental processing updates without requiring a full page reload.
+
+`PRD-REQ-119` Failure and partial-completion messages must distinguish an unsupported input, recoverable stage failure, unresolved extraction, review requirement, and terminal processing failure.
+
+## 19. Data Lifecycle
+
+`PRD-REQ-120` The demonstration must allow a user to delete a case and its source and derived data.
+
+`PRD-REQ-121` The project must provide a way to reset the local demonstration to its initial synthetic cases.
+
+`PRD-REQ-122` Temporary document-processing artifacts must not be retained beyond their documented demonstration need.
+
+`PRD-REQ-123` The initial data lifecycle must not be represented as a production retention, deletion-verification, legal-hold, backup, or recovery policy.
+
+## 20. Demonstration Acceptance
+
+### 20.1 Native-text happy path
+
+`PRD-REQ-124` A fixed native-text golden case must complete without a VLM call and display claims, evidence, findings, disposition, and processing history.
+
+### 20.2 Adaptive extraction path
+
+`PRD-REQ-125` A fixed scanned or complex-table golden case must create an explicit extraction gap and invoke the bounded Agent with only approved recovery capabilities.
+
+`PRD-REQ-126` The adaptive path must display the recovery actions, resulting candidate and evidence, model usage, latency, and estimated cost.
+
+### 20.3 Review and safety path
+
+`PRD-REQ-127` A fixed mixed-document golden case must contain a supported cross-document conflict and instruction-like document content.
+
+`PRD-REQ-128` The review and safety path must demonstrate that document instructions do not change tools, rules, permissions, or disposition semantics.
+
+`PRD-REQ-129` The review and safety path must allow a reviewer to inspect evidence, correct a field with a reason, and observe the corresponding audit event.
+
+### 20.4 Offline reproducibility
+
+`PRD-REQ-130` All three primary demonstration paths must have a deterministic offline mode using fixed fixtures or fake-model adapters.
+
+## 21. Product Success Criteria
+
+The initial product is successful when:
+
+1. All requirements selected as release-critical by the approved implementation plan have passing acceptance evidence.
+2. The three primary demonstration paths execute reproducibly.
+3. The golden evaluation report identifies its dataset and component versions.
+4. Evidence can be inspected for every material claim used by a validation rule.
+5. A difficult case can progress from local extraction through bounded Agent recovery to human review without granting the model business authority.
+6. The documentation clearly distinguishes demonstrated behavior from production gaps.
+
+These criteria do not establish production fitness or a numeric model-quality threshold.
+
+## 22. Assumptions
+
+1. All initial-release documents and identities are synthetic or explicitly demo-safe.
+2. The demonstration case manifest can identify which supported document types are required for that case; V1 does not encode a real bank's document policy.
+3. The initial applicant is an employed natural person with at most one current employer.
+4. The initial evaluation can use a mixture of generated PDF, rendered scan, and image artifacts.
+5. External model availability is optional for offline acceptance because fake-model adapters are provided.
+
+## 23. Unresolved Product Questions
+
+No unresolved product-boundary decision blocks review of this document.
+
+The following evidence-dependent choices are intentionally owned elsewhere and remain in the backlog:
+
+1. Default and fallback VLM selection.
+2. Measured PDF, OCR, extraction, evidence, latency, and cost baselines.
+3. Regression tolerances derived from those baselines.
+
+## 24. Document History
+
+| Version | Date | Status | Change |
+|---|---|---|---|
+| 1.0 | 2026-09-03 | Approved | Created and approved the product and scope baseline from the approved index and reviewed migration source. |
