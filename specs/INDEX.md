@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 1.1.0
+Version: 1.1.2
 
 Status: Approved
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-This index, `PRODUCT_AND_SCOPE.md`, `SYSTEM_ARCHITECTURE.md`, and `DATA_MODEL.md` are approved. All other planned specifications remain pending until created and approved. The migration source remains the working behavioral baseline for subjects that do not yet have an approved owner.
+This index, `PRODUCT_AND_SCOPE.md`, `SYSTEM_ARCHITECTURE.md`, `DATA_MODEL.md`, and `components/DOCUMENT_PROCESSING.md` are approved. All other planned specifications remain pending until created and approved. The migration source remains the working behavioral baseline for subjects that do not yet have an approved owner.
 
 ## 3. Product Baseline
 
@@ -68,7 +68,7 @@ Normative product scope belongs to `PRODUCT_AND_SCOPE.md`. This section is an in
 | 2 | `PRODUCT_AND_SCOPE.md` | `PRD` | Users, use cases, V1 scope, exclusions, outcomes, and product acceptance | Approved |
 | 3 | `SYSTEM_ARCHITECTURE.md` | `ARC` | System boundaries, components, trust boundaries, processing flow, and cross-cutting architecture | Approved |
 | 4 | `DATA_MODEL.md` | `DAT` | Domain entities, claims, evidence, processing runs, stages, corrections, audit references, and persistence semantics | Approved |
-| 5 | `components/DOCUMENT_PROCESSING.md` | `DOC` | Intake, inspection, rendering, page classification, logical-document grouping, native extraction, OCR, and table extraction | Pending |
+| 5 | `components/DOCUMENT_PROCESSING.md` | `DOC` | Intake, inspection, rendering, page classification, logical-document grouping, native extraction, OCR, and table extraction | Approved |
 | 6 | `components/ADAPTIVE_EXTRACTION_AGENT.md` | `AGT` | Pi Agent boundary, extraction gaps, allowlisted tools, budgets, stopping, and escalation | Pending |
 | 7 | `components/VALIDATION_AND_DISPOSITION.md` | `VAL` | Entity matching, validation-rule architecture, findings, and deterministic recommended-disposition mapping | Pending |
 | 8 | `components/REVIEW_WORKBENCH.md` | `UI` | Reviewer workflows, evidence viewer, corrections, audit timeline, and annotation mode | Pending |
@@ -368,6 +368,8 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.1.2 | 2026-09-03 | Approved | Registered `components/DOCUMENT_PROCESSING.md` as Approved. |
+| 1.1.1 | 2026-09-03 | Approved | Registered `components/DOCUMENT_PROCESSING.md` as Draft for review. |
 | 1.1.0 | 2026-09-03 | Approved | Added the processing-run lifecycle vocabulary and registered `DATA_MODEL.md` as Approved. |
 | 1.0.5 | 2026-09-03 | Approved | Registered `DATA_MODEL.md` as Draft for review. |
 | 1.0.4 | 2026-09-03 | Approved | Registered `SYSTEM_ARCHITECTURE.md` as Approved. |
