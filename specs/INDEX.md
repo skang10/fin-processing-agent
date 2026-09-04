@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 2.2.0
+Version: 2.4.0
 
 Status: Approved
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-This index, `PRODUCT_AND_SCOPE.md`, `SYSTEM_ARCHITECTURE.md`, `DATA_MODEL.md`, `components/DOCUMENT_PROCESSING.md`, `components/ADAPTIVE_EXTRACTION_AGENT.md`, and `components/VALIDATION_AND_DISPOSITION.md` are approved. `components/REVIEW_WORKBENCH.md` exists as a draft and is not authoritative until approved. All other planned specifications remain pending until created and approved. The migration source remains the working behavioral baseline for subjects that do not yet have an approved owner.
+This index, `PRODUCT_AND_SCOPE.md`, `SYSTEM_ARCHITECTURE.md`, `DATA_MODEL.md`, `components/DOCUMENT_PROCESSING.md`, `components/ADAPTIVE_EXTRACTION_AGENT.md`, `components/VALIDATION_AND_DISPOSITION.md`, `components/REVIEW_WORKBENCH.md`, and `API_CONTRACTS.md` are approved. All remaining planned specifications are pending. The migration source remains the working behavioral baseline for subjects that do not yet have an approved owner.
 
 ## 3. Product Baseline
 
@@ -71,8 +71,8 @@ Normative product scope belongs to `PRODUCT_AND_SCOPE.md`. This section is an in
 | 5 | `components/DOCUMENT_PROCESSING.md` | `DOC` | Intake, inspection, rendering, page classification, logical-document grouping, native extraction, OCR, and table extraction | Approved |
 | 6 | `components/ADAPTIVE_EXTRACTION_AGENT.md` | `AGT` | Pi Case Review Agent, verified review briefs, optional gap recovery, allowlisted tools, budgets, stopping, and escalation | Approved |
 | 7 | `components/VALIDATION_AND_DISPOSITION.md` | `VAL` | Entity matching, validation-rule architecture, findings, and deterministic recommended-disposition mapping | Approved |
-| 8 | `components/REVIEW_WORKBENCH.md` | `UI` | Review Queue, Agent Report, evidence viewer, issue review, requested-change drafts, final review, and Agent-monitoring presentation | Draft for review |
-| 9 | `API_CONTRACTS.md` | `API` | HTTP endpoints, events, idempotency, error format, authentication context, and generated OpenAPI ownership | Pending |
+| 8 | `components/REVIEW_WORKBENCH.md` | `UI` | Review Queue, Agent Report, evidence viewer, issue review, requested-change drafts, final review, and Agent-monitoring presentation | Approved |
+| 9 | `API_CONTRACTS.md` | `API` | HTTP endpoints, events, idempotency, error format, authentication context, and generated OpenAPI ownership | Approved |
 | 10 | `ML_PIPELINE_AND_EVALUATION.md` | `MLE` | Datasets, dataset pipeline, metrics, model selection, confidence, evaluation, and regression | Pending |
 | 11 | `SECURITY_AND_LIMITATIONS.md` | `SEC` | Threat model, prompt injection, file controls, authorization boundary, secrets, and operational security controls | Pending |
 | 12 | `operations/OBSERVABILITY_AND_FAILURES.md` | `OPS` | Logs, traces, metrics, retries, degradation, recovery, and operational diagnosis | Pending |
@@ -367,6 +367,8 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.4.0 | 2026-09-04 | Approved | Approved the V1 API Contracts specification, completing the Stage Two specification baseline for vertical-slice implementation. |
+| 2.3.0 | 2026-09-04 | Approved | Approved the V1 Review Workbench specification and registered the initial API Contracts draft. |
 | 2.2.0 | 2026-09-04 | Approved | Aligned the UI ownership boundary with the V1 HTML baseline, including issue review, request drafts without delivery, and separate Agent monitoring. |
 | 2.1.0 | 2026-09-04 | Approved | Removed `processing_blocked` from the V1 disposition vocabulary; technical failures remain workflow and case failure states. |
 | 2.0.0 | 2026-09-04 | Approved | Made Pi the bounded per-case pre-screening Agent, defined the Case Review Brief, and retained adaptive extraction as an optional mode. |

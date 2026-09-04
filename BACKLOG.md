@@ -101,7 +101,7 @@ Replace unsupported numerical targets with measured results tied to dataset, mod
 
 ### BL-007 — V1 Review UX Contracts and Monitoring Projections
 
-**Status:** Accepted; awaiting API, observability, and security specifications
+**Status:** Partially specified; API contract is approved, observability and security specifications remain pending
 
 Define implementation contracts for the approved V1 HTML UX baseline:
 

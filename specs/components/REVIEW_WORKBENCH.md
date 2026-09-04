@@ -2,9 +2,9 @@
 
 Document ID: `UI`
 
-Version: 3.0
+Version: 3.0.0
 
-Status: Draft for review
+Status: Approved
 
 Last updated: 2026-09-04
 
@@ -374,7 +374,7 @@ No unresolved Review Workbench boundary decision blocks review of this document.
 
 | Version | Date | Status | Change |
 |---|---|---|---|
-| 3.0 | 2026-09-04 | Draft for review | Adopted the V1 HTML UX baseline; aligned Agent Report entry, workflow-state queue, issue review, applicant-readable drafts without delivery, compact progress, bounded case Agent log, and separate monitoring; deprecated direct correction, Pipeline, and reviewer audit views from V1. |
+| 3.0.0 | 2026-09-04 | Approved | Approved the V1 HTML UX baseline: Agent Report entry, workflow-state queue, issue review, applicant-readable drafts without delivery, compact progress, bounded case Agent log, and separate monitoring; deprecated direct correction, Pipeline, and reviewer audit views from V1. No unresolved boundary decision remains. |
 | 2.2 | 2026-09-04 | Draft for review | Added a separate Agent monitoring surface for aggregate health, safe session events, usage, cost, and read-only configuration. |
 | 2.1 | 2026-09-04 | Draft for review | Unified processing status and the Pi Case Review Brief into one Case Dashboard; retained deep Agent trace and audit as progressive detail. |
 | 2.0 | 2026-09-04 | Draft for review | Made the verified Pi Case Review Brief the review entry point while preserving evidence-first human authority and optional adaptive-recovery trace. |
