@@ -19,6 +19,7 @@ This document defines the known limitations of the initial release. These limita
 1. The project has not been certified or approved for compliance with the General Data Protection Regulation (GDPR), German banking requirements, Federal Financial Supervisory Authority (BaFin) expectations, credit decision regulation, Anti-Money Laundering (AML), or Know Your Customer (KYC) obligations.
 2. The system does not determine creditworthiness or make lending, account-opening, AML, KYC, or other regulated business decisions.
 3. The system has no permission or interface to disburse funds, open accounts, reject applications, contact customers, or perform other core banking actions.
+   The Review Workbench may record a human-reviewed, applicant-readable requested-change draft, but the V1 system does not send or deliver it.
 4. A recommended disposition describes only the state of document processing and review. It is not a customer or credit decision.
 5. The included validation rules are illustrative and must not be interpreted as the policy of a real financial institution.
 
@@ -53,10 +54,11 @@ This document defines the known limitations of the initial release. These limita
 ## Validation and Agent Boundaries
 
 1. Cross-document validation uses a finite, registered, versioned demonstration rule set. It is not a complete banking rule catalog.
-2. Models may assist with extraction and ambiguous entity matching, but they cannot create or modify validation rules, determine final findings, or select a business decision.
-3. The Pi-based adaptive extraction loop operates with a bounded tool allowlist, iteration limit, and model-call budget. It cannot access a shell, arbitrary files, unrestricted networks, core banking systems, or policy mutation tools.
-4. Cases with unresolved required evidence cannot be marked ready for downstream processing.
-5. Human corrections are retained as dataset candidates but do not automatically update prompts, models, rules, or thresholds.
+2. Models may assist with extraction, ambiguous entity matching, and a non-authoritative case-review brief, but they cannot create or modify validation rules, determine authoritative findings or dispositions, or select a business decision.
+3. The Pi-based Case Review Agent runs as a bounded pre-screening step for every processable case. Optional adaptive extraction is limited to eligible gaps. It cannot access a shell, arbitrary files, unrestricted networks, core banking systems, or policy mutation tools.
+4. Agent suggestions are limited to registered document-review actions, must cite persisted evidence or findings, and require human confirmation; they are not credit, lending, AML, or KYC advice.
+5. Cases with unresolved required evidence cannot be marked ready for downstream processing.
+6. Human corrections are retained as dataset candidates but do not automatically update prompts, models, rules, or thresholds.
 
 ## Reliability and Operations
 

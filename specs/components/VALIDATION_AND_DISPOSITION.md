@@ -2,7 +2,7 @@
 
 Document ID: `VAL`
 
-Version: 1.0
+Version: 2.0.0
 
 Status: Approved
 
@@ -39,6 +39,8 @@ Normative dependencies are:
 `VAL-REQ-003` Rule evaluation and disposition mapping must be separate deterministic operations with separate versions and outputs.
 
 `VAL-REQ-004` A model or Agent must not create, modify, activate, order, evaluate, or change the semantics of a rule or disposition policy at runtime.
+
+`VAL-REQ-137` The Case Review Agent may read persisted finding and recommended-disposition projections for reporting, but its brief must not become an input to rule evaluation or disposition mapping and must not alter their records.
 
 ## 3. Validation Flow
 
@@ -306,14 +308,12 @@ The only recommended dispositions are:
 ready_for_downstream_processing
 additional_documents_needed
 human_review_required
-processing_blocked
 ```
 
 Precedence is:
 
 ```text
-processing_blocked
-  > additional_documents_needed
+additional_documents_needed
   > human_review_required
   > ready_for_downstream_processing
 ```
@@ -324,7 +324,7 @@ processing_blocked
 
 `VAL-REQ-092` A disposition policy must have stable identity, semantic version, schema version, canonical hash, rule mappings, precedence, and creation provenance.
 
-`VAL-REQ-093` `processing_blocked` must be selected when a configured blocking technical or security failure, invalid required contract, unresolved manifest, or required processing failure prevents reliable completion.
+`VAL-REQ-093` A blocking technical or security failure, invalid required contract, unresolved manifest, or required processing failure must fail the processing run before disposition creation.
 
 `VAL-REQ-094` `additional_documents_needed` must be selected when no higher-precedence blocker exists and a completeness finding establishes that a required document is absent from the submitted input.
 
@@ -332,9 +332,9 @@ processing_blocked
 
 `VAL-REQ-096` `ready_for_downstream_processing` must be selected only when the required stages succeeded, every enabled rule produced a complete acceptable finding under policy, no required gap remains, and no higher-precedence condition exists.
 
-`VAL-REQ-097` A missing submitted document must use `additional_documents_needed`; inability to process a submitted required document may use `processing_blocked` or `human_review_required` only as declared by versioned policy and failure classification.
+`VAL-REQ-097` A missing submitted document must use `additional_documents_needed`; inability to process a submitted required document must either route to `human_review_required` when a reliable reviewable result exists or fail the run when it does not.
 
-`VAL-REQ-098` A `failed` validation finding representing a cross-document conflict must not automatically map to `processing_blocked` or customer rejection; V1 policy must route it to `human_review_required` unless a separately declared higher-precedence processing condition exists.
+`VAL-REQ-098` A `failed` validation finding representing a cross-document conflict must not map to a workflow failure or customer rejection; V1 policy must route it to `human_review_required`.
 
 `VAL-REQ-099` `not_applicable` may be acceptable for ready disposition only when the manifest declares that rule non-applicable and all required rules and evidence remain complete.
 
@@ -436,4 +436,6 @@ No unresolved validation-authority or disposition-semantics decision blocks revi
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.0.0 | 2026-09-04 | Approved | Removed `processing_blocked` as a disposition; unrecoverable technical and security blockers now fail the processing run before disposition creation. |
+| 1.1.0 | 2026-09-04 | Approved | Clarified that Agent review briefs may summarize but never influence deterministic findings or disposition mapping. |
 | 1.0 | 2026-09-03 | Approved | Approved entity matching, finite rule plugins, five demonstration rules, findings, and deterministic disposition mapping. |

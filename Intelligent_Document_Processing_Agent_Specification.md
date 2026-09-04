@@ -124,12 +124,13 @@ Case intake
   -> deterministic contiguous-page grouping
   -> native text/table extraction or selective OCR
   -> fixed VLM fallback for configured cases
-  -> bounded Adaptive Extraction Loop for remaining gaps
+  -> optional bounded Adaptive Extraction Loop for eligible remaining gaps
   -> normalization and evidence binding
   -> entity, role, and claim resolution
   -> demonstration validation rules
   -> deterministic recommended-disposition mapping
-  -> result presentation or Human-in-the-Loop review
+  -> bounded Pi Case Review Brief and deterministic verification
+  -> Human-in-the-Loop review
 ```
 
 ### 6.2 Durable workflow
@@ -208,7 +209,7 @@ Each page receives a supported business type, boundary prediction, confidence me
 
 The initial release does not automatically merge logical documents across uploaded files, reorder non-contiguous pages, or silently accept an uncertain boundary. A reviewer may correct boundaries, and the correction must be audited.
 
-## 9. VLM and Adaptive Extraction
+## 9. VLM and Pi Case Review Agent
 
 ### 9.1 Model gateway
 
@@ -224,11 +225,11 @@ The initial release may use an external VLM because the project uses synthetic a
 4. Extraction-model calls must not expose tools.
 5. Every invocation records routing reason, provider, model, prompt version, schema version, latency, usage, estimated cost, and trace identifier.
 
-### 9.3 Adaptive Extraction Loop
+### 9.3 Case Review Agent and Adaptive Extraction Loop
 
 The initial release embeds `pi-coding-agent` through its software development kit. Default coding tools, Shell access, arbitrary file access, unrestricted HTTP, automatic resource discovery, runtime package installation, and dynamic extensions must be disabled.
 
-The bounded Agent operates only when fixed extraction leaves an explicit gap. Its allowlisted tools may include:
+The bounded Agent attempts a Case Review Brief for every processable result and may additionally enter Adaptive Extraction mode when fixed extraction leaves an eligible explicit gap. Recovery-mode allowlisted tools may include:
 
 1. `inspect_page`
 2. `get_native_text`
@@ -332,18 +333,16 @@ Initial values are:
 1. `ready_for_downstream_processing`
 2. `additional_documents_needed`
 3. `human_review_required`
-4. `processing_blocked`
 
 Precedence is:
 
 ```text
-processing_blocked
-  > additional_documents_needed
+additional_documents_needed
   > human_review_required
   > ready_for_downstream_processing
 ```
 
-`processing_blocked` represents a technical, security, or required-evidence failure. None of these values approves, rejects, or otherwise decides a loan.
+An unrecoverable technical or security failure terminates the processing run as `failed` before disposition creation. None of the disposition values approves, rejects, or otherwise decides a loan.
 
 ## 13. Review Workbench
 
@@ -357,7 +356,6 @@ The initial release must implement:
 6. Field correction with required reason.
 7. Review confirmation or further-review action.
 8. Application-level append-only audit timeline.
-9. A development-only golden annotation mode.
 
 The interface must not contain controls for loan approval, loan decline, disbursement, account opening, or customer contact.
 
@@ -388,9 +386,8 @@ The initial release uses synthetic and demo-safe data. Synthetic documents use f
 ### 15.2 Dataset composition
 
 1. Twenty curated, manually verified end-to-end golden cases.
-2. One hundred robustness cases generated reproducibly from fixed seeds by default.
-3. Separate mutable development fixtures.
-4. Three selected golden cases for the primary demonstration paths.
+2. Separate mutable development fixtures.
+3. Three selected golden cases for the primary demonstration paths.
 
 The curated set should cover native-text, scanned/OCR, mixed or multi-document, complex table/VLM, and cross-document-conflict cases.
 
@@ -493,7 +490,7 @@ The system records stage latency, failure, retry, queue depth, OCR/VLM routing, 
 5. PostgreSQL, Drizzle ORM, and Drizzle Kit migrations.
 6. pg-boss and a transactional outbox for asynchronous workflow stages.
 7. MinIO through an S3-compatible `ObjectStore` interface for local storage.
-8. React, Vite, TanStack Query, React Router, PDF.js, Tailwind CSS, and shadcn/ui for the workbench.
+8. React, Vite, TanStack Query, React Router, PDF.js, Radix UI Primitives, CSS Modules, Lucide React, Motion, and the native system font stack for the workbench.
 9. Vitest, Testcontainers, and Playwright for automated testing.
 10. Pino, OpenTelemetry, Prometheus-compatible metrics, and Jaeger for observability.
 11. Docker Compose as the delivered demonstration environment.
@@ -556,4 +553,3 @@ The reviewed baseline must be decomposed into:
 17. `specs/decisions/ADR_004_RULE_ARCHITECTURE.md`
 
 Executable TypeBox schemas and generated OpenAPI documents are contract artifacts. The project does not require a separate prose specification for every schema.
-

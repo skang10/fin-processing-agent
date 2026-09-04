@@ -2,11 +2,11 @@
 
 Document ID: `PRD`
 
-Version: 1.0
+Version: 3.0.0
 
 Status: Approved
 
-Last updated: 2026-09-03
+Last updated: 2026-09-04
 
 ## 1. Purpose
 
@@ -37,7 +37,7 @@ The [migration source specification](../Intelligent_Document_Processing_Agent_Sp
 
 ## 3. Product Statement
 
-Financial Document AI Agent converts a synthetic personal-loan document package into structured, evidence-linked claims and explainable document-review findings. It applies local extraction, selective model assistance, bounded Agent recovery, deterministic validation, and Human-in-the-Loop review to demonstrate how a machine learning document system can remain traceable and controlled.
+Financial Document AI Agent converts a synthetic personal-loan document package into structured, evidence-linked claims, deterministic findings, and a Pi-generated Case Review Brief for a human reviewer. Pi acts as a bounded junior document reviewer: it pre-screens every processable case, may recover eligible extraction gaps, flags evidence-grounded review signals, and suggests registered next review actions without making a banking decision.
 
 The product answers:
 
@@ -45,7 +45,7 @@ The product answers:
 2. Which pages and extraction paths produced each material value?
 3. What applicant, identity, employment, income, account, and transaction claims were observed?
 4. Which supported claims appear consistent, conflicting, missing, expired, or inconclusive?
-5. Is the document package ready for a downstream system, missing documents, in need of human review, or blocked by processing failure?
+5. Is the document package ready for a downstream system, missing documents, or in need of human review?
 
 The product does not answer whether a customer should receive a loan or another regulated financial product.
 
@@ -57,7 +57,7 @@ The product does not answer whether a customer should receive a loan or another 
 
 `PRD-REQ-003` The product must use local document processing before external model processing when the local result is adequate for the requested task.
 
-`PRD-REQ-004` The product must demonstrate selective use of OCR, VLM processing, and bounded Agent recovery rather than sending every document through the most expensive path.
+`PRD-REQ-004` The product must demonstrate selective use of OCR and VLM processing while using the bounded Case Review Agent for every processable case.
 
 `PRD-REQ-005` The product must demonstrate cross-document validation over a finite, versioned example rule set.
 
@@ -117,11 +117,11 @@ The reviewer examines document-processing results and corrects system output whe
 
 `PRD-REQ-023` A reviewer must be able to inspect the document, highlighted evidence, extracted value, confidence metadata, and related validation finding together.
 
-`PRD-REQ-024` A reviewer must be able to correct an extracted value, and every correction must require a reason.
+`PRD-REQ-024` Deprecated for the V1 reviewer surface. Direct extracted-value correction is deferred; V1 records issue review and requested-change drafts without rewriting extracted claims.
 
 `PRD-REQ-025` A reviewer must be able to confirm a document-review result or mark it for further review without making a lending or customer decision.
 
-`PRD-REQ-026` A reviewer must be able to inspect an audit timeline containing automated and human actions relevant to the case.
+`PRD-REQ-026` Deprecated in V3.0.0; a reviewer-facing audit timeline is not part of the V1 HTML baseline and retained audit access is governed by `PRD-REQ-144`.
 
 ### 7.3 Developer or evaluator
 
@@ -225,15 +225,25 @@ Structured application data is a source of claims and does not require an applic
 
 `PRD-REQ-061` The product must preserve the extraction method and processor version for every material extraction candidate.
 
-### 10.1 Adaptive extraction
+### 10.1 Pi Case Review Agent
 
-`PRD-REQ-062` The product must demonstrate a bounded Agent-in-the-Loop between fixed extraction fallback and Human-in-the-Loop review.
+`PRD-REQ-062` Every processable case must attempt a bounded Agent-in-the-Loop pre-screening step before Human-in-the-Loop review.
 
-`PRD-REQ-063` The Agent must operate only on an explicit extraction gap and within a fixed tool and execution budget.
+`PRD-REQ-063` The Agent must operate in one declared mode and within a mode-specific tool and execution budget: `adaptive_recovery` for an eligible extraction gap or `case_review_report` for the complete processable case result.
 
-`PRD-REQ-064` The Agent may submit extraction candidates but must not determine a validation finding, recommended disposition, or business action.
+`PRD-REQ-064` The Agent may submit extraction candidates in recovery mode and a non-authoritative Case Review Brief in report mode, but must not determine or change a validation finding, recommended disposition, or business action.
 
 `PRD-REQ-065` An unresolved or budget-exhausted extraction gap must be visible to the reviewer.
+
+`PRD-REQ-131` A Case Review Brief must summarize the processed document package, identify registered document-review signals, cite persisted claims, evidence, gaps, or findings, suggest only registered review actions, and may include a verified signal-bound applicant-readable requested-change draft without delivery authority.
+
+`PRD-REQ-132` Deterministic code must verify the brief's schema, references, registered vocabularies, and prohibited-decision boundary before the brief becomes reviewer-visible.
+
+`PRD-REQ-133` Agent report failure or rejection must remain visible but must not prevent a reviewer from receiving the deterministic claims, findings, and disposition.
+
+`PRD-REQ-134` Every completed case result must be presented for human review; `ready_for_downstream_processing` remains a document-processing recommendation and does not bypass reviewer confirmation.
+
+`PRD-REQ-135` Agent suggestions must not express creditworthiness, lending approval or decline, pricing, AML, final KYC, customer-contact, or account-action advice.
 
 ## 11. Evidence, Claims, and Confidence
 
@@ -277,7 +287,7 @@ Structured application data is a source of claims and does not require an applic
 
 `PRD-REQ-083` The product must produce exactly one current recommended disposition for a completed processing run.
 
-`PRD-REQ-084` The supported recommended dispositions must be the values defined in `INDEX.md`: `ready_for_downstream_processing`, `additional_documents_needed`, `human_review_required`, and `processing_blocked`.
+`PRD-REQ-084` The supported recommended dispositions must be the values defined in `INDEX.md`: `ready_for_downstream_processing`, `additional_documents_needed`, and `human_review_required`.
 
 `PRD-REQ-085` A recommended disposition must describe document-processing state only.
 
@@ -285,13 +295,13 @@ Structured application data is a source of claims and does not require an applic
 
 `PRD-REQ-087` A case with unresolved required evidence must not receive `ready_for_downstream_processing`.
 
-`PRD-REQ-088` `processing_blocked` must represent a technical, security, or required-evidence processing failure and must not be represented as a customer rejection.
+`PRD-REQ-088` A technical or security failure that prevents reliable result completion must terminate the processing run as `failed`; it must not create a recommended disposition or be represented as a customer rejection.
 
 ## 14. Human Review and Feedback
 
-`PRD-REQ-089` The Review Workbench must present case state, stage progress, logical documents, extracted claims, evidence, confidence metadata, validation findings, and recommended disposition.
+`PRD-REQ-089` Deprecated in V3.0.0; the V1 Review Workbench presentation is governed by `PRD-REQ-145`.
 
-`PRD-REQ-090` The reviewer must be able to correct supported extracted fields without altering the original model output.
+`PRD-REQ-090` Deprecated for V1 together with `PRD-REQ-024`; immutable correction semantics remain available for a later correction workflow but are not required by the V1 HTML baseline.
 
 `PRD-REQ-091` The product must preserve the actor, time, original value, corrected value, correction reason, and relevant evidence for each correction.
 
@@ -299,7 +309,27 @@ Structured application data is a source of claims and does not require an applic
 
 `PRD-REQ-093` A reviewer correction must not automatically modify a prompt, model, rule, threshold, disposition policy, or golden truth.
 
-`PRD-REQ-094` The workbench must not expose controls for lending approval, lending decline, fund disbursement, account opening, or customer communication.
+`PRD-REQ-094` Deprecated in V3.0.0; its prohibited-action boundary and requested-change draft clarification are governed by `PRD-REQ-140`.
+
+`PRD-REQ-143` Every completed processable case must enter the human Review Queue and open with its Agent Report as the default case view.
+
+`PRD-REQ-137` A reviewer must be able to confirm, ignore, or edit an Agent-raised review issue and create a human-raised issue, with each action preserved as human review state rather than mutation of the original Agent brief.
+
+`PRD-REQ-138` Confirming an issue may produce an editable applicant-readable requested-change draft, but confirming the issue and including its draft in the final message must remain separate reviewer choices.
+
+`PRD-REQ-139` Final document review must permit exactly one of `request_changes`, `escalate_review`, or `clear_for_downstream`; `request_changes` requires at least one included non-empty requested-change draft, and `clear_for_downstream` requires none.
+
+`PRD-REQ-140` The product must not send, deliver, or notify an applicant from the V1 Review Workbench; recording requested changes is not customer communication.
+
+`PRD-REQ-141` Agent monitoring must be separate from case review and must expose safe aggregate health, sessions, model usage, estimated cost, and read-only configuration without unrestricted prompts, document content, credentials, or chain-of-thought.
+
+`PRD-REQ-142` Structured application review must support reviewer-relevant applicant, masked contact, submission-history, employment, and income projections when those values are supplied by the synthetic input fixture.
+
+`PRD-REQ-144` Authorized operational users must be able to inspect safe Agent activity and retained audit records outside the default reviewer workflow; V1 does not require a reviewer-facing audit timeline.
+
+`PRD-REQ-145` The Review Workbench must present the Case Review Brief, compact case progress, structured application data, source documents, evidence-linked checked facts, review issues, and final document-review actions. Detailed runs, model usage, configuration, and safe Agent logs belong to Agent monitoring or case-level progressive disclosure.
+
+`PRD-REQ-146` The product must retain correlated processing, model, validation, disposition, and human-action history and expose safe operational projections through Agent monitoring; the V1 reviewer surface requires only compact case progress and a bounded case Agent log.
 
 ## 15. Processing Transparency and Reproducibility
 
@@ -311,15 +341,13 @@ Structured application data is a source of claims and does not require an applic
 
 `PRD-REQ-098` The product must retain successful partial results when safe, but it must visibly identify incomplete or failed stages.
 
-`PRD-REQ-099` The product must expose a processing timeline that correlates automated stages, model invocations, validation, disposition, and human actions.
+`PRD-REQ-099` Deprecated in V3.0.0; retained processing history and its V1 presentation are governed by `PRD-REQ-146`.
 
 `PRD-REQ-100` A material runtime result must identify the component and configuration versions necessary to explain it.
 
 ## 16. Evaluation Product Requirements
 
 `PRD-REQ-101` The project must provide a versioned curated golden set of twenty manually verified end-to-end synthetic cases.
-
-`PRD-REQ-102` The project must provide a fixed-seed generator that produces one hundred robustness cases by default.
 
 `PRD-REQ-103` The curated cases must cover native-text, scanned/OCR, mixed or multi-document, complex-table/VLM, and cross-document-conflict behavior.
 
@@ -373,13 +401,15 @@ Structured application data is a source of claims and does not require an applic
 
 ### 20.1 Native-text happy path
 
-`PRD-REQ-124` A fixed native-text golden case must complete without a VLM call and display claims, evidence, findings, disposition, and processing history.
+`PRD-REQ-124` A fixed native-text golden case must complete without a VLM extraction call and display claims, evidence, findings, disposition, a verified Case Review Brief, and processing history.
 
 ### 20.2 Adaptive extraction path
 
 `PRD-REQ-125` A fixed scanned or complex-table golden case must create an explicit extraction gap and invoke the bounded Agent with only approved recovery capabilities.
 
 `PRD-REQ-126` The adaptive path must display the recovery actions, resulting candidate and evidence, model usage, latency, and estimated cost.
+
+`PRD-REQ-136` Each primary demonstration path must attempt Case Review Brief generation and expose whether the brief was verified, rejected, or unavailable.
 
 ### 20.3 Review and safety path
 
@@ -401,7 +431,7 @@ The initial product is successful when:
 2. The three primary demonstration paths execute reproducibly.
 3. The golden evaluation report identifies its dataset and component versions.
 4. Evidence can be inspected for every material claim used by a validation rule.
-5. A difficult case can progress from local extraction through bounded Agent recovery to human review without granting the model business authority.
+5. Every processable case progresses through bounded Agent pre-screening to human review, while difficult cases may additionally use bounded recovery, without granting the model business authority.
 6. The documentation clearly distinguishes demonstrated behavior from production gaps.
 
 These criteria do not establish production fitness or a numeric model-quality threshold.
@@ -428,4 +458,8 @@ The following evidence-dependent choices are intentionally owned elsewhere and r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.0.0 | 2026-09-04 | Approved | Adopted the V1 HTML UX baseline: Agent Report entry, issue review, applicant-readable request drafts without delivery, compact case progress, and separate Agent monitoring; deferred direct field and boundary correction from the V1 reviewer surface. |
+| 2.1.0 | 2026-09-04 | Approved | Removed the V1 `processing_blocked` disposition and retained technical blocking conditions as failed workflow state without a disposition. |
+| 2.0.0 | 2026-09-04 | Approved | Made the bounded Pi Case Review Agent a per-case pre-screening stage with verified review briefs, optional gap recovery, and mandatory human confirmation. |
+| 1.0.1 | 2026-09-04 | Approved | Removed the V1 robustness dataset requirement `PRD-REQ-102`; the curated twenty-case golden set remains the evaluation and demonstration baseline. |
 | 1.0 | 2026-09-03 | Approved | Created and approved the product and scope baseline from the approved index and reviewed migration source. |

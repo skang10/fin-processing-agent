@@ -6,7 +6,7 @@ This backlog tracks accepted decisions that still require a dedicated specificat
 
 ### BL-001 — Finite Cross-Document Validation Rule Sets
 
-**Status:** Accepted; awaiting component specification and implementation
+**Status:** Accepted and specified; awaiting ADR, evaluation evidence, and implementation
 
 Cross-document validation must execute only rules from a finite, explicitly registered, versioned rule set. V1 uses compiled TypeScript rule plugins and a versioned YAML or JSON manifest. Models cannot create, modify, activate, or change validation-rule semantics at runtime.
 
@@ -37,11 +37,11 @@ Validation findings, risk or review signals, and recommended-disposition mapping
 5. Historical processing runs retain the exact rule-set version.
 6. An ambiguous matching model can return only a constrained opinion; deterministic rule code produces the finding.
 
-### BL-002 — Bounded Pi Adaptive Extraction Loop
+### BL-002 — Bounded Pi Case Review Agent
 
-**Status:** Accepted; awaiting ADR, component specification, and implementation spike
+**Status:** Accepted and specified; awaiting ADR and implementation spike
 
-Embed the `pi-coding-agent` software development kit as a bounded Agent between fixed extraction fallback and Human-in-the-Loop review. Disable built-in coding tools, Shell access, arbitrary file and network access, dynamic extensions, runtime package installation, and automatic resource discovery.
+Embed the `pi-coding-agent` software development kit as a bounded pre-screening Agent for every processable case. It produces a verified Case Review Brief and may enter Adaptive Extraction mode only for eligible gaps. Disable built-in coding tools, Shell access, arbitrary file and network access, dynamic extensions, runtime package installation, and automatic resource discovery.
 
 The implementation spike must prove:
 
@@ -50,6 +50,8 @@ The implementation spike must prove:
 3. Durable progress survives Agent-process loss because PostgreSQL and pg-boss own workflow state.
 4. Document instruction injection cannot expand tool authority or change validation and disposition logic.
 5. A fake-model adapter can reproduce the acceptance path offline.
+6. Every processable case attempts a schema- and reference-validated report without making the report a single point of failure for human review.
+7. Report suggestions use registered document-review codes and cannot express lending, creditworthiness, AML, or KYC decisions.
 
 **Target documents:**
 
@@ -79,16 +81,15 @@ Evaluate two candidate external VLMs on the same versioned subset of the golden 
 
 The resulting choice belongs in `specs/decisions/ADR_003_VLM_SELECTION.md`. Product specifications must remain provider-neutral.
 
-### BL-005 — Versioned Golden and Robustness Datasets
+### BL-005 — Versioned Golden Dataset
 
 **Status:** Accepted; awaiting dataset tooling and artifacts
 
 Build:
 
 1. Twenty curated, manually verified end-to-end golden cases.
-2. One hundred fixed-seed robustness cases by default.
-3. Generator-produced truth followed by human confirmation in a development-only Review Workbench mode.
-4. Command-line generation, validation, build, load, evaluation, and reporting workflows.
+2. Generator-produced truth followed by human confirmation through lightweight dataset command-line workflows.
+3. Command-line generation, validation, build, load, evaluation, and reporting workflows.
 
 Synthetic files must be visibly marked and must not reproduce official security features or real institution branding.
 
@@ -97,6 +98,27 @@ Synthetic files must be visibly marked and must not reproduce official security 
 **Status:** Blocked on BL-003 through BL-005 evidence
 
 Replace unsupported numerical targets with measured results tied to dataset, model, prompt, component, and environment versions. Establish regression tolerances only after the initial baseline exists.
+
+### BL-007 — V1 Review UX Contracts and Monitoring Projections
+
+**Status:** Accepted; awaiting API, observability, and security specifications
+
+Define implementation contracts for the approved V1 HTML UX baseline:
+
+1. Review Queue workflow-state queries and ordering.
+2. Agent Report, review-issue, human edit, confirm, ignore, and create commands.
+3. Applicant-readable requested-change drafts, inclusion state, final message projection, and the prohibition on delivery from V1.
+4. Final `request_changes`, `escalate_review`, and `clear_for_downstream` command preconditions.
+5. Structured application projections for masked contact and submission-history fields.
+6. Case Agent log and Agent-monitoring aggregate, session, usage, cost, and read-only configuration queries.
+7. Monitoring time windows, cost calculation, authorization, retention, and unavailable-data semantics.
+
+**Target documents:**
+
+1. `specs/API_CONTRACTS.md`
+2. `specs/SECURITY_AND_LIMITATIONS.md`
+3. `specs/operations/OBSERVABILITY_AND_FAILURES.md`
+4. Executable TypeBox schemas after the Stage Two repository skeleton exists.
 
 ## Deferred Production Work
 
@@ -123,4 +145,3 @@ Define Service Level Objectives, capacity, autoscaling, high availability, disas
 ### BL-105 — Authorized Real-Data Evaluation
 
 Obtain approved representative data and complete privacy, fairness, model-risk, subgroup, drift, and operational evaluation before claiming real-world performance.
-

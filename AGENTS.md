@@ -75,10 +75,10 @@ Agents must preserve these accepted boundaries unless an approved change superse
 2. `firecrawl/pdf-inspector` is the initial PDF-processing foundation behind project interfaces.
 3. A provider-neutral model gateway isolates external, private-cloud, and local model deployments.
 4. A VLM receives only selected pages, bounded page windows, or regions, never a complete case package.
-5. `pi-coding-agent` is embedded only for the bounded Adaptive Extraction Loop.
+5. `pi-coding-agent` is embedded as the bounded Case Review Agent for every processable case; its optional Adaptive Extraction Loop may run only for eligible extraction gaps.
 6. Pi has no Shell, arbitrary filesystem, unrestricted network, runtime package installation, or dynamic-extension authority.
 7. PostgreSQL, pg-boss, and the Workflow Coordinator own durable workflow state.
-8. Models produce candidates or constrained matching opinions; deterministic code owns validation findings and recommended dispositions.
+8. Models produce candidates, constrained matching opinions, or non-authoritative review briefs; deterministic code owns validation findings and recommended dispositions, and a human owns the final review action.
 9. Cross-document rules are finite, registered, versioned TypeScript plugins selected by a versioned manifest.
 10. Original model output, processing runs, and human corrections are immutable revisions.
 
@@ -124,7 +124,7 @@ The accepted baseline is:
 3. Fastify, TypeBox, and JSON Schema.
 4. PostgreSQL, Drizzle ORM, Drizzle Kit, pg-boss, and a transactional outbox.
 5. S3-compatible object storage with MinIO for local development.
-6. React, Vite, TanStack Query, React Router, PDF.js, Tailwind CSS, and shadcn/ui.
+6. React, Vite, TanStack Query, React Router, PDF.js, Radix UI Primitives, CSS Modules, Lucide React, Motion, and the native system font stack.
 7. Pino, OpenTelemetry, Prometheus-compatible metrics, and Jaeger.
 8. Vitest, Testcontainers, Playwright, synthetic golden cases, and fake-model adapters.
 9. Docker Compose for the delivered demonstration environment.
@@ -155,4 +155,3 @@ No implementation commands are defined yet. After the monorepo skeleton exists, 
 9. Demo-data loading and reset.
 
 Until then, inspect the repository rather than guessing a command.
-

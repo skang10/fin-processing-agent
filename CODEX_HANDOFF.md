@@ -16,7 +16,7 @@ Future scenarios: Business lending, invoice review, and standalone Know Your Cus
 
 ## Mission
 
-Build a specification-driven prototype that demonstrates reliable machine learning document processing, evidence-linked extraction, bounded agent recovery, cross-document validation, and human review.
+Build a specification-driven prototype that demonstrates reliable machine learning document processing, evidence-linked extraction, a bounded Pi Case Review Agent, cross-document validation, and human review.
 
 The system receives structured application data and supporting documents. It validates and stores files, identifies logical documents, classifies pages, extracts native text, selectively runs local Optical Character Recognition (OCR), routes difficult pages or regions to a Vision Language Model (VLM), normalizes evidence-backed claims, validates selected facts across documents, and produces a recommended document-processing disposition.
 
@@ -57,9 +57,9 @@ The system has no permission or interface to disburse funds, open accounts, appr
 4. The initial OCR implementation is the PP-OCRv6 integration exposed by PDF Inspector, behind a replaceable `OcrEngine` interface.
 5. External VLM use is allowed for the prototype. A provider-neutral gateway must allow later private-cloud or local deployment.
 6. A VLM receives only selected pages, bounded consecutive-page windows, or cropped regions. It never receives an entire case package.
-7. Models produce candidates, classifications, or constrained matching opinions. They do not create validation rules, determine final validation findings, or select business decisions.
+7. Models produce candidates, classifications, constrained matching opinions, or non-authoritative review briefs. They do not create validation rules, determine authoritative validation findings or dispositions, or select business decisions.
 8. `pi-coding-agent` is embedded through its software development kit as a bounded Agent harness. Default coding tools, dynamic extensions, automatic resource discovery, Shell access, and unrestricted network or file access are disabled.
-9. Pi operates only in an Adaptive Extraction Loop between fixed extraction fallback and Human-in-the-Loop review.
+9. Pi runs for every processable case as a bounded pre-screening reviewer that produces a verified Case Review Brief; it may additionally use the Adaptive Extraction Loop only for eligible gaps.
 10. The durable workflow is owned by PostgreSQL state, pg-boss jobs, and a Workflow Coordinator. Pi is not the durable workflow engine.
 11. Every material extracted claim links to source evidence.
 12. Original model output, human corrections, and repeated processing runs are immutable revisions rather than overwritten values.
@@ -73,12 +73,13 @@ Case intake
   -> page classification and logical-document grouping
   -> native extraction or selective local OCR
   -> fixed VLM fallback where configured
-  -> bounded Pi Adaptive Extraction Loop for unresolved gaps
+  -> optional bounded Pi Adaptive Extraction Loop for eligible unresolved gaps
   -> field normalization and evidence binding
   -> entity and claim resolution
   -> finite demonstration validation rule set
   -> deterministic recommended-disposition mapping
-  -> ready result or Human-in-the-Loop review
+  -> bounded Pi Case Review Brief and deterministic report verification
+  -> Human-in-the-Loop review
 ```
 
 Logical-document splitting supports contiguous page ranges within one physical PDF. Page classification and boundary prediction precede deterministic grouping. Low-confidence boundaries remain reviewable.
@@ -113,7 +114,6 @@ Validation findings and recommended dispositions are separate concerns. The init
 1. `ready_for_downstream_processing`
 2. `additional_documents_needed`
 3. `human_review_required`
-4. `processing_blocked`
 
 These values describe document-processing state only. They are not lending or customer decisions.
 
@@ -121,26 +121,25 @@ These values describe document-processing state only. They are not lending or cu
 
 The initial release includes a small working Review Workbench with:
 
-1. Case list and case detail.
-2. Document and stage status.
-3. Extracted fields and validation findings.
-4. PDF.js document rendering with evidence-region overlays.
-5. Field correction with a required reason.
-6. Review disposition without approve, decline, disburse, open-account, or contact-customer actions.
-7. An application-level append-only audit timeline.
+1. A workflow-state Review Queue and Agent Report default case view.
+2. Compact shared case progress and a bounded case Agent log.
+3. Structured application data, document rendering, checked facts, and navigable evidence.
+4. Agent-raised and human-raised issue review with confirm, ignore, and edit actions.
+5. Applicant-readable requested-change drafts that the V1 system records but never sends or delivers.
+6. Final `request_changes`, `escalate_review`, or `clear_for_downstream` document-review actions without approve, decline, disburse, open-account, or contact-customer authority.
+7. Separate Agent monitoring for safe sessions, model usage, estimated cost, and read-only configuration.
 
-Reviewer corrections are dataset candidates. They never update models, prompts, rules, thresholds, or golden truth automatically.
+Reviewer issue edits and any later correction workflow never update models, prompts, rules, thresholds, or golden truth automatically.
 
 ## Data and Evaluation
 
 1. V1 does not train a proprietary model. It orchestrates and evaluates pretrained components.
 2. Quality targets are baseline-driven. Unsupported numerical claims must not be added before measurement.
 3. The curated golden set contains 20 manually verified end-to-end cases.
-4. A fixed-seed generator produces 100 reproducible robustness cases by default.
-5. Synthetic documents must be visibly marked as synthetic and must not reproduce official security features or real institution branding.
-6. Dataset preparation and evaluation use lightweight command-line workflows rather than Airflow, Dagster, or dbt.
-7. Golden truth is generated with templates and confirmed through a development-only annotation mode in the Review Workbench.
-8. Live-model evaluation is separate from default continuous integration and must have an explicit cost budget.
+4. Synthetic documents must be visibly marked as synthetic and must not reproduce official security features or real institution branding.
+5. Dataset preparation and evaluation use lightweight command-line workflows rather than Airflow, Dagster, or dbt.
+6. Golden truth is generated with templates and manually confirmed through lightweight dataset command-line workflows before release.
+7. Live-model evaluation is separate from default continuous integration and must have an explicit cost budget.
 
 ## Technical Baseline
 
@@ -152,7 +151,7 @@ Reviewer corrections are dataset candidates. They never update models, prompts, 
 6. pg-boss for PostgreSQL-backed asynchronous jobs.
 7. Transactional outbox for reliable stage scheduling.
 8. S3-compatible object storage through an `ObjectStore` interface; MinIO for local development.
-9. React, Vite, TanStack Query, React Router, PDF.js, Tailwind CSS, and shadcn/ui for the Review Workbench.
+9. React, Vite, TanStack Query, React Router, PDF.js, Radix UI Primitives, CSS Modules, Lucide React, Motion, and the native system font stack for the Review Workbench.
 10. Pino, OpenTelemetry, Prometheus-compatible metrics, and Jaeger for local observability.
 11. Vitest, Testcontainers, Playwright, and synthetic golden cases for testing.
 12. Docker Compose is the delivered runtime. The design remains cloud-neutral and includes an Amazon Web Services reference mapping without Terraform in V1.
@@ -181,17 +180,18 @@ Reviewer corrections are dataset candidates. They never update models, prompts, 
 
 1. Documents are untrusted data. Document instructions cannot modify tools, prompts, policies, schemas, or dispositions.
 2. VLM extraction calls have no tools and accept only schema-constrained output.
-3. The Adaptive Extraction Agent has a fixed tool allowlist, iteration limit, VLM-call limit, timeout, and cost budget.
-4. Local demo authentication is development-only and sits behind a replaceable authentication provider interface for future OpenID Connect (OIDC).
-5. Audit events are append-only at the application layer but are not represented as tamper-proof.
-6. The prototype has no production Service Level Agreement (SLA). It reports measured quality, latency, and cost baselines.
-7. Critical dependencies, native runtimes, and model assets are pinned. Continuous integration uses a frozen lockfile and performs baseline supply-chain checks.
-8. The complete limitation set is owned by [`LIMITATIONS.md`](LIMITATIONS.md).
+3. The Case Review Agent has mode-specific fixed tool allowlists, iteration limits, VLM-call limits, timeouts, and cost budgets.
+4. Its brief uses registered document-review signal and suggested-action codes, cites persisted evidence or findings, and passes schema and reference verification before display.
+5. Local demo authentication is development-only and sits behind a replaceable authentication provider interface for future OpenID Connect (OIDC).
+6. Audit events are append-only at the application layer but are not represented as tamper-proof.
+7. The prototype has no production Service Level Agreement (SLA). It reports measured quality, latency, and cost baselines.
+8. Critical dependencies, native runtimes, and model assets are pinned. Continuous integration uses a frozen lockfile and performs baseline supply-chain checks.
+9. The complete limitation set is owned by [`LIMITATIONS.md`](LIMITATIONS.md).
 
 ## Demonstration Acceptance Paths
 
-1. A native-text happy path completes without VLM use.
-2. A difficult scanned or table case triggers the bounded Pi Adaptive Extraction Loop and records its trace and cost.
+1. A native-text happy path completes without VLM extraction and produces a verified Pi Case Review Brief.
+2. A difficult scanned or table case triggers the bounded Pi Adaptive Extraction Loop, produces a brief, and records its trace and cost.
 3. A mixed document containing a cross-document conflict and prompt injection reaches Human-in-the-Loop review without executing document instructions.
 
 Each path must be reproducible with a fixed golden case and an offline fake-model adapter.

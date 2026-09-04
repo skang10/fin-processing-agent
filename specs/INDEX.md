@@ -2,11 +2,11 @@
 
 Document ID: `IDX`
 
-Version: 1.1.6
+Version: 2.2.0
 
 Status: Approved
 
-Last updated: 2026-09-03
+Last updated: 2026-09-04
 
 ## 1. Purpose
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-This index, `PRODUCT_AND_SCOPE.md`, `SYSTEM_ARCHITECTURE.md`, `DATA_MODEL.md`, `components/DOCUMENT_PROCESSING.md`, `components/ADAPTIVE_EXTRACTION_AGENT.md`, and `components/VALIDATION_AND_DISPOSITION.md` are approved. All other planned specifications remain pending until created and approved. The migration source remains the working behavioral baseline for subjects that do not yet have an approved owner.
+This index, `PRODUCT_AND_SCOPE.md`, `SYSTEM_ARCHITECTURE.md`, `DATA_MODEL.md`, `components/DOCUMENT_PROCESSING.md`, `components/ADAPTIVE_EXTRACTION_AGENT.md`, and `components/VALIDATION_AND_DISPOSITION.md` are approved. `components/REVIEW_WORKBENCH.md` exists as a draft and is not authoritative until approved. All other planned specifications remain pending until created and approved. The migration source remains the working behavioral baseline for subjects that do not yet have an approved owner.
 
 ## 3. Product Baseline
 
@@ -69,9 +69,9 @@ Normative product scope belongs to `PRODUCT_AND_SCOPE.md`. This section is an in
 | 3 | `SYSTEM_ARCHITECTURE.md` | `ARC` | System boundaries, components, trust boundaries, processing flow, and cross-cutting architecture | Approved |
 | 4 | `DATA_MODEL.md` | `DAT` | Domain entities, claims, evidence, processing runs, stages, corrections, audit references, and persistence semantics | Approved |
 | 5 | `components/DOCUMENT_PROCESSING.md` | `DOC` | Intake, inspection, rendering, page classification, logical-document grouping, native extraction, OCR, and table extraction | Approved |
-| 6 | `components/ADAPTIVE_EXTRACTION_AGENT.md` | `AGT` | Pi Agent boundary, extraction gaps, allowlisted tools, budgets, stopping, and escalation | Approved |
+| 6 | `components/ADAPTIVE_EXTRACTION_AGENT.md` | `AGT` | Pi Case Review Agent, verified review briefs, optional gap recovery, allowlisted tools, budgets, stopping, and escalation | Approved |
 | 7 | `components/VALIDATION_AND_DISPOSITION.md` | `VAL` | Entity matching, validation-rule architecture, findings, and deterministic recommended-disposition mapping | Approved |
-| 8 | `components/REVIEW_WORKBENCH.md` | `UI` | Reviewer workflows, evidence viewer, corrections, audit timeline, and annotation mode | Pending |
+| 8 | `components/REVIEW_WORKBENCH.md` | `UI` | Review Queue, Agent Report, evidence viewer, issue review, requested-change drafts, final review, and Agent-monitoring presentation | Draft for review |
 | 9 | `API_CONTRACTS.md` | `API` | HTTP endpoints, events, idempotency, error format, authentication context, and generated OpenAPI ownership | Pending |
 | 10 | `ML_PIPELINE_AND_EVALUATION.md` | `MLE` | Datasets, dataset pipeline, metrics, model selection, confidence, evaluation, and regression | Pending |
 | 11 | `SECURITY_AND_LIMITATIONS.md` | `SEC` | Threat model, prompt injection, file controls, authorization boundary, secrets, and operational security controls | Pending |
@@ -195,8 +195,9 @@ Git commit identifiers support traceability but do not replace explicit artifact
 
 | Term | Definition |
 |---|---|
-| Agent | The bounded Pi-based Adaptive Extraction Agent, unless another agent is explicitly named. It is not the durable workflow engine or a business decision-maker. |
-| Adaptive Extraction Loop | A budgeted Agent loop that selects from approved extraction tools after fixed extraction paths leave an explicit gap and before human escalation. |
+| Agent | The bounded Pi-based Case Review Agent, unless another agent is explicitly named. It pre-screens each processable case but is not the durable workflow engine, authoritative validator, or business decision-maker. |
+| Case Review Brief | A schema- and reference-verified, non-authoritative Agent report containing evidence-grounded review signals and suggested human review actions for one result revision. |
+| Adaptive Extraction Loop | An optional budgeted Agent mode that selects from approved extraction tools after fixed extraction paths leave an eligible explicit gap. |
 | Application data | Structured JSON supplied by an upstream caller; it is not necessarily extracted from an application-form document. |
 | Artifact | An immutable stored input or derived object with identity, version, checksum, media type, and lineage. |
 | Case | The top-level document-review container for one applicant, application data, documents, processing runs, and review history. It is not a loan account or lending decision. |
@@ -213,7 +214,6 @@ Git commit identifiers support traceability but do not replace explicit artifact
 | Physical document | One uploaded PDF, JPEG, or PNG object before logical-document grouping. |
 | Processing run | An immutable execution over fixed input and component versions. Stage retries are attempts within a run; material version changes create a new run. |
 | Recommended disposition | A deterministic document-processing recommendation. It is not a lending, KYC, AML, account, or customer decision. |
-| Robustness case | A reproducibly generated synthetic variation used for batch evaluation beyond the curated golden set. |
 | Stage execution | The durable record of one processing stage and its attempts within a processing run. |
 
 ## 11. Acronyms
@@ -291,7 +291,6 @@ not_applicable
 ready_for_downstream_processing
 additional_documents_needed
 human_review_required
-processing_blocked
 ```
 
 `IDX-REQ-014` A specification must not add, rename, or redefine a value in these vocabularies without updating this index and the owning specification in the same approved change.
@@ -321,9 +320,9 @@ The following table assigns sections from the migration source to their future o
 | File intake, PDF inspection, rendering, OCR, page classification, logical splitting, and table extraction | `components/DOCUMENT_PROCESSING.md` |
 | Pi integration, extraction gaps, allowlisted tools, budgets, stopping, and human escalation | `components/ADAPTIVE_EXTRACTION_AGENT.md` |
 | Entity matching, finite rule sets, five demonstration rules, finding states, and disposition mapping | `components/VALIDATION_AND_DISPOSITION.md` |
-| Case UI, evidence viewer, corrections, review actions, timeline, and annotation mode | `components/REVIEW_WORKBENCH.md` |
+| Case UI, Agent brief, evidence viewer, review issues, requested-change drafts, final review actions, and Agent-monitoring presentation | `components/REVIEW_WORKBENCH.md` |
 | HTTP endpoints, SSE, error format, idempotency, authentication context, and OpenAPI | `API_CONTRACTS.md` |
-| Golden and robustness sets, dataset tooling, confidence, metrics, model comparison, prompts, and regression | `ML_PIPELINE_AND_EVALUATION.md` |
+| Golden set, dataset tooling, confidence, metrics, model comparison, prompts, and regression | `ML_PIPELINE_AND_EVALUATION.md` |
 | File controls, prompt injection, secrets, access boundaries, and production-gap references | `SECURITY_AND_LIMITATIONS.md` |
 | Logs, traces, metrics, retries, partial results, budgets, and degradation | `operations/OBSERVABILITY_AND_FAILURES.md` |
 | Docker Compose, dependencies, configuration, containers, supply chain, and AWS reference mapping | `operations/DEPLOYMENT.md` |
@@ -356,10 +355,10 @@ The minimum processing-run version set will be owned by `DATA_MODEL.md` and must
 
 The following decisions require implementation or evaluation evidence and remain tracked in [`BACKLOG.md`](../BACKLOG.md):
 
-1. Pi Adaptive Extraction Loop integration proof.
+1. Pi Case Review Agent integration proof, including per-case verified briefs and optional Adaptive Extraction.
 2. PDF Inspector and PP-OCRv6 baseline on the project dataset.
 3. Default and fallback VLM selection.
-4. Versioned golden and robustness dataset artifacts.
+4. Versioned golden dataset artifacts.
 5. Measured quality, latency, and cost baseline.
 
 These open items do not change the accepted product boundary. They must not be resolved by adding unsupported claims to a specification.
@@ -368,6 +367,12 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.2.0 | 2026-09-04 | Approved | Aligned the UI ownership boundary with the V1 HTML baseline, including issue review, request drafts without delivery, and separate Agent monitoring. |
+| 2.1.0 | 2026-09-04 | Approved | Removed `processing_blocked` from the V1 disposition vocabulary; technical failures remain workflow and case failure states. |
+| 2.0.0 | 2026-09-04 | Approved | Made Pi the bounded per-case pre-screening Agent, defined the Case Review Brief, and retained adaptive extraction as an optional mode. |
+| 1.1.9 | 2026-09-04 | Approved | Removed the V1 robustness dataset term and scope; the curated golden set remains the dataset baseline. |
+| 1.1.8 | 2026-09-04 | Approved | Removed development annotation from the Review Workbench ownership boundary and aligned the catalog with offline dataset tooling. |
+| 1.1.7 | 2026-09-03 | Approved | Added boundary-correction run lineage and registered the native-platform-styled `components/REVIEW_WORKBENCH.md` as Draft for review. |
 | 1.1.6 | 2026-09-03 | Approved | Registered `components/VALIDATION_AND_DISPOSITION.md` as Approved. |
 | 1.1.5 | 2026-09-03 | Approved | Registered `components/VALIDATION_AND_DISPOSITION.md` as Draft for review. |
 | 1.1.4 | 2026-09-03 | Approved | Registered `components/ADAPTIVE_EXTRACTION_AGENT.md` as Approved. |

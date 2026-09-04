@@ -2,11 +2,11 @@
 
 Document ID: `DAT`
 
-Version: 1.0
+Version: 2.1.0
 
 Status: Approved
 
-Last updated: 2026-09-03
+Last updated: 2026-09-04
 
 ## 1. Purpose
 
@@ -21,7 +21,7 @@ This document owns:
 1. Case, input, artifact, physical-document, page, and logical-document semantics.
 2. Processing-run, stage-execution, and stage-attempt identity and lifecycle relationships.
 3. Extraction candidate, evidence, claim, entity, role, and entity-resolution semantics.
-4. Extraction-gap, finding, recommended-disposition, correction, review, and audit-record semantics.
+4. Extraction-gap, finding, recommended-disposition, Case Review Brief, correction, review, and audit-record semantics.
 5. Immutability, revision, lineage, current-view, and deletion-marker invariants.
 6. The minimum version manifest required for reproducible processing.
 
@@ -71,8 +71,11 @@ erDiagram
     PROCESSING_RUN ||--|| VERSION_MANIFEST : fixes
     PROCESSING_RUN ||--o{ STAGE_EXECUTION : contains
     PROCESSING_RUN ||--o{ RESULT_REVISION : presents_through
+    PROCESSING_RUN ||--o{ AGENT_SESSION : invokes
     PROCESSING_RUN o|--o| PROCESSING_RUN : supersedes_or_compares
     RESULT_REVISION o|--o| RESULT_REVISION : supersedes
+    RESULT_REVISION ||--o{ CASE_REVIEW_BRIEF_REVISION : receives
+    AGENT_SESSION ||--o| CASE_REVIEW_BRIEF_REVISION : submits
     STAGE_EXECUTION ||--o{ STAGE_ATTEMPT : retries_as
     STAGE_ATTEMPT ||--o{ ARTIFACT : produces
 ```
@@ -285,6 +288,8 @@ An Artifact is immutable stored content plus integrity and lineage metadata. Lar
 
 `DAT-REQ-050` The active or current run for a case must be an explicit projection or reference and must not be inferred from greatest creation timestamp alone.
 
+`DAT-REQ-186` A processing run created to re-extract after a human boundary correction must reference the triggering immutable boundary-correction revision and the prior processing run; it must retain the same input revision unless source inputs also changed.
+
 `DAT-REQ-173` A processing run must use exactly one status from `IDX` section 12.2 and must retain append-only status-transition history.
 
 `DAT-REQ-185` Valid processing-run transitions are `created` to `running`, `running` to `completed`, and `created` or `running` to `failed`; a terminal run must not transition back to a non-terminal status.
@@ -485,6 +490,16 @@ A Claim is a reconciled raw or normalized assertion linked to evidence. A Claim 
 
 `DAT-REQ-127` Dataset-candidate nomination must not mutate golden truth or make the nominated data part of a dataset release automatically.
 
+`DAT-REQ-192` A review issue must identify its case and predecessor result revision, origin as Agent-raised or human-raised, immutable source signal or supporting references when applicable, current human-review state, and append-only human edit revisions without mutating the original Case Review Brief.
+
+`DAT-REQ-193` A requested-change draft must reference one review issue, retain its Agent-proposed text when applicable and current human-edited text separately, record inclusion state and acting reviewer, and remain a draft without delivery or customer-contact authority.
+
+`DAT-REQ-194` A final review record must preserve the selected document-review action, included requested-change draft revisions, optional internal note, reviewer, time, and reviewed predecessor result revision.
+
+`DAT-REQ-195` A `request_changes` review record must reference at least one included non-empty requested-change draft; a `clear_for_downstream` review record must reference none; `escalate_review` may retain either state for reviewer context.
+
+`DAT-REQ-196` Reviewer-facing structured application projections may contain synthetic contact preferences and initial-submission, latest-submission, and latest-update times when present in an immutable input revision; protected values must use the security-governed masked projection.
+
 ## 19. Model Invocations and Agent Activity
 
 `DAT-REQ-128` A model invocation record must identify task, provider adapter, model, resolved prompt version and hash, input and output schema versions, routing reason, start and end time, outcome, usage, estimated cost when available, trace identifier, and input/output artifact references or safe hashes.
@@ -493,13 +508,21 @@ A Claim is a reconciled raw or normalized assertion linked to evidence. A Claim 
 
 `DAT-REQ-130` A model input selection must identify the exact pages, bounded page window, regions, or structured claims supplied.
 
-`DAT-REQ-131` An Agent session must identify its triggering extraction gaps, configuration version, allowed tool-registry version, and budget limits.
+`DAT-REQ-131` An Agent session must identify its mode, bound processing run and stage attempt, configuration version, allowed tool-registry version, and budget limits; recovery sessions bind triggering gaps and report sessions bind one result revision.
 
 `DAT-REQ-132` Each Agent step must record the requested registered tool, externally validated arguments or their safe canonical hash, outcome, budget consumption, and resulting candidate or artifact references.
 
 `DAT-REQ-133` Agent session state must be diagnostic provenance and must not be authoritative workflow state.
 
 `DAT-REQ-134` Agent termination must record a stable terminal reason such as gaps resolved, no progress, conflicting candidates, budget exhausted, timeout, or error; exact reason-code ownership belongs to the Agent specification.
+
+`DAT-REQ-188` A Case Review Brief revision must identify its bound result revision, Agent session, schema version, immutable original submission, verification status, verified presentation when available, report-status code, review signals, suggested actions, optional signal-bound requested-change drafts, ordered attention items, and supporting record references.
+
+`DAT-REQ-189` Brief references must resolve only to records in the bound case, processing run, and result-revision projection, except explicitly linked Agent-session outcomes from that run.
+
+`DAT-REQ-190` Verification rejection must preserve the submitted brief and stable rejection reasons without promoting its content to the current reviewer-visible brief.
+
+`DAT-REQ-191` A result revision remains reviewable when its Agent brief is unavailable, timed out, budget-exhausted, or rejected.
 
 `DAT-REQ-183` A model-produced candidate or LLM entity-match opinion must reference exactly one model invocation; non-model results must not carry a fabricated model-invocation reference.
 
@@ -612,4 +635,7 @@ The following details are intentionally deferred to later owning specifications:
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.1.0 | 2026-09-04 | Approved | Added review issues, requested-change drafts without delivery authority, final-review action consistency, and structured application review projections for the V1 HTML baseline. |
+| 2.0.0 | 2026-09-04 | Approved | Added Agent session modes and immutable, verified Case Review Brief revisions without making Agent output authoritative workflow state. |
+| 1.1.0 | 2026-09-03 | Approved | Added processing-run lineage for explicit re-extraction after a human boundary correction. |
 | 1.0 | 2026-09-03 | Approved | Approved the domain data, document-version, result-revision, lineage, evidence, and audit baseline after internal consistency review. |

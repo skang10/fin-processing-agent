@@ -12,7 +12,7 @@ Last updated: 2026-09-03
 
 This specification defines intake validation, PDF and image inspection, page rendering, native content extraction, selective OCR, technical and business page classification, boundary prediction, deterministic logical-document grouping, and low-level table candidate production.
 
-It does not define business-field reconciliation, Adaptive Extraction Agent behavior, cross-document validation, recommended disposition, reviewer interaction, or model-selection benchmarks.
+It does not define business-field reconciliation, Case Review Agent behavior, cross-document validation, recommended disposition, reviewer interaction, or model-selection benchmarks.
 
 ## 2. Authority and Dependencies
 

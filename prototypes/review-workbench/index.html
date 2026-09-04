@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FinDoc Review Workbench</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="side-rail" aria-label="Primary navigation">
+      <a class="brand" href="#" aria-label="FinDoc home">
+        <span class="brand-mark">FD</span>
+        <span><strong>FinDoc</strong><small>Review workbench</small></span>
+      </a>
+      <nav>
+        <p class="nav-label">Workspace</p>
+        <button class="nav-item active" id="queue-nav">
+          <span class="nav-icon" aria-hidden="true">≡</span>
+          <span>Review queue</span>
+          <b>3</b>
+        </button>
+        <button class="nav-item" id="monitoring-nav">
+          <span class="nav-icon" aria-hidden="true">◎</span>
+          <span>Agent monitoring</span>
+        </button>
+      </nav>
+      <div class="rail-status">
+        <span class="status-dot"></span>
+        <div><strong>Offline fixture</strong></div>
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <header class="topbar">
+        <div><strong>Document review</strong></div>
+        <div class="topbar-actions">
+          <span class="environment">Synthetic demo data</span>
+          <button class="icon-button" aria-label="Help">?</button>
+          <button class="user" aria-label="Reviewer profile">LK</button>
+        </div>
+      </header>
+
+      <main id="queue" class="screen active">
+        <div class="page-wrap">
+          <header class="page-heading">
+            <div>
+              <h1>Review queue</h1>
+            </div>
+            <button class="button quiet" id="refresh-queue"><span aria-hidden="true">↻</span> Refresh</button>
+          </header>
+
+          <section class="queue-panel" aria-label="Review queue">
+            <div class="queue-toolbar">
+              <label class="search">
+                <span aria-hidden="true">⌕</span>
+                <input id="search" placeholder="Search case ID or applicant" autocomplete="off">
+              </label>
+              <div class="filter-group" aria-label="Case filters">
+                <button class="filter active" data-filter="all">All <span>3</span></button>
+                <button class="filter" data-filter="ready">Ready for review <span>2</span></button>
+                <button class="filter" data-filter="in-progress">In progress <span>1</span></button>
+                <button class="filter" data-filter="escalated">Escalated <span>0</span></button>
+              </div>
+              <span class="last-updated">Updated just now</span>
+            </div>
+
+            <div class="table-wrap">
+              <table class="case-table">
+                <thead><tr><th>Case</th><th>Applicant</th><th>Review summary</th><th>Issues</th><th>Status</th><th>Waiting</th><th><span class="sr-only">Open</span></th></tr></thead>
+                <tbody id="case-list"></tbody>
+              </table>
+              <div class="empty-state" id="empty-state" hidden>No cases match this view.</div>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <main id="monitoring" class="screen">
+        <div class="page-wrap monitoring-page">
+          <header class="page-heading"><div><h1>Agent monitoring</h1></div><span class="last-updated">Illustrative fixture</span></header>
+          <nav class="monitoring-tabs" aria-label="Agent monitoring sections">
+            <button class="active" data-monitor-tab="overview">Overview</button>
+            <button data-monitor-tab="sessions">Sessions</button>
+            <button data-monitor-tab="configuration">Configuration</button>
+          </nav>
+
+          <section class="monitor-view active" data-monitor-view="overview">
+            <div class="monitor-metrics">
+              <article><span>Sessions</span><strong>128</strong><small>Last 24 hours</small></article>
+              <article><span>Completed</span><strong>94.5%</strong><small>121 sessions</small></article>
+              <article><span>Average duration</span><strong>18.4 s</strong><small>p95 31.2 s</small></article>
+              <article><span>Token usage</span><strong>184k</strong><small>Input and output</small></article>
+              <article><span>Estimated cost</span><strong>€1.42</strong><small>Last 24 hours</small></article>
+              <article><span>Needs attention</span><strong>7</strong><small>Failed, timed out, or budget exhausted</small></article>
+            </div>
+            <section class="monitor-section"><div class="section-heading"><h2>Recent activity</h2></div><div class="activity-list">
+              <div><i class="ok"></i><span><strong>Review brief generated</strong><small>FD-2026-0042</small></span><time>09:41:24</time></div>
+              <div><i class="ok"></i><span><strong>Employer details cross-checked</strong><small>FD-2026-0042</small></span><time>09:41:20</time></div>
+              <div><i class="warn"></i><span><strong>Session budget exhausted</strong><small>FD-2026-0038</small></span><time>09:38:06</time></div>
+            </div></section>
+          </section>
+
+          <section class="monitor-view" data-monitor-view="sessions">
+            <div class="session-table"><div class="session-row session-head"><span>Session</span><span>Case</span><span>Model</span><span>Duration</span><span>Tokens</span><span>Cost</span><span>Outcome</span></div>
+              <button class="session-row" data-session-toggle="session-detail"><span>AGT-2026-0041</span><span>FD-2026-0042</span><span>VLM Small</span><span>22.1 s</span><span>1,842</span><span>€0.006</span><b class="session-status success">Completed</b></button>
+              <div class="session-detail" id="session-detail" hidden><div><time>09:41:08</time><span>Extraction gap received</span></div><div><time>09:41:14</time><span>Candidate validated</span></div><div><time>09:41:24</time><span>Review brief generated</span></div></div>
+              <button class="session-row"><span>AGT-2026-0040</span><span>FD-2026-0038</span><span>VLM Small</span><span>30.0 s</span><span>2,411</span><span>€0.009</span><b class="session-status warning">Budget exhausted</b></button>
+            </div>
+          </section>
+
+          <section class="monitor-view" data-monitor-view="configuration">
+            <div class="config-card"><div class="section-heading"><h2>Active configuration</h2><span>Read only</span></div><dl>
+              <div><dt>Agent version</dt><dd>pi-review-agent 0.4.0</dd></div><div><dt>Model</dt><dd>VLM Small</dd></div>
+              <div><dt>Prompt version</dt><dd>review-brief-v7</dd></div><div><dt>Schema version</dt><dd>case-review-brief 1.2</dd></div>
+              <div><dt>Maximum iterations</dt><dd>4</dd></div><div><dt>VLM call limit</dt><dd>2</dd></div>
+              <div><dt>Token budget</dt><dd>4,000</dd></div><div><dt>Cost budget</dt><dd>€0.020 per session</dd></div>
+              <div><dt>Timeout</dt><dd>30 seconds</dd></div><div><dt>Tools</dt><dd>Bounded OCR, region extraction</dd></div>
+            </dl></div>
+          </section>
+        </div>
+      </main>
+
+      <main id="workspace" class="screen">
+        <header class="casebar">
+          <button class="back-button" id="back" aria-label="Back to review queue">←</button>
+          <div class="case-identity"><span class="case-id">FD-2026-0042</span><strong>Anna Beispiel</strong></div>
+          <span class="status-badge review">Review required</span>
+          <section class="case-progress" aria-label="Case progress">
+            <div class="progress-track">
+            <div class="progress-step complete"><i>✓</i><span>Submitted</span></div>
+            <div class="progress-step complete"><i>✓</i><span>Extracted</span></div>
+            <div class="progress-step complete"><i>✓</i><span>Agent checked</span></div>
+            <div class="progress-step active"><i></i><span>Human review</span></div>
+            <div class="progress-step pending" id="outcome-step"><i></i><span>Outcome</span></div>
+            </div>
+          </section>
+          <button class="agent-latest" id="case-agent-trigger" aria-haspopup="dialog"><span>Latest Agent activity</span><strong>Summarized 3 review issues</strong><i>→</i></button>
+        </header>
+
+        <div class="review-layout">
+          <section class="document-panel" aria-label="Document evidence">
+            <div class="document-bar">
+              <div class="source-heading"><strong id="document-name">Bank statement</strong><span id="page-name">Page 4 of 5</span></div>
+              <div class="source-switch" role="tablist" aria-label="Evidence source"><button class="active" data-source-view="document">Document</button><button data-source-view="application">Application data</button></div>
+              <div class="document-tools" role="toolbar" aria-label="Document controls">
+                <button class="tool-button" id="zoom-out" aria-label="Zoom out">−</button>
+                <span id="zoom-label">92%</span>
+                <button class="tool-button" id="zoom-in" aria-label="Zoom in">+</button>
+                <span class="tool-divider"></span>
+                <button class="tool-button" aria-label="Rotate document">↻</button>
+                <button class="tool-button" aria-label="Fit page">↗</button>
+              </div>
+            </div>
+            <div class="document-body">
+              <aside class="thumbnail-strip" id="thumbnails" aria-label="Document pages"></aside>
+              <div class="document-stage"><article class="paper" id="paper"></article></div>
+            </div>
+          </section>
+
+          <div class="panel-resizer" id="panel-resizer" role="separator" aria-label="Resize case workspace" aria-orientation="vertical" tabindex="0"></div>
+          <aside class="review-panel" aria-label="Issue review">
+            <nav class="case-tabs" aria-label="Case review sections"><button class="active" data-case-tab="report">Agent report</button><button data-case-tab="issues">Issues <span>3</span></button><button data-case-tab="submit">Review & submit</button></nav>
+            <section class="case-view report-workspace active" data-case-view="report"></section>
+            <section class="case-view issues-workspace" data-case-view="issues">
+            <div class="issue-sequence">
+              <div class="issue-sequence-head"><button class="issue-list-toggle" id="issue-list-toggle" aria-expanded="true"><span>Review signals</span><small id="resolved-count">0 of 3 reviewed</small><b>⌃</b></button><button class="create-issue" id="create-issue">+ New issue</button></div>
+              <div id="issue-list" class="issue-list"></div>
+            </div>
+            <div class="issue-scroll"><div id="issue-content"></div></div>
+            <footer class="issue-footer">
+              <button class="button quiet square" id="previous" aria-label="Previous issue">←</button>
+              <span></span>
+              <button class="button quiet square" id="next" aria-label="Next issue">→</button>
+            </footer>
+            </section>
+            <section class="case-view submit-workspace" data-case-view="submit"></section>
+          </aside>
+        </div>
+      </main>
+
+      <main id="summary" class="screen">
+        <header class="casebar">
+          <button class="back-button" id="return-workspace" aria-label="Return to issues">←</button>
+          <div class="case-identity"><span class="case-id">FD-2026-0042</span><strong>Anna Beispiel</strong></div>
+          <span class="status-badge review">Review draft</span>
+        </header>
+        <div class="summary-wrap">
+          <div class="summary-main">
+            <h1>Review &amp; submit</h1>
+
+            <section class="summary-section">
+              <div class="section-heading"><h2>Review summary</h2></div>
+              <div id="summary-issues" class="summary-issues"></div>
+            </section>
+
+            <section class="summary-section message-preview-section">
+              <div class="section-heading"><h2>Message preview</h2><span>Draft only</span></div>
+              <div id="applicant-message-preview" class="applicant-message-preview"></div>
+            </section>
+
+            <section class="summary-section">
+              <div class="section-heading"><h2>Internal note</h2><span>Optional</span></div>
+              <label class="submission-field"><span>Visible to reviewers only</span><textarea id="internal-review-note" rows="3" placeholder="Add context for the audit record"></textarea></label>
+            </section>
+
+            <div class="submission-actions">
+              <button class="button quiet full case-action" data-case-action="changes">Request changes</button>
+              <button class="button quiet full case-action" data-case-action="escalate">Escalate review</button>
+              <button class="button primary full case-action" data-case-action="clear">Complete document review</button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+    </div>
+  </div>
+
+  <dialog id="details" class="details-drawer">
+    <div class="drawer-head">
+      <div><h2 id="drawer-title">Agent report</h2></div>
+      <button class="icon-button" id="close-details" aria-label="Close processing details">×</button>
+    </div>
+    <div class="drawer-body">
+      <section class="drawer-view active" data-view="report">
+        <section class="report-section">
+          <h3>Summary</h3>
+          <p class="report-copy">Four documents were processed. Three items require human review.</p>
+        </section>
+        <section class="report-section">
+          <h3>Issues</h3>
+          <div class="report-links">
+            <button data-report-issue="0"><b>01</b><span>Employer mismatch</span><em>→</em></button>
+            <button data-report-issue="1"><b>02</b><span>Monthly income</span><em>→</em></button>
+            <button data-report-issue="2"><b>03</b><span>Document boundary</span><em>→</em></button>
+          </div>
+        </section>
+        <section class="report-section">
+          <h3>Checked facts</h3>
+          <div class="checked-facts">
+            <button data-checked-source="application" data-source-issue="0"><i>✓</i><span><strong>Required documents present</strong><small>Application, identity document, payslip, and bank statement were found.</small><em>Application data</em></span><b>→</b></button>
+            <button data-checked-source="application" data-source-issue="0"><i>✓</i><span><strong>Applicant name consistent</strong><small>Anna Beispiel matches across the submitted documents.</small><em>Application data and submitted documents</em></span><b>→</b></button>
+            <button data-checked-source="document" data-source-issue="2" data-source-kind="identity" data-source-name="Identity document" data-source-page="Page 1"><i>✓</i><span><strong>Identity document not expired</strong><small>Expiry date 14 May 2031 is after the review date.</small><em>Identity document</em></span><b>→</b></button>
+            <button data-checked-source="document" data-source-issue="0" data-source-kind="bank" data-source-name="Bank statement" data-source-page="Page 1 of 5"><i>✓</i><span><strong>Account holder name consistent</strong><small>The bank statement account holder matches the applicant.</small><em>Bank statement, page 1</em></span><b>→</b></button>
+          </div>
+        </section>
+      </section>
+    </div>
+  </dialog>
+
+  <dialog id="case-agent-run" class="agent-run-dialog" aria-labelledby="case-agent-title">
+    <header><h2 id="case-agent-title">Agent log</h2><button class="icon-button" id="close-agent-run" aria-label="Close Agent log">×</button></header>
+    <div class="agent-run-body">
+      <div class="agent-log-meta"><span>Model <strong>VLM Small</strong></span><span>Cost <strong>€0.006</strong></span></div>
+      <section class="agent-run-events"><div><time>09:41:08</time><span>Received extraction gap</span></div><div><time>09:41:11</time><span>Called OCR region on payslip, page 2</span></div><div><time>09:41:14</time><span>Validated monthly income candidate</span></div><div><time>09:41:20</time><span>Cross-checked employer details</span></div><div><time>09:41:24</time><span>Generated review report</span></div></section>
+    </div>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

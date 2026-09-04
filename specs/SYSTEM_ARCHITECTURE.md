@@ -2,11 +2,11 @@
 
 Document ID: `ARC`
 
-Version: 1.1.0
+Version: 2.1.0
 
 Status: Approved
 
-Last updated: 2026-09-03
+Last updated: 2026-09-04
 
 ## 1. Purpose
 
@@ -23,7 +23,7 @@ This document owns:
 3. Trust zones and cross-zone data flow.
 4. End-to-end processing topology.
 5. Durable workflow and asynchronous coordination architecture.
-6. Model-gateway and Adaptive Extraction Agent placement.
+6. Model-gateway and Case Review Agent placement.
 7. Persistence-system responsibilities at an architectural level.
 8. Runtime isolation and cloud-portability constraints.
 
@@ -149,9 +149,9 @@ The initial release is a modular monolith deployed as a small set of processes. 
 
 | Runtime unit | Kind | Responsibilities | Explicit exclusions |
 |---|---|---|---|
-| Review Web | Static browser application | Case submission, progress, evidence inspection, corrections, review, audit timeline, and development annotation | Database access, durable state, document processing, model credentials |
+| Review Web | Static browser application | Review Queue, Agent Report, document and structured-data inspection, issue review, requested-change draft recording, final review actions, and safe Agent-monitoring projections | Database access, durable state, document processing, customer-message delivery, model credentials, dataset authoring, or golden-truth mutation |
 | API Service | Long-running Node.js process | HTTP and SSE edge, authentication context, contract validation, commands, queries, uploads, and review operations | Long-running PDF, OCR, VLM, Agent, and validation execution |
-| Worker Service | Long-running Node.js process; horizontally repeatable | Job consumption, workflow-stage execution, document task control, extraction, Agent recovery, validation, and disposition | Public browser API, core banking actions, authoritative state outside persistence |
+| Worker Service | Long-running Node.js process; horizontally repeatable | Job consumption, workflow-stage execution, document task control, extraction, Agent recovery, validation, disposition, and Agent report verification | Public browser API, core banking actions, authoritative state outside persistence |
 | Document Sandbox | Restricted subprocess or isolated task container | PDF parsing, PDFium rendering, image processing, and OCR for one bounded task | Direct database access, business credentials, model-provider credentials, unrestricted network access |
 | Dataset CLI | Offline command process | Synthetic generation, truth validation, dataset build and load, evaluation, and reporting | Online case orchestration and mutation of released golden truth |
 
@@ -260,7 +260,7 @@ The initial modular boundaries permit later extraction but do not promise that e
 
 ### 7.1 Review Web
 
-The Review Web is the browser application for case submission, progress display, evidence inspection, correction, review disposition, audit timeline, and development-only golden annotation.
+The Review Web is the browser application for the Review Queue, compact case progress, Agent Report, evidence inspection, issue review, requested-change draft recording, final document-review actions, and safe Agent monitoring. It does not deliver customer messages. Detailed processing and audit records remain durable backend or operational concerns rather than default reviewer views. Dataset authoring and golden-truth mutation are outside its boundary.
 
 `ARC-REQ-024` The Review Web must access case and document capabilities only through the API Service.
 
@@ -338,13 +338,13 @@ The Model Gateway presents provider-neutral, task-specific operations for page c
 
 `ARC-REQ-049` A model adapter failure must be classified as retryable, non-retryable, budget-exhausted, schema-invalid, or unavailable before workflow handling.
 
-### 7.8 Adaptive Extraction Agent
+### 7.8 Pi Case Review Agent
 
-The Adaptive Extraction Agent uses an embedded Pi harness to choose among a finite set of approved recovery tools for one explicit extraction gap.
+The Pi Case Review Agent uses an embedded bounded harness in two modes: optional recovery over eligible extraction gaps and mandatory-attempt pre-screening over one processable result revision. Report mode produces a non-authoritative Case Review Brief for a human reviewer.
 
 `ARC-REQ-050` The Agent must be created with no default coding, Shell, arbitrary file, package-management, or unrestricted network tools.
 
-`ARC-REQ-051` The Agent must receive only the gap, bounded relevant context, approved tool schemas, and execution budgets required for its task.
+`ARC-REQ-051` The Agent must receive only the mode, bound gap or result revision, bounded relevant context, approved tool schemas, and execution budgets required for its task.
 
 `ARC-REQ-052` Each Agent tool must enforce case, run, document, page or region, input-schema, and authorization boundaries outside the model.
 
@@ -353,6 +353,12 @@ The Adaptive Extraction Agent uses an embedded Pi harness to choose among a fini
 `ARC-REQ-054` Submitted Agent candidates must pass the same schema, evidence, and reconciliation boundaries as non-Agent extraction candidates.
 
 `ARC-REQ-055` Agent-session state must not be the authoritative record of durable workflow progress.
+
+`ARC-REQ-164` Report mode must expose read-only case-review context plus one schema-constrained brief-submission tool; it must not expose candidate-submission or recovery tools.
+
+`ARC-REQ-165` A deterministic Report Verifier must validate report schema, references, registered vocabularies, value consistency, and prohibited-decision language before publication.
+
+`ARC-REQ-166` Report generation or verification failure must not prevent routing the deterministic result to Human-in-the-Loop review.
 
 ### 7.9 Entity Resolution Component
 
@@ -437,7 +443,8 @@ intake
   -> resolve entities
   -> validate
   -> derive recommended disposition
-  -> ready or review_required
+  -> Pi Case Review Brief generation and deterministic verification
+  -> review_required
 ```
 
 `ARC-REQ-076` The workflow definition must identify stage dependencies, input contract versions, output contract versions, retry policy references, and completion conditions.
@@ -559,7 +566,7 @@ The Model Gateway exposes task-specific operations rather than a generic unrestr
 
 `ARC-REQ-107` The architecture must permit configuration of a default model and fallback model selected through evaluation evidence.
 
-`ARC-REQ-108` The Adaptive Extraction Agent must not choose an arbitrary provider or model outside the configured operation.
+`ARC-REQ-108` The Case Review Agent must not choose an arbitrary provider or model outside the configured operation.
 
 `ARC-REQ-109` Model fallback must preserve task and output-contract semantics and must be visible in run provenance.
 
@@ -669,5 +676,8 @@ These decisions may refine adapters, versions, thresholds, and budgets. They mus
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.1.0 | 2026-09-04 | Approved | Aligned Review Web with the V1 HTML baseline, separated Agent monitoring from case review, and limited requested changes to recorded drafts without customer delivery. |
+| 2.0.0 | 2026-09-04 | Approved | Added per-case Pi pre-screening, verified Case Review Brief generation, and fail-open routing to human review while retaining bounded gap recovery. |
+| 1.1.1 | 2026-09-04 | Approved | Removed development annotation from the Review Web boundary; golden truth remains an offline Dataset CLI responsibility. |
 | 1.1.0 | 2026-09-03 | Approved | Corrected the run-versus-case lifecycle boundary and adopted the processing-run status vocabulary defined by `INDEX.md`. |
 | 1.0 | 2026-09-03 | Approved | Approved the system architecture baseline, including the modular-monolith deployment, service communication, and database-ownership model. |

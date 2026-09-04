@@ -1,24 +1,24 @@
-# Financial Document AI Agent Adaptive Extraction Agent Specification
+# Financial Document AI Agent Case Review Agent Specification
 
 Document ID: `AGT`
 
-Version: 1.0
+Version: 2.1.0
 
 Status: Approved
 
-Last updated: 2026-09-03
+Last updated: 2026-09-04
 
 ## 1. Purpose
 
-This specification defines the bounded Pi-based Adaptive Extraction Agent that may recover explicit extraction gaps after fixed processing paths are exhausted and before Human-in-the-Loop review.
+This specification defines the bounded Pi-based Case Review Agent that pre-screens every processable case, produces a Case Review Brief, and may recover explicit extraction gaps through an optional Adaptive Extraction mode.
 
-The Agent is an extraction-recovery mechanism. It is not the workflow engine, a general coding agent, a validator, a disposition authority, or a banking decision-maker.
+The Agent acts like a junior document-review employee: it assembles evidence-grounded observations and suggests registered reviewer actions. It is not the workflow engine, a general coding agent, a validator, a disposition authority, or a banking decision-maker.
 
 ## 2. Authority and Dependencies
 
 This document owns:
 
-1. Agent eligibility, context, lifecycle, stopping, and escalation.
+1. Per-case report scheduling, adaptive-recovery eligibility, context, lifecycle, stopping, and escalation.
 2. Agent tool registration, authorization, validation, and execution semantics.
 3. Execution budgets and no-progress controls.
 4. Pi harness restrictions and isolation.
@@ -32,7 +32,7 @@ Normative dependencies are:
 4. [`../DATA_MODEL.md`](../DATA_MODEL.md) for gaps, sessions, steps, invocations, candidates, evidence, and run provenance.
 5. [`DOCUMENT_PROCESSING.md`](DOCUMENT_PROCESSING.md) for document inspection, rendering, native extraction, and OCR operations.
 
-`AGT-REQ-001` The initial implementation must embed `pi-coding-agent` through its SDK behind a project-owned `AdaptiveExtractionHarness` interface.
+`AGT-REQ-001` The initial implementation must embed `pi-coding-agent` through its SDK behind a project-owned `CaseReviewAgentHarness` interface.
 
 `AGT-REQ-002` Pi-specific session, message, tool, and provider types must not enter domain contracts.
 
@@ -61,7 +61,7 @@ flowchart LR
 
 `AGT-REQ-005` The Workflow Coordinator, not the Agent, must decide whether and when an Agent session is scheduled.
 
-`AGT-REQ-006` An Agent session may start only for one or more persisted extraction gaps in one case and processing run.
+`AGT-REQ-006` An Agent session must declare `adaptive_recovery` or `case_review_report` mode. Recovery requires one or more persisted eligible gaps; report mode requires one processable result revision after deterministic validation and disposition.
 
 `AGT-REQ-007` Fixed native, OCR, local-table, and configured non-Agent extraction paths applicable to a gap must complete or explicitly fail before that gap becomes Agent-eligible.
 
@@ -73,7 +73,7 @@ flowchart LR
 
 ### 3.1 Agent-in-the-Loop contract
 
-The Adaptive Extraction Agent is an Agent-in-the-Loop between deterministic extraction and Human-in-the-Loop review. It does not continuously observe cases or decide independently to join a workflow.
+The Case Review Agent is an Agent-in-the-Loop scheduled by the Workflow Coordinator. It may run an eligible Adaptive Extraction session during processing and must attempt a report session after deterministic disposition; it does not continuously observe cases or decide independently to join a workflow.
 
 ```mermaid
 sequenceDiagram
@@ -136,15 +136,15 @@ flowchart LR
 
 The trusted Agent Control Plane owns context selection. Pi consumes the resulting view but cannot query arbitrary case state or mutate the context manifest.
 
-`AGT-REQ-011` A session must bind exactly one case, one processing run, one stage attempt, an explicit set of related gaps, one harness configuration version, one tool-registry version, and one budget envelope.
+`AGT-REQ-011` A session must bind exactly one case, one processing run, one stage attempt, one mode, one harness configuration version, one tool-registry version, and one budget envelope; it must additionally bind gaps in recovery mode or a result revision in report mode.
 
-`AGT-REQ-012` All gaps in one session must concern the same bounded logical document or explicitly approved contiguous page window.
+`AGT-REQ-012` All gaps in a recovery session must concern the same bounded logical document or explicitly approved contiguous page window.
 
-`AGT-REQ-013` A session must receive only the minimum context required to resolve its bound gaps.
+`AGT-REQ-013` A session must receive only the minimum context required for its declared mode.
 
 `AGT-REQ-014` Allowed context may include field schemas, gap descriptions, selected page metadata, bounded native or OCR text, existing candidate summaries, evidence metadata, and safe processing diagnostics.
 
-`AGT-REQ-015` A session must not receive a complete case package, unrelated logical documents, unrestricted application data, validation findings, disposition policy, credentials, or internal system configuration.
+`AGT-REQ-015` A session must not receive a complete case package, unrestricted application data, disposition-policy internals, credentials, or internal system configuration. Report mode may receive bounded persisted claim, evidence-index, gap, finding, and recommended-disposition projections for its bound result revision.
 
 `AGT-REQ-016` Full document bytes and page images must be accessed only through scoped tools; they must not be embedded wholesale in the Agent instruction context.
 
@@ -440,7 +440,35 @@ Retries operate at different layers. A lower layer must not conceal repeated wor
 
 `AGT-REQ-085` Rejected policy-violating requests must be recorded using safe reason codes without persisting the sensitive requested content unnecessarily.
 
-## 14. Observability
+## 14. Case Review Brief
+
+`AGT-REQ-144` The Workflow Coordinator must attempt exactly one current `case_review_report` session for every processable result revision before presenting that revision for human review.
+
+`AGT-REQ-145` Report mode must receive a deterministic `CaseReviewContext` containing document inventory, material claim references, evidence availability, extraction gaps, deterministic findings, recommended disposition, and safe processing diagnostics for one result revision.
+
+`AGT-REQ-146` Report mode must be read-only except for `submit_case_review_brief`; it must not submit extraction candidates, mutate claims, evaluate rules, change findings or disposition, or transition workflow state.
+
+`AGT-REQ-147` A `CaseReviewBrief` must contain schema version, bound result revision, report status, concise case summary, zero or more registered review signals, zero or more registered suggested actions, ordered reviewer-attention items, and supporting record references.
+
+The initial review-signal vocabulary is `document_missing`, `document_type_uncertain`, `document_boundary_uncertain`, `field_missing`, `field_low_confidence`, `evidence_missing`, `evidence_ambiguous`, `conflicting_candidates`, `validation_finding_requires_attention`, `instruction_like_content_observed`, `processing_failure`, `agent_budget_exhausted`, and `agent_report_unavailable`.
+
+The initial suggested-action vocabulary is `inspect_evidence`, `compare_claims`, `verify_extracted_value`, `review_document_boundary`, `review_missing_document`, `review_conflicting_candidates`, `review_agent_recovery`, `rerun_bounded_extraction`, `edit_issue`, `request_changes`, and `escalate_review`. The Agent must not suggest `accept_signal`, `dismiss_signal`, or `clear_for_downstream` for its own output.
+
+`AGT-REQ-148` Every review signal and suggested action must cite at least one current persisted claim, evidence item, gap, finding, processing failure, or Agent-session outcome; free-standing speculation is invalid.
+
+`AGT-REQ-149` The Agent may order reviewer-attention items within its brief but must not change deterministic finding severity, rule outcome, disposition precedence, or workflow priority.
+
+`AGT-REQ-150` A deterministic Report Verifier must reject a brief whose schema is invalid, references are absent or outside the bound result revision, vocabulary is unregistered, displayed values conflict with referenced records, or content expresses a prohibited lending, creditworthiness, AML, KYC, account, pricing, disbursement, or customer-contact decision.
+
+`AGT-REQ-151` Only a verified brief may be displayed as the current Agent report. Original submitted output and rejection reasons must remain immutable safe diagnostic provenance.
+
+`AGT-REQ-152` Report failure, timeout, budget exhaustion, or verification rejection must produce an explicit unavailable status and route the deterministic case result to human review without fabricating a brief or blocking access to claims, evidence, findings, and disposition.
+
+`AGT-REQ-153` A human reviewer must confirm or supersede the document-processing result through registered review actions; an Agent suggestion never constitutes that action.
+
+`AGT-REQ-154` Default continuous integration must cover verified, schema-rejected, reference-rejected, policy-rejected, timeout, and unavailable report fixtures with a fake Agent adapter.
+
+## 15. Observability
 
 `AGT-REQ-086` Agent telemetry must correlate case, run, gap, session, step, stage attempt, model invocation, tool call, and trace identifiers as applicable.
 
@@ -452,7 +480,7 @@ Retries operate at different layers. A lower layer must not conceal repeated wor
 
 `AGT-REQ-090` The system must report measured Agent behavior without claiming unsupported autonomy, accuracy, cost, latency, or production safety.
 
-## 15. Acceptance Criteria
+## 16. Acceptance Criteria
 
 The Agent component is acceptable for implementation when automated tests demonstrate that:
 
@@ -482,6 +510,12 @@ The Agent component is acceptable for implementation when automated tests demons
 
 `AGT-REQ-103` The adaptive demo path exposes recovery actions, resulting candidates and evidence, terminal outcome, latency, model usage, and estimated cost availability.
 
+`AGT-REQ-155` Every primary demo path attempts report generation, exposes verification status and supporting references, and proceeds to human review even when the report is unavailable.
+
+`AGT-REQ-156` A Case Review Brief may attach one applicant-readable requested-change draft to a review signal when the registered suggested action is `request_changes`; the draft must use plain language, remain evidence-grounded, and must not contain internal processing detail or imply customer-contact authority or a banking decision.
+
+`AGT-REQ-157` The Report Verifier must validate requested-change draft structure, signal binding, references, and prohibited content. A verified draft remains non-authoritative and cannot be included in a final review message without an explicit human action.
+
 `AGT-REQ-140` Eligibility tests prove that eligible extraction gaps trigger Agent-in-the-Loop only after fixed paths finish, while validation conflicts, fatal inputs, duplicate attempts, and insufficient budgets do not.
 
 `AGT-REQ-141` Context tests prove that manifests are scoped, size-bounded, trust-labeled, reproducible, and preserve required control metadata during compaction.
@@ -490,7 +524,7 @@ The Agent component is acceptable for implementation when automated tests demons
 
 `AGT-REQ-143` Retry tests distinguish transport, tool, model, step, session, stage, and new-run behavior and prove that usage and attempts are not reset or hidden across layers.
 
-## 16. Assumptions and Deferred Evidence
+## 17. Assumptions and Deferred Evidence
 
 1. Only synthetic or explicitly demo-safe documents enter the initial demonstration.
 2. Exact budget values, no-progress limits, default model, fallback model, and eligibility thresholds require golden-set evidence and remain in [`../../BACKLOG.md`](../../BACKLOG.md).
@@ -500,8 +534,10 @@ The Agent component is acceptable for implementation when automated tests demons
 
 No unresolved Agent-authority decision blocks review of this document.
 
-## 17. Document History
+## 18. Document History
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.1.0 | 2026-09-04 | Approved | Added optional verified applicant-readable requested-change drafts without delivery or decision authority for the V1 review workflow. |
+| 2.0.0 | 2026-09-04 | Approved | Expanded Pi into a per-case pre-screening Agent with a verified Case Review Brief while retaining optional bounded adaptive extraction. |
 | 1.0 | 2026-09-03 | Approved | Approved the bounded Pi harness, Agent-in-the-Loop trigger, context, tool, retry, budget, stopping, persistence, and safety baseline. |
