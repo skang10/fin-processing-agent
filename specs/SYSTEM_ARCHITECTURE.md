@@ -2,7 +2,7 @@
 
 Document ID: `ARC`
 
-Version: 2.1.0
+Version: 2.2.0
 
 Status: Approved
 
@@ -149,8 +149,8 @@ The initial release is a modular monolith deployed as a small set of processes. 
 
 | Runtime unit | Kind | Responsibilities | Explicit exclusions |
 |---|---|---|---|
-| Review Web | Static browser application | Review Queue, Agent Report, document and structured-data inspection, issue review, requested-change draft recording, final review actions, and safe Agent-monitoring projections | Database access, durable state, document processing, customer-message delivery, model credentials, dataset authoring, or golden-truth mutation |
-| API Service | Long-running Node.js process | HTTP and SSE edge, authentication context, contract validation, commands, queries, uploads, and review operations | Long-running PDF, OCR, VLM, Agent, and validation execution |
+| Review Web | Static browser application | Review Queue, Agent Report, document and structured-data inspection, issue review, requested-change draft recording, final review actions, and bounded case Agent log | Database access, durable state, document processing, customer-message delivery, model credentials, dataset authoring, golden-truth mutation, or aggregate Agent monitoring |
+| API Service | Long-running Node.js process | HTTP edge, authentication context, contract validation, commands, polling queries, uploads, and review operations | Long-running PDF, OCR, VLM, Agent, and validation execution |
 | Worker Service | Long-running Node.js process; horizontally repeatable | Job consumption, workflow-stage execution, document task control, extraction, Agent recovery, validation, disposition, and Agent report verification | Public browser API, core banking actions, authoritative state outside persistence |
 | Document Sandbox | Restricted subprocess or isolated task container | PDF parsing, PDFium rendering, image processing, and OCR for one bounded task | Direct database access, business credentials, model-provider credentials, unrestricted network access |
 | Dataset CLI | Offline command process | Synthetic generation, truth validation, dataset build and load, evaluation, and reporting | Online case orchestration and mutation of released golden truth |
@@ -166,7 +166,6 @@ The initial release is a modular monolith deployed as a small set of processes. 
 | Caller | Callee | Mechanism | Purpose | Payload boundary |
 |---|---|---|---|---|
 | Review Web | API Service | HTTP request/response | Commands, queries, uploads, and review actions | Versioned API contracts |
-| Review Web | API Service | SSE | Incremental case and stage events | Authorized event projections |
 | API Service | PostgreSQL | SQL transaction | Case commands, query projections, review records, idempotency, and outbox | Typed repositories and transactions |
 | API Service | Object storage | S3-compatible API | Streaming source upload and authorized artifact access | Bytes plus immutable object metadata |
 | Outbox Dispatcher | pg-boss | PostgreSQL transaction and job enqueue | Publish committed workflow work | Versioned job reference, never document bytes |
@@ -260,7 +259,7 @@ The initial modular boundaries permit later extraction but do not promise that e
 
 ### 7.1 Review Web
 
-The Review Web is the browser application for the Review Queue, compact case progress, Agent Report, evidence inspection, issue review, requested-change draft recording, final document-review actions, and safe Agent monitoring. It does not deliver customer messages. Detailed processing and audit records remain durable backend or operational concerns rather than default reviewer views. Dataset authoring and golden-truth mutation are outside its boundary.
+The Review Web is the browser application for the Review Queue, compact case progress, Agent Report, evidence inspection, issue review, requested-change draft recording, final document-review actions, and a bounded case Agent log. It does not deliver customer messages. Detailed processing, aggregate Agent monitoring, and audit records remain backend or later operational concerns rather than V1 reviewer views. Dataset authoring and golden-truth mutation are outside its boundary.
 
 `ARC-REQ-024` The Review Web must access case and document capabilities only through the API Service.
 
@@ -500,7 +499,7 @@ Submitter      API        Object Store    PostgreSQL    Worker      Model/Agent
     |           |              |              |<----------|             |
     |           |              |              | validate + disposition  |
     |           |              |              |<----------|             |
-    | poll/SSE  |              |              |           |             |
+    | poll      |              |              |           |             |
     |---------->| query state  |              |           |             |
     |           |---------------------------->|           |             |
     |<----------| result/events|              |           |             |
@@ -508,7 +507,7 @@ Submitter      API        Object Store    PostgreSQL    Worker      Model/Agent
 
 `ARC-REQ-089` The API must acknowledge accepted asynchronous case creation without waiting for semantic document processing.
 
-`ARC-REQ-090` The browser must obtain authoritative state through query or event APIs, not by observing worker or Agent sessions directly.
+`ARC-REQ-090` The V1 browser must obtain authoritative state through polling query APIs, not by observing worker or Agent sessions directly. Event delivery is deferred.
 
 `ARC-REQ-091` Every asynchronous boundary must propagate or link request, case, run, job, stage, and trace identifiers as applicable.
 
@@ -676,6 +675,7 @@ These decisions may refine adapters, versions, thresholds, and budgets. They mus
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.2.0 | 2026-09-04 | Approved | Reduced V1 browser integration to polling and a bounded case Agent log; deferred SSE and aggregate Agent monitoring. |
 | 2.1.0 | 2026-09-04 | Approved | Aligned Review Web with the V1 HTML baseline, separated Agent monitoring from case review, and limited requested changes to recorded drafts without customer delivery. |
 | 2.0.0 | 2026-09-04 | Approved | Added per-case Pi pre-screening, verified Case Review Brief generation, and fail-open routing to human review while retaining bounded gap recovery. |
 | 1.1.1 | 2026-09-04 | Approved | Removed development annotation from the Review Web boundary; golden truth remains an offline Dataset CLI responsibility. |

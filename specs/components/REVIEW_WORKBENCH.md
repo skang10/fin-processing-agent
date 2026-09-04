@@ -2,7 +2,7 @@
 
 Document ID: `UI`
 
-Version: 3.0.0
+Version: 3.1.0
 
 Status: Approved
 
@@ -10,7 +10,7 @@ Last updated: 2026-09-04
 
 ## 1. Purpose
 
-This specification defines the V1 Review Queue, Pi Case Review Brief, compact processing progress, document and structured-application inspection, issue review, requested-change drafts, final document-review actions, case Agent log, and separate Agent-monitoring presentation.
+This specification defines the V1 Review Queue, Pi Case Review Brief, compact processing progress, document and structured-application inspection, issue review, requested-change drafts, final document-review actions, and bounded case Agent log. Aggregate Agent monitoring is deferred.
 
 The workbench supports document-processing review only. It is not a lending, account-opening, disbursement, customer-contact, AML, or KYC decision interface.
 
@@ -21,7 +21,7 @@ This document owns:
 1. Review Workbench information architecture and reviewer workflows.
 2. Evidence-viewer and correction interaction behavior.
 3. Review-action vocabulary and presentation safeguards.
-4. Agent brief, safe case Agent log, and Agent-monitoring presentation.
+4. Agent brief and safe case Agent log presentation.
 
 Normative dependencies are:
 
@@ -94,15 +94,15 @@ flowchart TD
 
 `UI-REQ-023` Polling must be the baseline mechanism for obtaining current case and stage state.
 
-`UI-REQ-024` SSE should provide incremental authorized case and stage events without requiring a full page reload.
+`UI-REQ-024` Deprecated in V3.1.0. V1 uses polling; SSE is deferred.
 
-`UI-REQ-025` SSE events must be treated as invalidation or projection updates and must not become the only authoritative record in the browser.
+`UI-REQ-025` Deprecated in V3.1.0 with SSE.
 
-`UI-REQ-026` On initial load, reconnection, detected event gap, or incompatible event version, the client must refetch the authoritative query projection.
+`UI-REQ-026` On initial load, browser refresh, stale-state detection, or command completion, the client must refetch the authoritative query projection.
 
-`UI-REQ-027` Duplicate or out-of-order events must not regress displayed authoritative state.
+`UI-REQ-027` An older polling response must not regress a newer displayed authoritative resource version.
 
-`UI-REQ-028` Loss of SSE must degrade to polling and must not prevent review of already available results.
+`UI-REQ-028` Deprecated in V3.1.0 with SSE.
 
 `UI-REQ-029` The interface must communicate when displayed data may be stale and provide a recovery action.
 
@@ -220,15 +220,15 @@ The workbench presents `clear_for_downstream` as **Complete document review** so
 
 `UI-REQ-150` A compact node-based case progression must appear inline in the case header so it remains shared across Agent Report, Issues, and Review & Submit; completed nodes are lit, the current node is highlighted, and the outcome is limited to completed, changes requested, or review escalated. One short, reviewer-readable description of the Agent's most recently completed activity may appear in a separate block to the right of the progression, without being attached to a checkpoint or exposing a step trace or internal telemetry. Run, result-revision, and current-issue counters must not duplicate information in this header.
 
-`UI-REQ-151` Agent operational monitoring must use a separate top-level entry and must not appear inside the case-review workspace.
+`UI-REQ-151` Deprecated in V3.1.0. A separate aggregate Agent-monitoring surface is deferred.
 
-`UI-REQ-152` Monitoring overview must show aggregate session outcomes, latency, token usage, estimated model cost, and attention-required counts with an explicit time scope.
+`UI-REQ-152` Deprecated in V3.1.0 with aggregate Agent monitoring.
 
-`UI-REQ-153` Session monitoring must identify Agent version, model, duration, token usage, estimated cost, terminal outcome, and a safe event summary without displaying document content, chain-of-thought, complete prompts, credentials, or raw provider payloads.
+`UI-REQ-153` Deprecated in V3.1.0 with aggregate Agent monitoring. The disclosure restrictions remain applicable to the case Agent log.
 
-`UI-REQ-154` Active Agent configuration must be read-only in monitoring and show versioned model, prompt, schema, tool, iteration, token, cost, call, and timeout limits when available. Runtime configuration changes require a separate controlled release workflow.
+`UI-REQ-154` Deprecated in V3.1.0. Runtime Agent configuration editing remains prohibited.
 
-`UI-REQ-155` Each case may provide a progressive-disclosure Agent log showing only the model, estimated cost, timestamps, and short reviewer-readable activity events, including bounded tool calls when relevant. Session identifiers, versions, token counts, duration, call budgets, and other technical metadata remain in Agent monitoring. The case log inherits the disclosure restrictions in `UI-REQ-153`.
+`UI-REQ-155` Each case may provide a progressive-disclosure Agent log showing only the model, estimated cost or explicit unavailability, timestamps, and short reviewer-readable activity events, including bounded tool calls when relevant. Session identifiers, complete prompts, document content, chain-of-thought, credentials, raw provider payloads, and unrestricted tool arguments must not appear.
 
 `UI-REQ-156` The structured Application data view must group reviewer-relevant applicant, masked contact, submission-history, employment, and income fields. It must distinguish initial submission, latest applicant submission, and latest application-data update times, and must not expose a customer-contact action.
 
@@ -248,7 +248,7 @@ The workbench presents `clear_for_downstream` as **Complete document review** so
 
 `UI-REQ-164` A native-text golden case must display its verified Case Review Brief, review issues, checked facts, structured application data, source documents, and evidence navigation without requiring a separate Pipeline view.
 
-`UI-REQ-165` An adaptive golden case must expose its reviewer-relevant recovery outcome through the Agent Report or issue evidence and expose model and cost detail through the bounded case Agent log or Agent monitoring.
+`UI-REQ-165` The single adaptive golden demonstration case must expose its reviewer-relevant recovery outcome through the Agent Report or issue evidence and expose model and cost detail through the bounded case Agent log.
 
 `UI-REQ-166` Missing and purged evidence and unavailable model cost must be labeled accurately; stale or historical result state is shown only when it materially interrupts current review.
 
@@ -256,13 +256,13 @@ The workbench presents `clear_for_downstream` as **Complete document review** so
 
 `UI-REQ-168` Editing an issue must occur inline within issue context and append human review state without mutating the original Agent signal or deterministic finding.
 
-`UI-REQ-169` Technical metadata and safe Agent activity must remain outside the default issue sequence and be reachable through the bounded case Agent log or separate Agent monitoring.
+`UI-REQ-169` Technical metadata and safe Agent activity must remain outside the default issue sequence and be reachable through the bounded case Agent log.
 
 `UI-REQ-170` Agent Report availability must communicate `Ready`, `Pending`, or `Unavailable`; technical verification status belongs to report metadata rather than the default case header.
 
 `UI-REQ-080` The reviewer workbench must not expose a separate Pipeline view; case-level processing state is represented by the compact shared progression in `UI-REQ-150`.
 
-`UI-REQ-081` through `UI-REQ-085` are superseded for V1 by the bounded case Agent log in `UI-REQ-155` and separate Agent monitoring in `UI-REQ-151` through `UI-REQ-154`. Missing provider usage or cost must still be labeled unavailable rather than zero.
+`UI-REQ-081` through `UI-REQ-085` are superseded for V1 by the bounded case Agent log in `UI-REQ-155`. Missing provider usage or cost must still be labeled unavailable rather than zero.
 
 ## 14. Deferred Reviewer Audit Timeline
 
@@ -332,7 +332,7 @@ The workbench is acceptable for implementation when automated browser and contra
 
 `UI-REQ-143` Report-rejected and report-unavailable fixtures remain fully reviewable and never display unverified Agent prose as an accepted brief.
 
-`UI-REQ-125` SSE loss, duplicate events, out-of-order events, and reconnection converge to authoritative API state through refetch or polling.
+`UI-REQ-125` Polling, browser refresh, stale responses, and command completion must converge to authoritative API state through refetch.
 
 `UI-REQ-126` Deprecated in V3.0; unavailable and stale state is governed by `UI-REQ-166`.
 
@@ -363,7 +363,7 @@ When all issues are resolved, `request_changes` must be available only when at l
 ## 19. Assumptions and Deferred Details
 
 1. V1 uses synthetic or explicitly demo-safe cases only.
-2. Detailed HTTP payloads, pagination, SSE envelopes, idempotency headers, and error schemas belong to `API_CONTRACTS.md`.
+2. Detailed HTTP payloads, polling, bounded idempotency, concurrency, and error schemas belong to `API_CONTRACTS.md`.
 3. Exact visual design, responsive breakpoints, component composition, and motion may evolve without weakening these workflows or semantic distinctions.
 4. Production identity, fine-grained authorization, regulated accessibility conformance, and sensitive-value reveal workflows are not claimed by V1 and remain subject to later security specification.
 5. V1 is a small functional workbench, not a full banking operations queue or case-management platform.
@@ -374,6 +374,7 @@ No unresolved Review Workbench boundary decision blocks review of this document.
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.1.0 | 2026-09-04 | Approved | Reduced V1 to polling and a bounded case Agent log; deferred SSE and the separate aggregate Agent-monitoring surface. |
 | 3.0.0 | 2026-09-04 | Approved | Approved the V1 HTML UX baseline: Agent Report entry, workflow-state queue, issue review, applicant-readable drafts without delivery, compact progress, bounded case Agent log, and separate monitoring; deprecated direct correction, Pipeline, and reviewer audit views from V1. No unresolved boundary decision remains. |
 | 2.2 | 2026-09-04 | Draft for review | Added a separate Agent monitoring surface for aggregate health, safe session events, usage, cost, and read-only configuration. |
 | 2.1 | 2026-09-04 | Draft for review | Unified processing status and the Pi Case Review Brief into one Case Dashboard; retained deep Agent trace and audit as progressive detail. |

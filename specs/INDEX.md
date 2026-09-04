@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 2.4.0
+Version: 2.7.0
 
 Status: Approved
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-This index, `PRODUCT_AND_SCOPE.md`, `SYSTEM_ARCHITECTURE.md`, `DATA_MODEL.md`, `components/DOCUMENT_PROCESSING.md`, `components/ADAPTIVE_EXTRACTION_AGENT.md`, `components/VALIDATION_AND_DISPOSITION.md`, `components/REVIEW_WORKBENCH.md`, and `API_CONTRACTS.md` are approved. All remaining planned specifications are pending. The migration source remains the working behavioral baseline for subjects that do not yet have an approved owner.
+This index, `PRODUCT_AND_SCOPE.md`, `SYSTEM_ARCHITECTURE.md`, `DATA_MODEL.md`, `components/DOCUMENT_PROCESSING.md`, `components/ADAPTIVE_EXTRACTION_AGENT.md`, `components/VALIDATION_AND_DISPOSITION.md`, `components/REVIEW_WORKBENCH.md`, `API_CONTRACTS.md`, and `ML_PIPELINE_AND_EVALUATION.md` are approved. `SECURITY_AND_LIMITATIONS.md` is in review; all remaining planned specifications are pending. The migration source remains the working behavioral baseline for subjects that do not yet have an approved owner.
 
 ## 3. Product Baseline
 
@@ -71,10 +71,10 @@ Normative product scope belongs to `PRODUCT_AND_SCOPE.md`. This section is an in
 | 5 | `components/DOCUMENT_PROCESSING.md` | `DOC` | Intake, inspection, rendering, page classification, logical-document grouping, native extraction, OCR, and table extraction | Approved |
 | 6 | `components/ADAPTIVE_EXTRACTION_AGENT.md` | `AGT` | Pi Case Review Agent, verified review briefs, optional gap recovery, allowlisted tools, budgets, stopping, and escalation | Approved |
 | 7 | `components/VALIDATION_AND_DISPOSITION.md` | `VAL` | Entity matching, validation-rule architecture, findings, and deterministic recommended-disposition mapping | Approved |
-| 8 | `components/REVIEW_WORKBENCH.md` | `UI` | Review Queue, Agent Report, evidence viewer, issue review, requested-change drafts, final review, and Agent-monitoring presentation | Approved |
-| 9 | `API_CONTRACTS.md` | `API` | HTTP endpoints, events, idempotency, error format, authentication context, and generated OpenAPI ownership | Approved |
-| 10 | `ML_PIPELINE_AND_EVALUATION.md` | `MLE` | Datasets, dataset pipeline, metrics, model selection, confidence, evaluation, and regression | Pending |
-| 11 | `SECURITY_AND_LIMITATIONS.md` | `SEC` | Threat model, prompt injection, file controls, authorization boundary, secrets, and operational security controls | Pending |
+| 8 | `components/REVIEW_WORKBENCH.md` | `UI` | Review Queue, Agent Report, evidence viewer, issue review, requested-change drafts, final review, and bounded case Agent log | Approved |
+| 9 | `API_CONTRACTS.md` | `API` | HTTP endpoints, polling, bounded idempotency, concurrency, error format, authentication context, and generated OpenAPI ownership | Approved |
+| 10 | `ML_PIPELINE_AND_EVALUATION.md` | `MLE` | Datasets, dataset pipeline, metrics, model selection, confidence, evaluation, and regression | Approved |
+| 11 | `SECURITY_AND_LIMITATIONS.md` | `SEC` | Threat model, prompt injection, file controls, authorization boundary, secrets, and operational security controls | In Review |
 | 12 | `operations/OBSERVABILITY_AND_FAILURES.md` | `OPS` | Logs, traces, metrics, retries, degradation, recovery, and operational diagnosis | Pending |
 | 13 | `operations/DEPLOYMENT.md` | `DEP` | Docker Compose delivery, configuration, containers, storage dependencies, and cloud reference mapping | Pending |
 | 14 | `decisions/ADR_001_PI_AGENT_HARNESS.md` | `ADR-001` | Selection and hardening of the Pi Agent harness | Pending |
@@ -320,8 +320,8 @@ The following table assigns sections from the migration source to their future o
 | File intake, PDF inspection, rendering, OCR, page classification, logical splitting, and table extraction | `components/DOCUMENT_PROCESSING.md` |
 | Pi integration, extraction gaps, allowlisted tools, budgets, stopping, and human escalation | `components/ADAPTIVE_EXTRACTION_AGENT.md` |
 | Entity matching, finite rule sets, five demonstration rules, finding states, and disposition mapping | `components/VALIDATION_AND_DISPOSITION.md` |
-| Case UI, Agent brief, evidence viewer, review issues, requested-change drafts, final review actions, and Agent-monitoring presentation | `components/REVIEW_WORKBENCH.md` |
-| HTTP endpoints, SSE, error format, idempotency, authentication context, and OpenAPI | `API_CONTRACTS.md` |
+| Case UI, Agent brief, evidence viewer, review issues, requested-change drafts, final review actions, and bounded case Agent log | `components/REVIEW_WORKBENCH.md` |
+| HTTP endpoints, polling, bounded idempotency, concurrency, error format, authentication context, and OpenAPI | `API_CONTRACTS.md` |
 | Golden set, dataset tooling, confidence, metrics, model comparison, prompts, and regression | `ML_PIPELINE_AND_EVALUATION.md` |
 | File controls, prompt injection, secrets, access boundaries, and production-gap references | `SECURITY_AND_LIMITATIONS.md` |
 | Logs, traces, metrics, retries, partial results, budgets, and degradation | `operations/OBSERVABILITY_AND_FAILURES.md` |
@@ -367,6 +367,9 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.7.0 | 2026-09-04 | Approved | Reduced the first V1 vertical slice to polling, case-level Agent activity, six initial golden cases, and staged infrastructure delivery. |
+| 2.6.0 | 2026-09-04 | Approved | Approved the focused V1 ML Pipeline and Evaluation specification and registered Security and Limitations for review. |
+| 2.5.0 | 2026-09-04 | Approved | Registered the focused V1 ML Pipeline and Evaluation specification for review. |
 | 2.4.0 | 2026-09-04 | Approved | Approved the V1 API Contracts specification, completing the Stage Two specification baseline for vertical-slice implementation. |
 | 2.3.0 | 2026-09-04 | Approved | Approved the V1 Review Workbench specification and registered the initial API Contracts draft. |
 | 2.2.0 | 2026-09-04 | Approved | Aligned the UI ownership boundary with the V1 HTML baseline, including issue review, request drafts without delivery, and separate Agent monitoring. |

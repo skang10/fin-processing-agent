@@ -91,8 +91,8 @@ function show(id) {
   document.querySelectorAll('.screen').forEach(function (screen) { screen.classList.remove('active'); });
   document.querySelector('#' + id).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(function (item) { item.classList.remove('active'); });
-  document.querySelector(id === 'monitoring' ? '#monitoring-nav' : '#queue-nav').classList.add('active');
-  document.querySelector('.topbar > div:first-child strong').textContent = id === 'monitoring' ? 'Agent monitoring' : 'Document review';
+  document.querySelector('#queue-nav').classList.add('active');
+  document.querySelector('.topbar > div:first-child strong').textContent = 'Document review';
   if (id === 'workspace') render();
   if (id === 'summary') renderSummary();
 }
@@ -352,22 +352,9 @@ document.querySelectorAll('.filter').forEach(function (button) {
   });
 });
 document.querySelector('#queue-nav').addEventListener('click', function () { show('queue'); });
-document.querySelector('#monitoring-nav').addEventListener('click', function () { show('monitoring'); });
 const caseAgentRun = document.querySelector('#case-agent-run');
 document.querySelector('#case-agent-trigger').addEventListener('click', function () { caseAgentRun.showModal(); });
 document.querySelector('#close-agent-run').addEventListener('click', function () { caseAgentRun.close(); });
-document.querySelectorAll('[data-monitor-tab]').forEach(function (button) {
-  button.addEventListener('click', function () {
-    document.querySelectorAll('[data-monitor-tab]').forEach(function (item) { item.classList.toggle('active', item === button); });
-    document.querySelectorAll('[data-monitor-view]').forEach(function (view) { view.classList.toggle('active', view.dataset.monitorView === button.dataset.monitorTab); });
-  });
-});
-document.querySelectorAll('[data-session-toggle]').forEach(function (button) {
-  button.addEventListener('click', function () {
-    const detail = document.querySelector('#' + button.dataset.sessionToggle);
-    detail.hidden = !detail.hidden;
-  });
-});
 document.querySelector('#back').addEventListener('click', function () { show('queue'); });
 document.querySelector('#previous').addEventListener('click', function () { if (current > 0) { current -= 1; editing = false; confirming = false; render(); } });
 document.querySelector('#next').addEventListener('click', function () { if (current < issues.length - 1) { current += 1; editing = false; confirming = false; render(); } });

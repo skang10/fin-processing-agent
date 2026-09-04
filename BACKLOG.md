@@ -83,11 +83,11 @@ The resulting choice belongs in `specs/decisions/ADR_003_VLM_SELECTION.md`. Prod
 
 ### BL-005 — Versioned Golden Dataset
 
-**Status:** Accepted; awaiting dataset tooling and artifacts
+**Status:** Approved specification; awaiting dataset tooling and artifacts
 
-Build:
+Build incrementally:
 
-1. Twenty curated, manually verified end-to-end golden cases.
+1. Six curated, manually verified end-to-end golden cases for the first vertical slice, expanding to twenty for completed V1.
 2. Generator-produced truth followed by human confirmation through lightweight dataset command-line workflows.
 3. Command-line generation, validation, build, load, evaluation, and reporting workflows.
 
@@ -95,13 +95,13 @@ Synthetic files must be visibly marked and must not reproduce official security 
 
 ### BL-006 — Measured Quality, Latency, and Cost Baseline
 
-**Status:** Blocked on BL-003 through BL-005 evidence
+**Status:** Blocked on BL-003 through BL-005 evidence; measurement method is approved
 
 Replace unsupported numerical targets with measured results tied to dataset, model, prompt, component, and environment versions. Establish regression tolerances only after the initial baseline exists.
 
-### BL-007 — V1 Review UX Contracts and Monitoring Projections
+### BL-007 — V1 Review UX Contracts
 
-**Status:** Partially specified; API contract is approved, observability and security specifications remain pending
+**Status:** API contract approved; case-level Agent log retained, aggregate monitoring deferred
 
 Define implementation contracts for the approved V1 HTML UX baseline:
 
@@ -110,15 +110,13 @@ Define implementation contracts for the approved V1 HTML UX baseline:
 3. Applicant-readable requested-change drafts, inclusion state, final message projection, and the prohibition on delivery from V1.
 4. Final `request_changes`, `escalate_review`, and `clear_for_downstream` command preconditions.
 5. Structured application projections for masked contact and submission-history fields.
-6. Case Agent log and Agent-monitoring aggregate, session, usage, cost, and read-only configuration queries.
-7. Monitoring time windows, cost calculation, authorization, retention, and unavailable-data semantics.
+6. Case Agent log with safe model, cost, timestamp, and bounded activity projections.
 
 **Target documents:**
 
 1. `specs/API_CONTRACTS.md`
 2. `specs/SECURITY_AND_LIMITATIONS.md`
-3. `specs/operations/OBSERVABILITY_AND_FAILURES.md`
-4. Executable TypeBox schemas after the Stage Two repository skeleton exists.
+3. Executable TypeBox schemas after the Stage Two repository skeleton exists.
 
 ## Deferred Production Work
 

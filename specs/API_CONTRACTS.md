@@ -2,7 +2,7 @@
 
 Document ID: `API`
 
-Version: 1.0.0
+Version: 1.1.0
 
 Status: Approved
 
@@ -10,7 +10,7 @@ Last updated: 2026-09-04
 
 ## 1. Purpose
 
-This specification defines the V1 HTTP and Server-Sent Events (SSE) contracts exposed by the API Service. It owns transport representations, routes, authentication context, idempotency, optimistic concurrency, errors, pagination, artifact access, and OpenAPI generation.
+This specification defines the V1 HTTP contracts exposed by the API Service. It owns transport representations, routes, authentication context, bounded idempotency, optimistic concurrency, errors, bounded collections, artifact access, and OpenAPI generation. V1 uses polling; Server-Sent Events (SSE) are deferred.
 
 The API supports document processing and human document review only. It does not expose lending approval or rejection, creditworthiness, account opening, disbursement, customer contact, final Anti-Money Laundering (AML), or final Know Your Customer (KYC) operations.
 
@@ -20,8 +20,8 @@ This document owns:
 
 1. Public HTTP resources, commands, query projections, and status codes.
 2. Request and response envelope conventions.
-3. Command idempotency and optimistic-concurrency behavior.
-4. SSE event envelopes and recovery behavior.
+3. Bounded command idempotency and optimistic-concurrency behavior.
+4. Polling and recovery behavior.
 5. Public error representation and generated OpenAPI ownership.
 
 Normative dependencies are:
@@ -94,11 +94,11 @@ The public error media type is `application/problem+json` with this minimum shap
 
 `API-REQ-020` A command whose outcome is unknown after a client timeout must be recoverable through its idempotency identity or authoritative resource query; the API must not require blind resubmission.
 
-## 6. Pagination, Filtering, and Ordering
+## 6. Collections, Filtering, and Ordering
 
-`API-REQ-021` Collection routes must use opaque cursor pagination with bounded `limit`, `next_cursor`, and a stable deterministic tie-breaker; offset pagination is not required in V1.
+`API-REQ-021` The first vertical slice may return one bounded Review Queue collection with a deterministic maximum and ordering; cursor pagination is deferred until dataset size requires it.
 
-`API-REQ-022` Invalid, expired, or query-incompatible cursors must fail explicitly and must not restart silently at the first page.
+`API-REQ-022` Deprecated in V1.1.0 with cursor pagination.
 
 `API-REQ-023` Filter and sort parameters must be allowlisted by each route contract. Unknown parameters must be rejected rather than ignored.
 
@@ -106,7 +106,7 @@ The public error media type is `application/problem+json` with this minimum shap
 
 ## 7. Idempotency and Concurrency
 
-`API-REQ-025` Case creation, processing-run creation, review-issue mutations, requested-change draft mutations, and final-review submission must require an `Idempotency-Key` header.
+`API-REQ-025` Case creation and final-review submission must require an `Idempotency-Key` header. Other V1 reviewer mutations require optimistic concurrency but need not use a persistent idempotency ledger.
 
 `API-REQ-026` An idempotency record must bind actor scope, route or command type, target resource when present, canonical request hash, response status, and created result identity.
 
@@ -116,7 +116,7 @@ The public error media type is `application/problem+json` with this minimum shap
 
 `API-REQ-029` A mutation of review state must include the predecessor result-revision identity and expected resource version. A superseded result or version mismatch must return `409 concurrency_conflict` with a safe current-resource reference.
 
-`API-REQ-030` An idempotent replay must not create duplicate cases, runs, issues, edit revisions, requested-change drafts, final review records, audit events, or outbox work.
+`API-REQ-030` An idempotent replay must not create a duplicate case, final review, associated audit event, or required asynchronous work.
 
 ## 8. Case Intake and Processing Routes
 
@@ -128,14 +128,13 @@ GET  /api/v1/cases
 GET  /api/v1/cases/{case_id}
 POST /api/v1/cases/{case_id}/runs
 GET  /api/v1/cases/{case_id}/events
-GET  /api/v1/cases/{case_id}/stream
 ```
 
 `API-REQ-031` `POST /cases` must accept either the documented multipart demonstration intake or an approved object-store reference contract; it must reject arbitrary public URLs.
 
 `API-REQ-032` Multipart intake must stream files to the object-store write path, determine media type from content, enforce configured limits, and accept only supported PDF, JPEG, and PNG documents.
 
-`API-REQ-033` Case creation must return `202 Accepted` with `case_id`, initial `run_id`, case lifecycle, status URL, events URL, stream URL, and request identity without waiting for semantic processing.
+`API-REQ-033` Case creation must return `202 Accepted` with `case_id`, initial `run_id`, case lifecycle, status URL, and request identity without waiting for semantic processing.
 
 `API-REQ-034` Structured application data must be schema validated and versioned independently from document bytes; reviewer projections may expose masked contact preferences and initial-submission, latest-submission, and latest-update times when present.
 
@@ -224,27 +223,27 @@ POST  /api/v1/cases/{case_id}/final-review
 
 `API-REQ-062` `clear_for_downstream` records completion of document review only and must not represent or authorize application approval, loan approval, account opening, disbursement, customer contact, final AML, or final KYC.
 
-## 11. SSE and Polling
+## 11. Polling
 
-`API-REQ-063` Polling authoritative query routes must be the baseline progress mechanism; SSE is an optional incremental optimization for the Review Workbench.
+`API-REQ-063` Polling authoritative query routes must be the V1 progress and refresh mechanism.
 
-`API-REQ-064` `GET /cases/{case_id}/stream` must use `text/event-stream`, authenticate and authorize before subscription, and periodically re-evaluate authorization according to the future security contract.
+`API-REQ-064` Deprecated in V1.1.0. The case SSE stream is deferred.
 
-`API-REQ-065` Every SSE event must contain an opaque event identifier, event schema version, event type, case identifier, occurred time, and a minimal authorized projection or invalidation target.
+`API-REQ-065` Deprecated in V1.1.0 with SSE delivery.
 
-`API-REQ-066` Public event types must be finite and versioned. V1 may include `case_projection_changed`, `progress_changed`, `agent_report_changed`, `issues_changed`, `final_review_changed`, and `stream_heartbeat`.
+`API-REQ-066` Deprecated in V1.1.0 with SSE delivery.
 
-`API-REQ-067` SSE events are not authoritative domain records. Duplicate, delayed, or out-of-order delivery must not regress state, and the client must refetch after initial connection, reconnect, event gap, unknown version, or invalidation.
+`API-REQ-067` Deprecated in V1.1.0 with SSE delivery.
 
-`API-REQ-068` The stream must support `Last-Event-ID` when retained history permits replay; if replay is unavailable or incomplete, it must emit a refetch instruction rather than silently omit the gap.
+`API-REQ-068` Deprecated in V1.1.0 with SSE delivery.
 
-`API-REQ-069` `GET /cases/{case_id}/events` must provide a bounded authorized event projection for polling recovery and must not expose the full domain audit trail or unrestricted operational logs.
+`API-REQ-069` `GET /cases/{case_id}/events` may provide a bounded authorized event projection for diagnostic polling but is not required for ordinary V1 case refresh.
 
 `API-REQ-070` External callbacks and webhooks are outside V1.
 
-## 12. Agent Monitoring Routes
+## 12. Deferred Aggregate Agent Monitoring
 
-Agent monitoring is separate from case review:
+The following aggregate monitoring routes are deferred beyond the first V1 implementation slice:
 
 ```text
 GET /api/v1/agent-monitoring/overview
@@ -253,23 +252,23 @@ GET /api/v1/agent-monitoring/sessions/{session_id}
 GET /api/v1/agent-monitoring/configuration
 ```
 
-`API-REQ-071` Monitoring queries must require explicit evaluator or administrator authorization and must not be reachable solely because a caller can review one case.
+`API-REQ-071` Deprecated in V1.1.0. Aggregate Agent-monitoring routes are deferred; the case-level `GET /agent-log` projection remains in scope.
 
-`API-REQ-072` Monitoring overview must require an explicit bounded time window and return aggregate outcomes, latency, token usage, estimated model cost, and attention-required counts with unavailable-data semantics.
+`API-REQ-072` Deprecated in V1.1.0 with aggregate Agent monitoring.
 
-`API-REQ-073` Session projections may identify Agent version, model, duration, token usage, estimated cost, terminal outcome, and safe event summary; they must not expose document content, complete prompts, chain-of-thought, credentials, raw provider payloads, or unrestricted tool arguments.
+`API-REQ-073` Deprecated in V1.1.0 with aggregate Agent monitoring.
 
-`API-REQ-074` Configuration queries must be read-only and expose immutable version references and bounded limits for model, prompt, schema, tools, iterations, tokens, cost, calls, and timeout when available.
+`API-REQ-074` Deprecated in V1.1.0 with aggregate Agent monitoring.
 
 `API-REQ-075` V1 must expose no monitoring mutation route for prompts, models, rules, thresholds, tool registries, Agent budgets, or disposition policy.
 
 ## 13. Caching and Sensitive Browser State
 
-`API-REQ-076` Case, evidence, artifact, issue, requested-change, final-review, and monitoring responses must use cache controls appropriate to authenticated sensitive data and must not be publicly cacheable.
+`API-REQ-076` Case, evidence, artifact, issue, requested-change, final-review, and Agent-log responses must use cache controls appropriate to authenticated sensitive data and must not be publicly cacheable.
 
 `API-REQ-077` Short-lived artifact capabilities must be scoped to one authorized artifact or page representation, expire, and be unsuitable as permanent storage references.
 
-`API-REQ-078` Responses containing review or monitoring data must not require the browser to persist access tokens, artifact capabilities, full identifiers, or document content in local storage.
+`API-REQ-078` Responses containing review or Agent-log data must not require the browser to persist access tokens, artifact capabilities, full identifiers, or document content in local storage.
 
 ## 14. OpenAPI and Compatibility
 
@@ -295,15 +294,15 @@ The API contracts are acceptable for implementation when automated contract and 
 
 `API-REQ-087` Evidence fixtures distinguish page-region, page-level, structured-input, missing, purged, and unauthorized states and enforce scoped artifact access.
 
-`API-REQ-088` Issue create, edit, confirm, ignore, and requested-change commands preserve immutable Agent sources, append review state, enforce idempotency, and reject stale result revisions.
+`API-REQ-088` Issue create, edit, confirm, ignore, and requested-change commands preserve immutable Agent sources, append review state, enforce optimistic concurrency, and reject stale result revisions.
 
 `API-REQ-089` Final-review tests enforce issue completion and the action-specific requested-change inclusion rules atomically.
 
 `API-REQ-090` No final-review response or side effect sends a requested-change draft or performs a lending, account, customer-contact, AML, or KYC action.
 
-`API-REQ-091` Duplicate, out-of-order, lost, and resumed SSE fixtures converge through authoritative refetch or polling.
+`API-REQ-091` Polling fixtures converge to current authoritative state after stale responses, command timeouts, and browser refresh.
 
-`API-REQ-092` Monitoring authorization, time-window, unavailable-usage, safe-event, and read-only-configuration fixtures enforce the approved disclosure boundary.
+`API-REQ-092` The case Agent-log fixture enforces safe event, model, cost-unavailable, and disclosure boundaries.
 
 `API-REQ-093` Error fixtures use the stable public problem schema and contain neither internal stack traces nor sensitive payloads.
 
@@ -313,7 +312,7 @@ The API contracts are acceptable for implementation when automated contract and 
 
 1. V1 uses synthetic or explicitly demo-safe cases and development-only authentication.
 2. Exact production identity, role mapping, case-level authorization, retention, and sensitive-value reveal policies remain owned by `SECURITY_AND_LIMITATIONS.md` and are not invented here.
-3. Exact monitoring retention, aggregation windows, cost calculation, and incomplete-provider-usage semantics require `operations/OBSERVABILITY_AND_FAILURES.md`.
+3. Aggregate Agent monitoring is deferred; case-log cost calculation and incomplete-provider-usage semantics require `operations/OBSERVABILITY_AND_FAILURES.md`.
 4. Physical database table and index design remains an implementation concern constrained by `DATA_MODEL.md`.
 5. TypeBox schemas and generated OpenAPI will be created after the Stage Two repository skeleton exists.
 6. Direct extracted-value correction, interactive boundary correction, customer-message delivery, external webhooks, and general case deletion are outside V1.
@@ -324,4 +323,5 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.1.0 | 2026-09-04 | Approved | Reduced V1 to polling, case-creation and final-review idempotency, optimistic concurrency for issue edits, and a bounded case Agent log; deferred SSE and aggregate Agent monitoring. |
 | 1.0.0 | 2026-09-04 | Approved | Approved the V1 HTTP, review-command, evidence, SSE, idempotency, error, Agent-monitoring, and generated-contract baseline aligned with the approved Review Workbench. No unresolved transport-authority or V1 review-command decision remains. |

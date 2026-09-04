@@ -25,4 +25,3 @@ Then open `http://127.0.0.1:4173/`.
 5. Applicant-readable requested-change drafts that the demo records but does not send.
 6. Compact shared case progress and a bounded case Agent log showing model, cost, and safe events.
 7. A wider resizable case workspace with bounded pointer and keyboard resizing.
-8. Separate Agent monitoring for illustrative aggregate metrics, sessions, and read-only configuration.

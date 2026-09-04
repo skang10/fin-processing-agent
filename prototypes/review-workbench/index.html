@@ -20,10 +20,6 @@
           <span>Review queue</span>
           <b>3</b>
         </button>
-        <button class="nav-item" id="monitoring-nav">
-          <span class="nav-icon" aria-hidden="true">◎</span>
-          <span>Agent monitoring</span>
-        </button>
       </nav>
       <div class="rail-status">
         <span class="status-dot"></span>
@@ -72,51 +68,6 @@
               </table>
               <div class="empty-state" id="empty-state" hidden>No cases match this view.</div>
             </div>
-          </section>
-        </div>
-      </main>
-
-      <main id="monitoring" class="screen">
-        <div class="page-wrap monitoring-page">
-          <header class="page-heading"><div><h1>Agent monitoring</h1></div><span class="last-updated">Illustrative fixture</span></header>
-          <nav class="monitoring-tabs" aria-label="Agent monitoring sections">
-            <button class="active" data-monitor-tab="overview">Overview</button>
-            <button data-monitor-tab="sessions">Sessions</button>
-            <button data-monitor-tab="configuration">Configuration</button>
-          </nav>
-
-          <section class="monitor-view active" data-monitor-view="overview">
-            <div class="monitor-metrics">
-              <article><span>Sessions</span><strong>128</strong><small>Last 24 hours</small></article>
-              <article><span>Completed</span><strong>94.5%</strong><small>121 sessions</small></article>
-              <article><span>Average duration</span><strong>18.4 s</strong><small>p95 31.2 s</small></article>
-              <article><span>Token usage</span><strong>184k</strong><small>Input and output</small></article>
-              <article><span>Estimated cost</span><strong>€1.42</strong><small>Last 24 hours</small></article>
-              <article><span>Needs attention</span><strong>7</strong><small>Failed, timed out, or budget exhausted</small></article>
-            </div>
-            <section class="monitor-section"><div class="section-heading"><h2>Recent activity</h2></div><div class="activity-list">
-              <div><i class="ok"></i><span><strong>Review brief generated</strong><small>FD-2026-0042</small></span><time>09:41:24</time></div>
-              <div><i class="ok"></i><span><strong>Employer details cross-checked</strong><small>FD-2026-0042</small></span><time>09:41:20</time></div>
-              <div><i class="warn"></i><span><strong>Session budget exhausted</strong><small>FD-2026-0038</small></span><time>09:38:06</time></div>
-            </div></section>
-          </section>
-
-          <section class="monitor-view" data-monitor-view="sessions">
-            <div class="session-table"><div class="session-row session-head"><span>Session</span><span>Case</span><span>Model</span><span>Duration</span><span>Tokens</span><span>Cost</span><span>Outcome</span></div>
-              <button class="session-row" data-session-toggle="session-detail"><span>AGT-2026-0041</span><span>FD-2026-0042</span><span>VLM Small</span><span>22.1 s</span><span>1,842</span><span>€0.006</span><b class="session-status success">Completed</b></button>
-              <div class="session-detail" id="session-detail" hidden><div><time>09:41:08</time><span>Extraction gap received</span></div><div><time>09:41:14</time><span>Candidate validated</span></div><div><time>09:41:24</time><span>Review brief generated</span></div></div>
-              <button class="session-row"><span>AGT-2026-0040</span><span>FD-2026-0038</span><span>VLM Small</span><span>30.0 s</span><span>2,411</span><span>€0.009</span><b class="session-status warning">Budget exhausted</b></button>
-            </div>
-          </section>
-
-          <section class="monitor-view" data-monitor-view="configuration">
-            <div class="config-card"><div class="section-heading"><h2>Active configuration</h2><span>Read only</span></div><dl>
-              <div><dt>Agent version</dt><dd>pi-review-agent 0.4.0</dd></div><div><dt>Model</dt><dd>VLM Small</dd></div>
-              <div><dt>Prompt version</dt><dd>review-brief-v7</dd></div><div><dt>Schema version</dt><dd>case-review-brief 1.2</dd></div>
-              <div><dt>Maximum iterations</dt><dd>4</dd></div><div><dt>VLM call limit</dt><dd>2</dd></div>
-              <div><dt>Token budget</dt><dd>4,000</dd></div><div><dt>Cost budget</dt><dd>€0.020 per session</dd></div>
-              <div><dt>Timeout</dt><dd>30 seconds</dd></div><div><dt>Tools</dt><dd>Bounded OCR, region extraction</dd></div>
-            </dl></div>
           </section>
         </div>
       </main>

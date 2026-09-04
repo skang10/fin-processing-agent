@@ -50,9 +50,9 @@ Use the authority order defined by [`specs/INDEX.md`](specs/INDEX.md). In summar
 
 ## Current Development State
 
-The project is in Stage One specification development. The implementation monorepo and its commands do not yet exist.
+The Stage Two core specifications are approved and vertical-slice implementation is permitted. The implementation monorepo and its commands do not yet exist; the immediate next implementation step is to create the approved repository skeleton.
 
-Agents must not invent package scripts, test commands, generated artifacts, directory paths, environment variables, or deployment instructions. Update this section after the Stage Two specifications are approved and the repository skeleton is created.
+Until that skeleton exists, agents must not invent package scripts, test commands, generated artifacts, directory paths, environment variables, or deployment instructions. After it exists, update this section with the authoritative commands.
 
 ## Working Rules
 
@@ -122,10 +122,10 @@ The accepted baseline is:
 1. TypeScript on Node.js 22.19 or later.
 2. pnpm workspaces and TypeScript project references.
 3. Fastify, TypeBox, and JSON Schema.
-4. PostgreSQL, Drizzle ORM, Drizzle Kit, pg-boss, and a transactional outbox.
+4. PostgreSQL, Drizzle ORM, Drizzle Kit, and pg-boss; transactional-outbox completion may follow the first vertical slice but remains required before the completed V1 demonstration baseline.
 5. S3-compatible object storage with MinIO for local development.
 6. React, Vite, TanStack Query, React Router, PDF.js, Radix UI Primitives, CSS Modules, Lucide React, Motion, and the native system font stack.
-7. Pino, OpenTelemetry, Prometheus-compatible metrics, and Jaeger.
+7. Pino and basic OpenTelemetry tracing for the first vertical slice; Prometheus-compatible metrics and Jaeger integration may follow later in V1.
 8. Vitest, Testcontainers, Playwright, synthetic golden cases, and fake-model adapters.
 9. Docker Compose for the delivered demonstration environment.
 

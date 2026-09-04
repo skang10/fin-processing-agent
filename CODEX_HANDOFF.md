@@ -127,7 +127,7 @@ The initial release includes a small working Review Workbench with:
 4. Agent-raised and human-raised issue review with confirm, ignore, and edit actions.
 5. Applicant-readable requested-change drafts that the V1 system records but never sends or delivers.
 6. Final `request_changes`, `escalate_review`, or `clear_for_downstream` document-review actions without approve, decline, disburse, open-account, or contact-customer authority.
-7. Separate Agent monitoring for safe sessions, model usage, estimated cost, and read-only configuration.
+7. A bounded case Agent log with model, estimated cost, timestamps, and safe reviewer-readable activity; aggregate Agent monitoring is deferred.
 
 Reviewer issue edits and any later correction workflow never update models, prompts, rules, thresholds, or golden truth automatically.
 
@@ -135,7 +135,7 @@ Reviewer issue edits and any later correction workflow never update models, prom
 
 1. V1 does not train a proprietary model. It orchestrates and evaluates pretrained components.
 2. Quality targets are baseline-driven. Unsupported numerical claims must not be added before measurement.
-3. The curated golden set contains 20 manually verified end-to-end cases.
+3. The first vertical slice contains 6 manually verified end-to-end golden cases; the completed V1 target is 20.
 4. Synthetic documents must be visibly marked as synthetic and must not reproduce official security features or real institution branding.
 5. Dataset preparation and evaluation use lightweight command-line workflows rather than Airflow, Dagster, or dbt.
 6. Golden truth is generated with templates and manually confirmed through lightweight dataset command-line workflows before release.
@@ -149,10 +149,10 @@ Reviewer issue edits and any later correction workflow never update models, prom
 4. Fastify API with TypeBox and JSON Schema contracts.
 5. PostgreSQL with Drizzle ORM and Drizzle Kit migrations.
 6. pg-boss for PostgreSQL-backed asynchronous jobs.
-7. Transactional outbox for reliable stage scheduling.
+7. Transactional outbox for reliable stage scheduling before the completed V1 baseline; the first vertical slice may establish the workflow before completing the outbox path.
 8. S3-compatible object storage through an `ObjectStore` interface; MinIO for local development.
 9. React, Vite, TanStack Query, React Router, PDF.js, Radix UI Primitives, CSS Modules, Lucide React, Motion, and the native system font stack for the Review Workbench.
-10. Pino, OpenTelemetry, Prometheus-compatible metrics, and Jaeger for local observability.
+10. Pino and basic OpenTelemetry tracing for the first vertical slice; Prometheus-compatible metrics and Jaeger may follow later in V1.
 11. Vitest, Testcontainers, Playwright, and synthetic golden cases for testing.
 12. Docker Compose is the delivered runtime. The design remains cloud-neutral and includes an Amazon Web Services reference mapping without Terraform in V1.
 
@@ -169,8 +169,8 @@ Reviewer issue edits and any later correction workflow never update models, prom
 
 1. Public endpoints use `/api/v1`.
 2. Errors use one stable Problem Details-style structure and never expose internal stack traces or provider payloads.
-3. Case creation and run creation support `Idempotency-Key` with request-hash conflict detection.
-4. Case progress is available through polling and Server-Sent Events (SSE). External webhooks are outside V1.
+3. Case creation and final-review submission support `Idempotency-Key` with request-hash conflict detection; issue edits use optimistic concurrency.
+4. Case progress is available through polling. SSE and external webhooks are outside the first V1 implementation slice.
 5. Physical files and derived artifacts are immutable objects referenced from PostgreSQL.
 6. Large document bytes are not placed in queue payloads or relational columns.
 7. A case has immutable processing runs; each run has stage executions and retry attempts.

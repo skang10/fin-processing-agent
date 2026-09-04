@@ -2,7 +2,7 @@
 
 Document ID: `PRD`
 
-Version: 3.0.0
+Version: 3.1.0
 
 Status: Approved
 
@@ -321,15 +321,15 @@ Structured application data is a source of claims and does not require an applic
 
 `PRD-REQ-140` The product must not send, deliver, or notify an applicant from the V1 Review Workbench; recording requested changes is not customer communication.
 
-`PRD-REQ-141` Agent monitoring must be separate from case review and must expose safe aggregate health, sessions, model usage, estimated cost, and read-only configuration without unrestricted prompts, document content, credentials, or chain-of-thought.
+`PRD-REQ-141` Deprecated in V3.1.0. A separate aggregate Agent-monitoring product surface is deferred; V1 exposes only the bounded case-level Agent log required by `PRD-REQ-145`.
 
 `PRD-REQ-142` Structured application review must support reviewer-relevant applicant, masked contact, submission-history, employment, and income projections when those values are supplied by the synthetic input fixture.
 
 `PRD-REQ-144` Authorized operational users must be able to inspect safe Agent activity and retained audit records outside the default reviewer workflow; V1 does not require a reviewer-facing audit timeline.
 
-`PRD-REQ-145` The Review Workbench must present the Case Review Brief, compact case progress, structured application data, source documents, evidence-linked checked facts, review issues, and final document-review actions. Detailed runs, model usage, configuration, and safe Agent logs belong to Agent monitoring or case-level progressive disclosure.
+`PRD-REQ-145` The Review Workbench must present the Case Review Brief, compact case progress, structured application data, source documents, evidence-linked checked facts, review issues, final document-review actions, and a bounded case-level Agent log. Detailed runs and aggregate operational monitoring are deferred.
 
-`PRD-REQ-146` The product must retain correlated processing, model, validation, disposition, and human-action history and expose safe operational projections through Agent monitoring; the V1 reviewer surface requires only compact case progress and a bounded case Agent log.
+`PRD-REQ-146` The product must retain correlated processing, model, validation, disposition, and human-action history. The V1 reviewer surface exposes only compact case progress and a bounded case Agent log; aggregate operational monitoring is deferred.
 
 ## 15. Processing Transparency and Reproducibility
 
@@ -347,7 +347,7 @@ Structured application data is a source of claims and does not require an applic
 
 ## 16. Evaluation Product Requirements
 
-`PRD-REQ-101` The project must provide a versioned curated golden set of twenty manually verified end-to-end synthetic cases.
+`PRD-REQ-101` The first vertical slice must provide six manually verified end-to-end synthetic golden cases; the completed V1 target remains a versioned curated set of twenty.
 
 `PRD-REQ-103` The curated cases must cover native-text, scanned/OCR, mixed or multi-document, complex-table/VLM, and cross-document-conflict behavior.
 
@@ -458,6 +458,7 @@ The following evidence-dependent choices are intentionally owned elsewhere and r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.1.0 | 2026-09-04 | Approved | Reduced the first vertical slice to six golden cases and deferred the separate aggregate Agent-monitoring surface while retaining the bounded case Agent log. |
 | 3.0.0 | 2026-09-04 | Approved | Adopted the V1 HTML UX baseline: Agent Report entry, issue review, applicant-readable request drafts without delivery, compact case progress, and separate Agent monitoring; deferred direct field and boundary correction from the V1 reviewer surface. |
 | 2.1.0 | 2026-09-04 | Approved | Removed the V1 `processing_blocked` disposition and retained technical blocking conditions as failed workflow state without a disposition. |
 | 2.0.0 | 2026-09-04 | Approved | Made the bounded Pi Case Review Agent a per-case pre-screening stage with verified review briefs, optional gap recovery, and mandatory human confirmation. |
