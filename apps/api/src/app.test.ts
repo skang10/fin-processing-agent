@@ -6,7 +6,7 @@ const boundary = "findoc-test-boundary";
 function multipartPayload() {
   return Buffer.from([
     `--${boundary}\r\nContent-Disposition: form-data; name="application_data"\r\n\r\n`,
-    JSON.stringify({ applicant_display_name: "Anna Beispiel" }),
+    JSON.stringify({ applicant_display_name: "Anna Beispiel", demo_fixture_id: "anna-example-v1" }),
     `\r\n--${boundary}\r\nContent-Disposition: form-data; name="documents"; filename="statement.pdf"\r\nContent-Type: application/pdf\r\n\r\n`,
     "%PDF-1.7\nDEMO",
     `\r\n--${boundary}--\r\n`,
@@ -52,7 +52,9 @@ describe("case intake", () => {
 
     expect(response.statusCode).toBe(202);
     expect(response.json()).toMatchObject({ case_id: "case_1", lifecycle: "processing" });
-    expect(accept).toHaveBeenCalledOnce();
+    expect(accept).toHaveBeenCalledWith(expect.objectContaining({
+      applicationData: { applicant_display_name: "Anna Beispiel" },
+    }));
     await app.close();
   });
 
@@ -121,6 +123,7 @@ describe("case intake", () => {
     expect(uploaded.toString()).toBe("%PDF-1.7\nDEMO");
     expect(accept).toHaveBeenCalledWith(expect.objectContaining({
       applicantDisplayName: "Anna Beispiel",
+      applicationData: { applicant_display_name: "Anna Beispiel", demo_fixture_id: "anna-example-v1" },
       documents: [expect.objectContaining({ submittedFilename: "statement.pdf" })],
     }));
     await app.close();

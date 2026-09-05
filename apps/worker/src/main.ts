@@ -2,7 +2,7 @@ import pino from "pino";
 import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
 import { PdfInspectorAdapter } from "@findoc/document-processing";
-import { runOfflineFixture } from "@findoc/offline";
+import { OfflineFixtureUnavailableError, runOfflineFixture } from "@findoc/offline";
 import { PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
 import { createMinioObjectStore, readObjectBytes } from "@findoc/storage";
 import { CASE_PROCESSING_QUEUE, OutboxRelay } from "./outbox.js";
@@ -36,6 +36,11 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   if (!job) return;
   if (!isCaseProcessingJob(job.data)) throw new Error("Invalid case-processing job payload");
   logger.info({ case_id: job.data.case_id, run_id: job.data.run_id }, "case processing claimed");
+  if (!await coordinator.hasInputDocuments(job.data.case_id, job.data.run_id)) {
+    await coordinator.failRun(job.data.case_id, job.data.run_id, "required_documents_missing");
+    logger.warn({ case_id: job.data.case_id, run_id: job.data.run_id }, "case routed to processing exception");
+    return;
+  }
   const documents = await coordinator.loadUninspectedDocuments(job.data.case_id, job.data.run_id);
   for (const document of documents) {
     if (document.mediaType === "application/pdf") {
@@ -56,8 +61,15 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
       });
     }
   }
-  const applicant = await coordinator.loadApplicant(job.data.case_id, job.data.run_id);
-  await coordinator.completeOffline(job.data.case_id, job.data.run_id, runOfflineFixture(applicant));
+  const applicationData = await coordinator.loadApplicationData(job.data.case_id, job.data.run_id);
+  try {
+    await coordinator.completeOffline(job.data.case_id, job.data.run_id, runOfflineFixture(applicationData["demo_fixture_id"]));
+  } catch (error) {
+    if (!(error instanceof OfflineFixtureUnavailableError)) throw error;
+    await coordinator.failRun(job.data.case_id, job.data.run_id, "offline_fixture_unavailable");
+    logger.warn({ case_id: job.data.case_id, run_id: job.data.run_id }, "case routed to processing exception");
+    return;
+  }
   logger.info({ case_id: job.data.case_id, run_id: job.data.run_id }, "offline case processing completed");
 });
 

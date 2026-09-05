@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { count } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { IdempotencyConflictError } from "@findoc/core";
@@ -9,10 +9,14 @@ import {
   PostgresCaseQueryService,
   PostgresWorkflowCoordinator,
   agentReports,
+  applicationSnapshots,
   artifacts,
   cases,
+  caseStateTransitions,
   createDatabase,
   idempotencyRecords,
+  inputDocumentSelections,
+  inputRevisions,
   documentVersions,
   documentInspections,
   outboxEvents,
@@ -44,6 +48,7 @@ describe("PostgresCaseCommandService", () => {
     const service = new PostgresCaseCommandService(connection.db, "actor_1");
     const command = {
       applicantDisplayName: "Anna Beispiel",
+      applicationData: { applicant_display_name: "Anna Beispiel", demo_fixture_id: "anna-example-v1" },
       idempotencyKey: "key_1",
       documents: [{
         submittedFilename: "statement.pdf",
@@ -59,14 +64,17 @@ describe("PostgresCaseCommandService", () => {
     await expect(service.accept({ ...command, applicantDisplayName: "Other" }))
       .rejects.toBeInstanceOf(IdempotencyConflictError);
 
-    const [[caseCount], [runCount], [eventCount], [keyCount]] = await Promise.all([
+    const [[caseCount], [runCount], [eventCount], [keyCount], [snapshotCount], [revisionCount], [selectionCount]] = await Promise.all([
       connection.db.select({ value: count() }).from(cases),
       connection.db.select({ value: count() }).from(processingRuns),
       connection.db.select({ value: count() }).from(outboxEvents),
       connection.db.select({ value: count() }).from(idempotencyRecords),
+      connection.db.select({ value: count() }).from(applicationSnapshots),
+      connection.db.select({ value: count() }).from(inputRevisions),
+      connection.db.select({ value: count() }).from(inputDocumentSelections),
     ]);
-    expect([caseCount?.value, runCount?.value, eventCount?.value, keyCount?.value])
-      .toEqual([1, 1, 1, 1]);
+    expect([caseCount?.value, runCount?.value, eventCount?.value, keyCount?.value, snapshotCount?.value, revisionCount?.value, selectionCount?.value])
+      .toEqual([1, 1, 1, 1, 1, 1, 1]);
     const [[artifactCount], [documentCount], [versionCount]] = await Promise.all([
       connection.db.select({ value: count() }).from(artifacts),
       connection.db.select({ value: count() }).from(physicalDocuments),
@@ -75,6 +83,8 @@ describe("PostgresCaseCommandService", () => {
     expect([artifactCount?.value, documentCount?.value, versionCount?.value]).toEqual([1, 1, 1]);
 
     const coordinator = new PostgresWorkflowCoordinator(connection.db);
+    await expect(coordinator.loadApplicationData(accepted.caseId, accepted.runId)).resolves.toEqual(command.applicationData);
+    await expect(coordinator.hasInputDocuments(accepted.caseId, accepted.runId)).resolves.toBe(true);
     const [document] = await coordinator.loadUninspectedDocuments(accepted.caseId, accepted.runId);
     expect(document).toMatchObject({ mediaType: "application/pdf" });
     if (!document) throw new Error("Expected document fixture");
@@ -96,7 +106,7 @@ describe("PostgresCaseCommandService", () => {
     expect([inspectionCount?.value, pageCount?.value]).toEqual([1, 1]);
 
     const result = {
-      summary: "Synthetic case requires review.", modelLabel: "fake-pi-agent-v1", estimatedCost: "0.0000",
+      summary: "Synthetic case requires review.", modelLabel: "fake-pi-harness-v1", estimatedCost: "0.0000",
       issues: [{ code: "VAL_EMPLOYER_CONSISTENCY_001", description: "Employer differs.", recommendedAction: "Confirm the current employer." }],
     };
     await coordinator.completeOffline(accepted.caseId, accepted.runId, result);
@@ -110,5 +120,31 @@ describe("PostgresCaseCommandService", () => {
     ]);
     expect(status).toMatchObject({ lifecycle: "ready_for_review", progress: "human_review", version: 2 });
     expect([stageCount?.value, issueCount?.value, reportCount?.value]).toEqual([4, 1, 1]);
+    const [transitionCount] = await connection.db.select({ value: count() }).from(caseStateTransitions);
+    expect(transitionCount?.value).toBe(2);
+  });
+
+  it("routes an unprocessable run to one durable processing exception", async () => {
+    const service = new PostgresCaseCommandService(connection.db, "actor_2");
+    const accepted = await service.accept({
+      applicantDisplayName: "Synthetic Applicant",
+      applicationData: { applicant_display_name: "Synthetic Applicant" },
+      idempotencyKey: "missing_documents",
+      documents: [],
+    });
+    const coordinator = new PostgresWorkflowCoordinator(connection.db);
+
+    await expect(coordinator.hasInputDocuments(accepted.caseId, accepted.runId)).resolves.toBe(false);
+    await coordinator.failRun(accepted.caseId, accepted.runId, "required_documents_missing");
+    await coordinator.failRun(accepted.caseId, accepted.runId, "required_documents_missing");
+
+    await expect(new PostgresCaseQueryService(connection.db).get(accepted.caseId)).resolves.toMatchObject({
+      lifecycle: "processing_exception",
+      resultAvailability: "unavailable",
+      version: 2,
+    });
+    const [transitionCount] = await connection.db.select({ value: count() }).from(caseStateTransitions)
+      .where(eq(caseStateTransitions.caseId, accepted.caseId));
+    expect(transitionCount?.value).toBe(2);
   });
 });

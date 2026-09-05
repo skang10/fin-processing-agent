@@ -8,6 +8,35 @@ export const cases = pgTable("cases", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const applicationSnapshots = pgTable("application_snapshots", {
+  id: uuid("id").primaryKey(),
+  caseId: uuid("case_id").notNull().references(() => cases.id),
+  schemaId: text("schema_id").notNull(),
+  schemaVersion: text("schema_version").notNull(),
+  contentHash: text("content_hash").notNull(),
+  content: jsonb("content").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("application_snapshot_case_idx").on(table.caseId)]);
+
+export const inputRevisions = pgTable("input_revisions", {
+  id: uuid("id").primaryKey(),
+  caseId: uuid("case_id").notNull().references(() => cases.id),
+  applicationSnapshotId: uuid("application_snapshot_id").notNull().references(() => applicationSnapshots.id),
+  revision: integer("revision").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("input_revision_case_number_uq").on(table.caseId, table.revision)]);
+
+export const caseStateTransitions = pgTable("case_state_transitions", {
+  id: uuid("id").primaryKey(),
+  caseId: uuid("case_id").notNull().references(() => cases.id),
+  runId: uuid("run_id"),
+  priorState: text("prior_state"),
+  newState: text("new_state").notNull(),
+  reason: text("reason").notNull(),
+  actor: text("actor").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("case_transition_case_idx").on(table.caseId, table.createdAt)]);
+
 export const artifacts = pgTable("artifacts", {
   id: uuid("id").primaryKey(),
   caseId: uuid("case_id").notNull().references(() => cases.id),
@@ -38,6 +67,13 @@ export const documentVersions = pgTable("document_versions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("document_version_number_uq").on(table.physicalDocumentId, table.version)]);
 
+export const inputDocumentSelections = pgTable("input_document_selections", {
+  id: uuid("id").primaryKey(),
+  inputRevisionId: uuid("input_revision_id").notNull().references(() => inputRevisions.id),
+  physicalDocumentId: uuid("physical_document_id").notNull().references(() => physicalDocuments.id),
+  documentVersionId: uuid("document_version_id").notNull().references(() => documentVersions.id),
+}, (table) => [uniqueIndex("input_selection_revision_document_uq").on(table.inputRevisionId, table.physicalDocumentId)]);
+
 export const documentInspections = pgTable("document_inspections", {
   id: uuid("id").primaryKey(),
   runId: uuid("run_id").notNull().references(() => processingRuns.id),
@@ -65,6 +101,7 @@ export const pages = pgTable("pages", {
 export const processingRuns = pgTable("processing_runs", {
   id: uuid("id").primaryKey(),
   caseId: uuid("case_id").notNull().references(() => cases.id),
+  inputRevisionId: uuid("input_revision_id").notNull().references(() => inputRevisions.id),
   workflowVersion: text("workflow_version").notNull(),
   status: text("status").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

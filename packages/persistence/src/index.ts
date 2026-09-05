@@ -3,7 +3,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { CaseNotFoundError, IdempotencyConflictError, type AcceptedCase, type AgentReportView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type OfflineCaseResult, type ReviewIssueView } from "@findoc/core";
-import { agentReports, artifacts, cases, documentInspections, documentVersions, idempotencyRecords, outboxEvents, pages, physicalDocuments, processingRuns, reviewIssues, stageExecutions } from "./schema.js";
+import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, documentInspections, documentVersions, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, reviewIssues, stageExecutions } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
@@ -37,14 +37,29 @@ export class PostgresCaseCommandService implements CaseCommandService {
       }
 
       const accepted = { caseId: randomUUID(), runId: randomUUID(), replayed: false };
+      const applicationData = command.applicationData;
+      const applicationSnapshotId = randomUUID();
+      const inputRevisionId = randomUUID();
       await tx.insert(cases).values({
         id: accepted.caseId,
         applicantDisplayName: command.applicantDisplayName,
         lifecycle: "processing",
       });
+      await tx.insert(applicationSnapshots).values({
+        id: applicationSnapshotId, caseId: accepted.caseId,
+        schemaId: "synthetic-personal-loan-application",
+        schemaVersion: "1.0.0",
+        contentHash: hashCanonical(applicationData),
+        content: applicationData,
+      });
+      await tx.insert(inputRevisions).values({
+        id: inputRevisionId, caseId: accepted.caseId,
+        applicationSnapshotId, revision: 1,
+      });
       await tx.insert(processingRuns).values({
         id: accepted.runId,
         caseId: accepted.caseId,
+        inputRevisionId,
         workflowVersion: WORKFLOW_VERSION,
         status: "queued",
       });
@@ -61,15 +76,23 @@ export class PostgresCaseCommandService implements CaseCommandService {
           artifactKind: "source",
         });
         await tx.insert(physicalDocuments).values({ id: physicalDocumentId, caseId: accepted.caseId });
+        const documentVersionId = randomUUID();
         await tx.insert(documentVersions).values({
-          id: randomUUID(), physicalDocumentId, sourceArtifactId: artifactId, version: 1,
+          id: documentVersionId, physicalDocumentId, sourceArtifactId: artifactId, version: 1,
           submittedFilename: document.submittedFilename,
           detectedMediaType: document.artifact.detectedMediaType,
           integrityState: "verified",
           readabilityState: "not_inspected",
           malwareScanState: "not_scanned",
         });
+        await tx.insert(inputDocumentSelections).values({
+          id: randomUUID(), inputRevisionId, physicalDocumentId, documentVersionId,
+        });
       }
+      await tx.insert(caseStateTransitions).values({
+        id: randomUUID(), caseId: accepted.caseId, runId: accepted.runId,
+        priorState: null, newState: "processing", reason: "case_accepted", actor: this.actorId,
+      });
       await tx.insert(outboxEvents).values({
         id: randomUUID(),
         eventType: "case_processing_requested",
@@ -156,17 +179,29 @@ function asCaseLifecycle(value: string): CaseStatus["lifecycle"] {
 }
 
 export function hashIntake(command: CaseIntakeCommand): string {
-  return createHash("sha256")
-    .update(JSON.stringify({
+  return hashCanonical({
       applicant_display_name: command.applicantDisplayName,
+      application_data: command.applicationData,
       documents: (command.documents ?? []).map((document) => ({
         filename: document.submittedFilename,
         sha256: document.artifact.sha256,
         byte_size: document.artifact.byteSize,
         media_type: document.artifact.detectedMediaType,
       })),
-    }))
-    .digest("hex");
+    });
+}
+
+function hashCanonical(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(canonicalize(value))).digest("hex");
+}
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, canonicalize(entry)]));
+  }
+  return value;
 }
 
 export interface PendingOutboxEvent {
@@ -206,19 +241,41 @@ export class PostgresWorkflowCoordinator {
     return record.applicantDisplayName;
   }
 
+  async loadApplicationData(caseId: string, runId: string): Promise<Readonly<Record<string, unknown>>> {
+    const [record] = await this.db.select({ content: applicationSnapshots.content })
+      .from(processingRuns)
+      .innerJoin(inputRevisions, eq(processingRuns.inputRevisionId, inputRevisions.id))
+      .innerJoin(applicationSnapshots, eq(inputRevisions.applicationSnapshotId, applicationSnapshots.id))
+      .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
+    if (!record || typeof record.content !== "object" || record.content === null || Array.isArray(record.content)) {
+      throw new CaseNotFoundError();
+    }
+    return record.content as Record<string, unknown>;
+  }
+
+  async hasInputDocuments(caseId: string, runId: string): Promise<boolean> {
+    const [record] = await this.db.select({ id: inputDocumentSelections.id })
+      .from(processingRuns)
+      .innerJoin(inputDocumentSelections, eq(processingRuns.inputRevisionId, inputDocumentSelections.inputRevisionId))
+      .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
+    return Boolean(record);
+  }
+
   async loadUninspectedDocuments(caseId: string, runId: string): Promise<StoredDocumentReference[]> {
     const records = await this.db.select({
       documentVersionId: documentVersions.id,
       objectKey: artifacts.objectKey,
       mediaType: documentVersions.detectedMediaType,
     }).from(documentVersions)
+      .innerJoin(inputDocumentSelections, eq(documentVersions.id, inputDocumentSelections.documentVersionId))
+      .innerJoin(processingRuns, eq(inputDocumentSelections.inputRevisionId, processingRuns.inputRevisionId))
       .innerJoin(physicalDocuments, eq(documentVersions.physicalDocumentId, physicalDocuments.id))
       .innerJoin(artifacts, eq(documentVersions.sourceArtifactId, artifacts.id))
       .leftJoin(documentInspections, and(
         eq(documentInspections.documentVersionId, documentVersions.id),
         eq(documentInspections.runId, runId),
       ))
-      .where(and(eq(physicalDocuments.caseId, caseId), isNull(documentInspections.id)));
+      .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId), isNull(documentInspections.id)));
     return records;
   }
 
@@ -275,6 +332,28 @@ export class PostgresWorkflowCoordinator {
       await tx.update(processingRuns).set({ status: "completed" }).where(eq(processingRuns.id, runId));
       await tx.update(cases).set({ lifecycle: "ready_for_review", version: sql`${cases.version} + 1` })
         .where(eq(cases.id, caseId));
+      await tx.insert(caseStateTransitions).values({
+        id: randomUUID(), caseId, runId, priorState: "processing",
+        newState: "ready_for_review", reason: "offline_result_ready", actor: "workflow_coordinator",
+      });
+    });
+  }
+
+  async failRun(caseId: string, runId: string, reason: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${runId}, 0))`);
+      const [run] = await tx.select({ status: processingRuns.status }).from(processingRuns)
+        .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
+      if (!run) throw new CaseNotFoundError();
+      if (run.status === "failed" || run.status === "completed") return;
+      await tx.update(processingRuns).set({ status: "failed" })
+        .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId)));
+      await tx.update(cases).set({ lifecycle: "processing_exception", version: sql`${cases.version} + 1` })
+        .where(and(eq(cases.id, caseId), eq(cases.lifecycle, "processing")));
+      await tx.insert(caseStateTransitions).values({
+        id: randomUUID(), caseId, runId, priorState: "processing",
+        newState: "processing_exception", reason, actor: "workflow_coordinator",
+      });
     });
   }
 }

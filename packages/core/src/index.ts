@@ -37,6 +37,7 @@ export interface OfflineCaseResult {
 export interface CaseIntakeCommand {
   readonly applicantDisplayName: string;
   readonly idempotencyKey: string;
+  readonly applicationData: Readonly<Record<string, unknown>>;
   readonly documents?: readonly IntakeDocument[];
 }
 

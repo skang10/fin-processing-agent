@@ -170,11 +170,12 @@ export function buildApp(
     async (request, reply) => {
       const key = request.headers["idempotency-key"] as string;
       let applicantDisplayName: string;
+      let applicationData: Readonly<Record<string, unknown>>;
       const documents: IntakeDocument[] = [];
       try {
         if (request.isMultipart()) {
           if (!sourceIntake) throw new Error("Multipart source intake is not configured");
-          let applicationData: unknown;
+          let rawApplicationData: unknown;
           for await (const part of request.parts()) {
             if (part.type === "file") {
               documents.push({
@@ -183,19 +184,20 @@ export function buildApp(
               });
             } else if (part.fieldname === "application_data") {
               try {
-                applicationData = JSON.parse(String(part.value));
+                rawApplicationData = JSON.parse(String(part.value));
               } catch {
                 throw new IntakeRequestError("application_data must be valid JSON");
               }
             }
           }
           if (documents.length === 0) throw new IntakeRequestError("Multipart intake requires at least one document");
+          applicationData = readApplicationData(rawApplicationData);
           applicantDisplayName = readApplicantDisplayName(applicationData);
         } else {
-          const body = request.body as { applicant_display_name: string };
-          applicantDisplayName = readApplicantDisplayName(body);
+          applicationData = readApplicationData(request.body);
+          applicantDisplayName = readApplicantDisplayName(applicationData);
         }
-        const accepted = await caseCommands.accept({ applicantDisplayName, idempotencyKey: key, documents });
+        const accepted = await caseCommands.accept({ applicantDisplayName, applicationData, idempotencyKey: key, documents });
         if (accepted.replayed) await discardUploads(sourceIntake, documents, request.log);
         const requestId = request.id || randomUUID();
         return reply.code(202).send({
@@ -233,4 +235,11 @@ function readApplicantDisplayName(value: unknown): string {
   const name = (value as { applicant_display_name?: unknown }).applicant_display_name;
   if (typeof name !== "string" || name.trim().length === 0) throw new IntakeRequestError("applicant_display_name is required");
   return name;
+}
+
+function readApplicationData(value: unknown): Readonly<Record<string, unknown>> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new IntakeRequestError("application_data must be a JSON object");
+  }
+  return value as Record<string, unknown>;
 }
