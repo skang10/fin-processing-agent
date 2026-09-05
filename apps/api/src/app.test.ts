@@ -27,7 +27,11 @@ describe("case intake", () => {
       availability: "ready" as const,
       summary: "Three items require review.",
       issueLinks: ["issue_1"],
-      checkedFacts: [],
+      checkedFacts: [{
+        statement: "The applicant name is consistent.", sourceType: "deterministic_check" as const,
+        status: "passed" as const,
+        references: ["/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/evidence/4c816f67-5f2f-4e21-8c17-7eb1e5383999"],
+      }],
     })),
     getIssues: vi.fn(async () => [{
       issueId: "4c816f67-5f2f-4e21-8c17-7eb1e53838be",
@@ -38,6 +42,13 @@ describe("case intake", () => {
       reviewState: "pending" as const,
       version: 1,
     }]),
+    getEvidence: vi.fn(async () => ({
+      evidenceId: "4c816f67-5f2f-4e21-8c17-7eb1e5383999",
+      evidenceType: "structured_input" as const,
+      jsonPointer: "/applicant_display_name",
+      extractionMethod: "structured_input",
+      processorVersion: "application-schema-1.0.0",
+    })),
   };
 
   it("accepts work asynchronously", async () => {
@@ -97,6 +108,23 @@ describe("case intake", () => {
     ]);
     expect(report.json()).toMatchObject({ availability: "ready", issue_links: ["issue_1"] });
     expect(issues.json()).toMatchObject({ issues: [{ review_state: "pending" }] });
+    await app.close();
+  });
+
+  it("returns a scoped evidence projection without internal object-store locations", async () => {
+    const app = buildApp({ accept: vi.fn() }, caseQueries);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/evidence/4c816f67-5f2f-4e21-8c17-7eb1e5383999",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      evidence_id: "4c816f67-5f2f-4e21-8c17-7eb1e5383999",
+      evidence_type: "structured_input",
+      json_pointer: "/applicant_display_name",
+      extraction_method: "structured_input",
+      processor_version: "application-schema-1.0.0",
+    });
     await app.close();
   });
 

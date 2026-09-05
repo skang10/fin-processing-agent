@@ -71,10 +71,31 @@ export const AgentReportSchema = Type.Object({
   issue_links: Type.Array(Type.String()),
   checked_facts: Type.Array(Type.Object({
     statement: Type.String(),
-    status: Type.String(),
+    source_type: Type.Literal("deterministic_check"),
+    status: Type.Literal("passed"),
     references: Type.Array(Type.String()),
   })),
 });
+
+const EvidenceBase = {
+  evidence_id: Type.String({ format: "uuid" }),
+  extraction_method: Type.String(),
+  processor_version: Type.String(),
+};
+
+export const EvidenceProjectionSchema = Type.Union([
+  Type.Object({
+    ...EvidenceBase,
+    evidence_type: Type.Literal("structured_input"),
+    json_pointer: Type.String(),
+  }, { additionalProperties: false }),
+  Type.Object({
+    ...EvidenceBase,
+    evidence_type: Type.Literal("page_level"),
+    document_version_id: Type.String({ format: "uuid" }),
+    page_number: Type.Integer({ minimum: 1 }),
+  }, { additionalProperties: false }),
+]);
 
 export const ReviewIssueSchema = Type.Object({
   issue_id: Type.String({ format: "uuid" }),

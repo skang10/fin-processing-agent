@@ -111,8 +111,25 @@ export interface AgentReportView {
   readonly availability: "ready" | "pending" | "unavailable";
   readonly summary?: string;
   readonly issueLinks: readonly string[];
-  readonly checkedFacts: readonly { statement: string; status: string; references: readonly string[] }[];
+  readonly checkedFacts: readonly { statement: string; sourceType: "deterministic_check"; status: "passed"; references: readonly string[] }[];
 }
+
+export type EvidenceView =
+  | {
+      readonly evidenceId: string;
+      readonly evidenceType: "structured_input";
+      readonly jsonPointer: string;
+      readonly extractionMethod: string;
+      readonly processorVersion: string;
+    }
+  | {
+      readonly evidenceId: string;
+      readonly evidenceType: "page_level";
+      readonly documentVersionId: string;
+      readonly pageNumber: number;
+      readonly extractionMethod: string;
+      readonly processorVersion: string;
+    };
 
 export interface ReviewIssueView {
   readonly issueId: string;
@@ -127,6 +144,7 @@ export interface ReviewIssueView {
 export interface CaseReviewQueryService {
   getAgentReport(caseId: CaseId): Promise<AgentReportView>;
   getIssues(caseId: CaseId): Promise<readonly ReviewIssueView[]>;
+  getEvidence(caseId: CaseId, evidenceId: string): Promise<EvidenceView>;
 }
 
 export class CaseNotFoundError extends Error {

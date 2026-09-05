@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, IdempotencyConflictError, type AcceptedCase, type AgentReportView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type OfflineCaseResult, type ReviewIssueView } from "@findoc/core";
+import { CaseNotFoundError, IdempotencyConflictError, type AcceptedCase, type AgentReportView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type EvidenceView, type OfflineCaseResult, type ReviewIssueView } from "@findoc/core";
 import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, recommendedDispositions, resultRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
@@ -165,6 +165,36 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       reviewState: record.reviewState === "confirmed" ? "confirmed" : record.reviewState === "ignored" ? "ignored" : "pending",
       version: record.version,
     }));
+  }
+
+  async getEvidence(caseId: string, evidenceId: string): Promise<EvidenceView> {
+    const [record] = await this.db.select({
+      evidenceId: evidenceRecords.id,
+      evidenceType: evidenceRecords.evidenceType,
+      jsonPointer: evidenceRecords.jsonPointer,
+      documentVersionId: evidenceRecords.documentVersionId,
+      pageNumber: evidenceRecords.pageNumber,
+      extractionMethod: evidenceRecords.extractionMethod,
+      processorVersion: evidenceRecords.processorVersion,
+    }).from(evidenceRecords)
+      .innerJoin(processingRuns, eq(evidenceRecords.runId, processingRuns.id))
+      .where(and(eq(processingRuns.caseId, caseId), eq(evidenceRecords.id, evidenceId))).limit(1);
+    if (!record) throw new CaseNotFoundError();
+    if (record.evidenceType === "structured_input" && record.jsonPointer) {
+      return {
+        evidenceId: record.evidenceId, evidenceType: "structured_input",
+        jsonPointer: record.jsonPointer, extractionMethod: record.extractionMethod,
+        processorVersion: record.processorVersion,
+      };
+    }
+    if (record.evidenceType === "page_level" && record.documentVersionId && record.pageNumber !== null) {
+      return {
+        evidenceId: record.evidenceId, evidenceType: "page_level",
+        documentVersionId: record.documentVersionId, pageNumber: record.pageNumber,
+        extractionMethod: record.extractionMethod, processorVersion: record.processorVersion,
+      };
+    }
+    throw new Error("Persisted evidence subtype is invalid");
   }
 
   private async assertCaseExists(caseId: string): Promise<void> {
@@ -398,7 +428,7 @@ export class PostgresWorkflowCoordinator {
         verificationStatus: result.reportAvailability === "ready" ? "verified" : "rejected",
         verificationFailureReason: result.reportFailureReason,
         summary: result.summary,
-        issueLinks: issues.map((issue) => issue.id), checkedFacts: [],
+        issueLinks: issues.map((issue) => issue.id), checkedFacts: buildCheckedFacts(caseId, result),
         modelLabel: result.modelLabel, estimatedCost: result.estimatedCost,
       });
       await tx.update(processingRuns).set({ status: "completed" }).where(eq(processingRuns.id, runId));
@@ -446,6 +476,32 @@ function validateOfflineProvenance(result: OfflineCaseResult, applicationSnapsho
   if (result.findings.some((item) => item.materialInputRefs.length === 0 || item.materialInputRefs.some((id) => !evidenceIds.has(id) && !claimIds.has(id)))) {
     throw new Error("Offline finding reference is invalid");
   }
+}
+
+function buildCheckedFacts(caseId: string, result: OfflineCaseResult): AgentReportView["checkedFacts"] {
+  const statements: Readonly<Record<string, string>> = {
+    VAL_DOC_COMPLETENESS_001: "All required document types are present and usable.",
+    VAL_NAME_CONSISTENCY_001: "The applicant name is consistent across the available documents.",
+    VAL_EMPLOYER_CONSISTENCY_001: "The employer information is consistent across the available sources.",
+    VAL_INCOME_CONSISTENCY_001: "The comparable monthly income values are consistent.",
+    VAL_ID_EXPIRY_001: "The identity document expiry date is on or after the review reference date.",
+  };
+  const evidenceIds = new Set(result.evidence.map((item) => item.evidenceId));
+  const claimsById = new Map(result.claims.map((claim) => [claim.claimId, claim]));
+  return result.findings.filter((finding) => finding.status === "passed").map((finding) => {
+    const referencedEvidence = new Set<string>();
+    for (const reference of finding.materialInputRefs) {
+      if (evidenceIds.has(reference)) referencedEvidence.add(reference);
+      for (const evidenceId of claimsById.get(reference)?.evidenceIds ?? []) referencedEvidence.add(evidenceId);
+    }
+    if (referencedEvidence.size === 0) throw new Error(`Passed finding ${finding.ruleId} has no evidence`);
+    const statement = statements[finding.ruleId];
+    if (!statement) throw new Error(`No checked-fact display registered for ${finding.ruleId}`);
+    return {
+      statement, sourceType: "deterministic_check" as const, status: "passed" as const,
+      references: [...referencedEvidence].sort().map((evidenceId) => `/api/v1/cases/${caseId}/evidence/${evidenceId}`),
+    };
+  });
 }
 
 function jsonPointerExists(value: unknown, pointer: string): boolean {

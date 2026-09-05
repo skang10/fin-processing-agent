@@ -6,6 +6,7 @@ import {
   CaseAcceptedSchema,
   CaseProjectionSchema,
   AgentReportSchema,
+  EvidenceProjectionSchema,
   ProblemDetailsSchema,
   ReviewIssuesSchema,
 } from "@findoc/contracts";
@@ -137,9 +138,29 @@ export function buildApp(
       issue_links: [...report.issueLinks],
       checked_facts: report.checkedFacts.map((fact) => ({
         statement: fact.statement,
+        source_type: fact.sourceType,
         status: fact.status,
         references: [...fact.references],
       })),
+    };
+  });
+
+  app.get("/api/v1/cases/:case_id/evidence/:evidence_id", {
+    schema: { response: { 200: EvidenceProjectionSchema, 404: ProblemDetailsSchema } },
+  }, async (request) => {
+    const { case_id: caseId, evidence_id: evidenceId } = request.params as { case_id: string; evidence_id: string };
+    const evidence = await caseQueries.getEvidence(caseId, evidenceId);
+    if (evidence.evidenceType === "structured_input") {
+      return {
+        evidence_id: evidence.evidenceId, evidence_type: evidence.evidenceType,
+        json_pointer: evidence.jsonPointer, extraction_method: evidence.extractionMethod,
+        processor_version: evidence.processorVersion,
+      };
+    }
+    return {
+      evidence_id: evidence.evidenceId, evidence_type: evidence.evidenceType,
+      document_version_id: evidence.documentVersionId, page_number: evidence.pageNumber,
+      extraction_method: evidence.extractionMethod, processor_version: evidence.processorVersion,
     };
   });
 

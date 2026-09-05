@@ -3,7 +3,7 @@ import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { count, eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { IdempotencyConflictError } from "@findoc/core";
+import { CaseNotFoundError, IdempotencyConflictError } from "@findoc/core";
 import {
   PostgresCaseCommandService,
   PostgresCaseQueryService,
@@ -147,7 +147,8 @@ describe("PostgresCaseCommandService", () => {
     await coordinator.completeOffline(accepted.caseId, accepted.runId, result);
     await coordinator.completeOffline(accepted.caseId, accepted.runId, result);
 
-    const status = await new PostgresCaseQueryService(connection.db).get(accepted.caseId);
+    const queries = new PostgresCaseQueryService(connection.db);
+    const status = await queries.get(accepted.caseId);
     const [[stageCount], [issueCount], [reportCount], [resultCount], [findingCount], [dispositionCount], [evidenceCount], [claimCount], [claimEvidenceCount]] = await Promise.all([
       connection.db.select({ value: count() }).from(stageExecutions),
       connection.db.select({ value: count() }).from(reviewIssues),
@@ -163,6 +164,13 @@ describe("PostgresCaseCommandService", () => {
     expect([stageCount?.value, issueCount?.value, reportCount?.value]).toEqual([4, 1, 1]);
     expect([resultCount?.value, findingCount?.value, dispositionCount?.value]).toEqual([1, 5, 1]);
     expect([evidenceCount?.value, claimCount?.value, claimEvidenceCount?.value]).toEqual([1, 1, 1]);
+    await expect(queries.getEvidence(accepted.caseId, evidenceId)).resolves.toMatchObject({
+      evidenceType: "page_level", documentVersionId: document.documentVersionId, pageNumber: 1,
+    });
+    await expect(queries.getEvidence("4c816f67-5f2f-4e21-8c17-7eb1e5383000", evidenceId)).rejects.toBeInstanceOf(CaseNotFoundError);
+    const report = await queries.getAgentReport(accepted.caseId);
+    expect(report.checkedFacts).toHaveLength(4);
+    expect(report.checkedFacts[0]?.references[0]).toContain(`/evidence/${evidenceId}`);
     const [transitionCount] = await connection.db.select({ value: count() }).from(caseStateTransitions);
     expect(transitionCount?.value).toBe(2);
   });
