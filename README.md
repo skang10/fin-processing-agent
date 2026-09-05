@@ -8,7 +8,7 @@ The project does not approve or reject loans, determine creditworthiness, contac
 
 The Stage Two skeleton provides separate API, Worker, and Review Web entry points, shared TypeBox contracts, internal processing ports, an asynchronous case-intake contract test, and an offline pipeline-order test.
 
-Case intake now has PostgreSQL persistence, a transactional outbox, a pg-boss relay, and a deterministic offline coordinator that publishes a fake Agent Report and review issues. A MinIO adapter and streaming PDF/JPEG/PNG intake guard are tested independently. Multipart document persistence, evidence, PDF Inspector, OCR, the real Pi harness, and model adapters remain next implementation steps, so this is not yet a complete document-processing vertical slice.
+Case intake now accepts multipart PDF/JPEG/PNG streams, stores source bytes through MinIO, and transactionally registers immutable artifact and document-version metadata with PostgreSQL workflow state. The pg-boss offline coordinator publishes a fake Agent Report and review issues. Application snapshots, failed-intake artifact cleanup, evidence, PDF Inspector, OCR, the real Pi harness, and model adapters remain next implementation steps, so this is not yet a complete document-processing vertical slice.
 
 ## Commands
 

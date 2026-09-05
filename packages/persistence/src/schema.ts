@@ -8,6 +8,36 @@ export const cases = pgTable("cases", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const artifacts = pgTable("artifacts", {
+  id: uuid("id").primaryKey(),
+  caseId: uuid("case_id").notNull().references(() => cases.id),
+  objectKey: text("object_key").notNull(),
+  sha256: text("sha256").notNull(),
+  byteSize: integer("byte_size").notNull(),
+  detectedMediaType: text("detected_media_type").notNull(),
+  artifactKind: text("artifact_kind").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("artifact_object_key_uq").on(table.objectKey), index("artifact_case_idx").on(table.caseId)]);
+
+export const physicalDocuments = pgTable("physical_documents", {
+  id: uuid("id").primaryKey(),
+  caseId: uuid("case_id").notNull().references(() => cases.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("physical_document_case_idx").on(table.caseId)]);
+
+export const documentVersions = pgTable("document_versions", {
+  id: uuid("id").primaryKey(),
+  physicalDocumentId: uuid("physical_document_id").notNull().references(() => physicalDocuments.id),
+  sourceArtifactId: uuid("source_artifact_id").notNull().references(() => artifacts.id),
+  version: integer("version").notNull(),
+  submittedFilename: text("submitted_filename").notNull(),
+  detectedMediaType: text("detected_media_type").notNull(),
+  integrityState: text("integrity_state").notNull(),
+  readabilityState: text("readability_state").notNull(),
+  malwareScanState: text("malware_scan_state").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("document_version_number_uq").on(table.physicalDocumentId, table.version)]);
+
 export const processingRuns = pgTable("processing_runs", {
   id: uuid("id").primaryKey(),
   caseId: uuid("case_id").notNull().references(() => cases.id),

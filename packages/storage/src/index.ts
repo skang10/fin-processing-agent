@@ -71,6 +71,30 @@ export interface MinioObjectStoreOptions {
   readonly bucket: string;
 }
 
+export interface MinioConnectionOptions {
+  readonly endpoint: string;
+  readonly accessKey: string;
+  readonly secretKey: string;
+  readonly bucket: string;
+}
+
+export function createMinioObjectStore(options: MinioConnectionOptions): MinioObjectStore {
+  const endpoint = new URL(options.endpoint);
+  if (endpoint.protocol !== "http:" && endpoint.protocol !== "https:") {
+    throw new Error("MINIO_ENDPOINT must use http or https");
+  }
+  return new MinioObjectStore({
+    client: new Client({
+      endPoint: endpoint.hostname,
+      port: endpoint.port ? Number(endpoint.port) : endpoint.protocol === "https:" ? 443 : 80,
+      useSSL: endpoint.protocol === "https:",
+      accessKey: options.accessKey,
+      secretKey: options.secretKey,
+    }),
+    bucket: options.bucket,
+  });
+}
+
 export class MinioObjectStore implements ObjectStore {
   constructor(private readonly options: MinioObjectStoreOptions) {}
 

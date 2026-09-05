@@ -14,6 +14,10 @@ export interface StoredSourceArtifact {
   readonly detectedMediaType: SupportedMediaType;
 }
 
+export interface SourceArtifactIntake {
+  store(source: AsyncIterable<Uint8Array>): Promise<StoredSourceArtifact>;
+}
+
 export interface OfflineIssueResult {
   readonly code: string;
   readonly description: string;
@@ -30,6 +34,12 @@ export interface OfflineCaseResult {
 export interface CaseIntakeCommand {
   readonly applicantDisplayName: string;
   readonly idempotencyKey: string;
+  readonly documents?: readonly IntakeDocument[];
+}
+
+export interface IntakeDocument {
+  readonly submittedFilename: string;
+  readonly artifact: StoredSourceArtifact;
 }
 
 export interface AcceptedCase {

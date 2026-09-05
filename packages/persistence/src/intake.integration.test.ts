@@ -9,11 +9,14 @@ import {
   PostgresCaseQueryService,
   PostgresWorkflowCoordinator,
   agentReports,
+  artifacts,
   cases,
   createDatabase,
   idempotencyRecords,
+  documentVersions,
   outboxEvents,
   processingRuns,
+  physicalDocuments,
   reviewIssues,
   stageExecutions,
 } from "./index.js";
@@ -37,7 +40,17 @@ describe("PostgresCaseCommandService", () => {
 
   it("atomically creates one case, run, outbox event, and idempotency record", async () => {
     const service = new PostgresCaseCommandService(connection.db, "actor_1");
-    const command = { applicantDisplayName: "Anna Beispiel", idempotencyKey: "key_1" };
+    const command = {
+      applicantDisplayName: "Anna Beispiel",
+      idempotencyKey: "key_1",
+      documents: [{
+        submittedFilename: "statement.pdf",
+        artifact: {
+          objectKey: "source/object_1", sha256: "a".repeat(64), byteSize: 128,
+          detectedMediaType: "application/pdf" as const,
+        },
+      }],
+    };
 
     const accepted = await service.accept(command);
     await expect(service.accept(command)).resolves.toEqual(accepted);
@@ -52,6 +65,12 @@ describe("PostgresCaseCommandService", () => {
     ]);
     expect([caseCount?.value, runCount?.value, eventCount?.value, keyCount?.value])
       .toEqual([1, 1, 1, 1]);
+    const [[artifactCount], [documentCount], [versionCount]] = await Promise.all([
+      connection.db.select({ value: count() }).from(artifacts),
+      connection.db.select({ value: count() }).from(physicalDocuments),
+      connection.db.select({ value: count() }).from(documentVersions),
+    ]);
+    expect([artifactCount?.value, documentCount?.value, versionCount?.value]).toEqual([1, 1, 1]);
 
     const coordinator = new PostgresWorkflowCoordinator(connection.db);
     const result = {

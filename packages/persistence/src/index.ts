@@ -3,7 +3,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { CaseNotFoundError, IdempotencyConflictError, type AcceptedCase, type AgentReportView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type OfflineCaseResult, type ReviewIssueView } from "@findoc/core";
-import { agentReports, cases, idempotencyRecords, outboxEvents, processingRuns, reviewIssues, stageExecutions } from "./schema.js";
+import { agentReports, artifacts, cases, documentVersions, idempotencyRecords, outboxEvents, physicalDocuments, processingRuns, reviewIssues, stageExecutions } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
@@ -48,6 +48,28 @@ export class PostgresCaseCommandService implements CaseCommandService {
         workflowVersion: WORKFLOW_VERSION,
         status: "queued",
       });
+      for (const document of command.documents ?? []) {
+        const artifactId = randomUUID();
+        const physicalDocumentId = randomUUID();
+        await tx.insert(artifacts).values({
+          id: artifactId,
+          caseId: accepted.caseId,
+          objectKey: document.artifact.objectKey,
+          sha256: document.artifact.sha256,
+          byteSize: document.artifact.byteSize,
+          detectedMediaType: document.artifact.detectedMediaType,
+          artifactKind: "source",
+        });
+        await tx.insert(physicalDocuments).values({ id: physicalDocumentId, caseId: accepted.caseId });
+        await tx.insert(documentVersions).values({
+          id: randomUUID(), physicalDocumentId, sourceArtifactId: artifactId, version: 1,
+          submittedFilename: document.submittedFilename,
+          detectedMediaType: document.artifact.detectedMediaType,
+          integrityState: "verified",
+          readabilityState: "not_inspected",
+          malwareScanState: "not_scanned",
+        });
+      }
       await tx.insert(outboxEvents).values({
         id: randomUUID(),
         eventType: "case_processing_requested",
@@ -135,7 +157,15 @@ function asCaseLifecycle(value: string): CaseStatus["lifecycle"] {
 
 export function hashIntake(command: CaseIntakeCommand): string {
   return createHash("sha256")
-    .update(JSON.stringify({ applicant_display_name: command.applicantDisplayName }))
+    .update(JSON.stringify({
+      applicant_display_name: command.applicantDisplayName,
+      documents: (command.documents ?? []).map((document) => ({
+        filename: document.submittedFilename,
+        sha256: document.artifact.sha256,
+        byte_size: document.artifact.byteSize,
+        media_type: document.artifact.detectedMediaType,
+      })),
+    }))
     .digest("hex");
 }
 

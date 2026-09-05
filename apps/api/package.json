@@ -8,10 +8,12 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@fastify/multipart": "10.1.1",
     "@fastify/type-provider-typebox": "6.1.0",
     "@findoc/contracts": "workspace:*",
     "@findoc/core": "workspace:*",
     "@findoc/persistence": "workspace:*",
+    "@findoc/storage": "workspace:*",
     "fastify": "5.12.3",
     "pino": "10.3.1"
   },

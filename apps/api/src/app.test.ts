@@ -86,4 +86,39 @@ describe("case intake", () => {
     expect(issues.json()).toMatchObject({ issues: [{ review_state: "pending" }] });
     await app.close();
   });
+
+  it("streams multipart documents through source intake before accepting the case", async () => {
+    const accept = vi.fn(async () => ({ caseId: "case_1", runId: "run_1" }));
+    let uploaded = Buffer.alloc(0);
+    const store = vi.fn(async (source: AsyncIterable<Uint8Array>) => {
+      for await (const chunk of source) uploaded = Buffer.concat([uploaded, Buffer.from(chunk)]);
+      return {
+        objectKey: "source/object_1", sha256: "a".repeat(64), byteSize: uploaded.byteLength,
+        detectedMediaType: "application/pdf" as const,
+      };
+    });
+    const app = buildApp({ accept }, caseQueries, { store });
+    const boundary = "findoc-test-boundary";
+    const payload = Buffer.from([
+      `--${boundary}\r\nContent-Disposition: form-data; name="application_data"\r\n\r\n`,
+      JSON.stringify({ applicant_display_name: "Anna Beispiel" }),
+      `\r\n--${boundary}\r\nContent-Disposition: form-data; name="documents"; filename="statement.pdf"\r\nContent-Type: application/pdf\r\n\r\n`,
+      "%PDF-1.7\nDEMO",
+      `\r\n--${boundary}--\r\n`,
+    ].join(""));
+    const response = await app.inject({
+      method: "POST", url: "/api/v1/cases",
+      headers: { "idempotency-key": "multipart_1", "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload,
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(store).toHaveBeenCalledOnce();
+    expect(uploaded.toString()).toBe("%PDF-1.7\nDEMO");
+    expect(accept).toHaveBeenCalledWith(expect.objectContaining({
+      applicantDisplayName: "Anna Beispiel",
+      documents: [expect.objectContaining({ submittedFilename: "statement.pdf" })],
+    }));
+    await app.close();
+  });
 });

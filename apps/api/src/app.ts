@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
+import multipart from "@fastify/multipart";
 import {
   CaseAcceptedSchema,
   CaseProjectionSchema,
@@ -8,10 +9,18 @@ import {
   ProblemDetailsSchema,
   ReviewIssuesSchema,
 } from "@findoc/contracts";
-import { CaseNotFoundError, IdempotencyConflictError, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService } from "@findoc/core";
+import { CaseNotFoundError, IdempotencyConflictError, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService, type IntakeDocument, type SourceArtifactIntake } from "@findoc/core";
+import { DocumentSizeLimitError, EmptyDocumentError, UnsupportedDocumentMediaError } from "@findoc/storage";
 
-export function buildApp(caseCommands: CaseCommandService, caseQueries: CaseQueryService & CaseReviewQueryService) {
+class IntakeRequestError extends Error {}
+
+export function buildApp(
+  caseCommands: CaseCommandService,
+  caseQueries: CaseQueryService & CaseReviewQueryService,
+  sourceIntake?: SourceArtifactIntake,
+) {
   const app = Fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
+  void app.register(multipart, { limits: { files: 10, fields: 10 } });
 
   app.addHook("onRequest", async (request, reply) => {
     const requestId = request.id;
@@ -36,6 +45,34 @@ export function buildApp(caseCommands: CaseCommandService, caseQueries: CaseQuer
         status: 404,
         code: "not_found",
         request_id: request.id,
+      });
+    }
+    if (error instanceof UnsupportedDocumentMediaError || error instanceof EmptyDocumentError) {
+      return reply.code(415).type("application/problem+json").send({
+        type: "https://example.invalid/problems/unsupported_document",
+        title: "Unsupported document",
+        status: 415,
+        code: "unsupported_document",
+        request_id: request.id,
+      });
+    }
+    if (error instanceof DocumentSizeLimitError) {
+      return reply.code(413).type("application/problem+json").send({
+        type: "https://example.invalid/problems/document_too_large",
+        title: "Document is too large",
+        status: 413,
+        code: "document_too_large",
+        request_id: request.id,
+      });
+    }
+    if (error instanceof IntakeRequestError) {
+      return reply.code(400).type("application/problem+json").send({
+        type: "https://example.invalid/problems/invalid_intake",
+        title: "Invalid case intake",
+        status: 400,
+        code: "invalid_intake",
+        request_id: request.id,
+        detail: error.message,
       });
     }
     throw error;
@@ -111,21 +148,40 @@ export function buildApp(caseCommands: CaseCommandService, caseQueries: CaseQuer
           required: ["idempotency-key"],
           properties: { "idempotency-key": { type: "string", minLength: 1 } },
         },
-        body: {
-          type: "object",
-          required: ["applicant_display_name"],
-          additionalProperties: false,
-          properties: { applicant_display_name: { type: "string", minLength: 1 } },
-        },
         response: { 202: CaseAcceptedSchema, 400: ProblemDetailsSchema },
       },
     },
     async (request, reply) => {
-      const body = request.body as { applicant_display_name: string };
       const key = request.headers["idempotency-key"] as string;
+      let applicantDisplayName: string;
+      const documents: IntakeDocument[] = [];
+      if (request.isMultipart()) {
+        if (!sourceIntake) throw new Error("Multipart source intake is not configured");
+        let applicationData: unknown;
+        for await (const part of request.parts()) {
+          if (part.type === "file") {
+            documents.push({
+              submittedFilename: part.filename,
+              artifact: await sourceIntake.store(part.file),
+            });
+          } else if (part.fieldname === "application_data") {
+            try {
+              applicationData = JSON.parse(String(part.value));
+            } catch {
+              throw new IntakeRequestError("application_data must be valid JSON");
+            }
+          }
+        }
+        if (documents.length === 0) throw new IntakeRequestError("Multipart intake requires at least one document");
+        applicantDisplayName = readApplicantDisplayName(applicationData);
+      } else {
+        const body = request.body as { applicant_display_name: string };
+        applicantDisplayName = readApplicantDisplayName(body);
+      }
       const accepted = await caseCommands.accept({
-        applicantDisplayName: body.applicant_display_name,
+        applicantDisplayName,
         idempotencyKey: key,
+        documents,
       });
       const requestId = request.id || randomUUID();
       return reply.code(202).send({
@@ -139,4 +195,13 @@ export function buildApp(caseCommands: CaseCommandService, caseQueries: CaseQuer
   );
 
   return app;
+}
+
+function readApplicantDisplayName(value: unknown): string {
+  if (typeof value !== "object" || value === null || !("applicant_display_name" in value)) {
+    throw new IntakeRequestError("application_data must contain applicant_display_name");
+  }
+  const name = (value as { applicant_display_name?: unknown }).applicant_display_name;
+  if (typeof name !== "string" || name.trim().length === 0) throw new IntakeRequestError("applicant_display_name is required");
+  return name;
 }
