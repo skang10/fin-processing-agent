@@ -43,6 +43,13 @@
       "when": 1788580808605,
       "tag": "0005_naive_starbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788581266802,
+      "tag": "0006_cheerful_revanche",
+      "breakpoints": true
     }
   ]
 }

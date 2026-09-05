@@ -353,7 +353,10 @@ export class PostgresWorkflowCoordinator {
       });
 
       await tx.insert(agentReports).values({
-        id: randomUUID(), caseId, runId, availability: "ready", summary: result.summary,
+        id: randomUUID(), caseId, runId, availability: result.reportAvailability,
+        verificationStatus: result.reportAvailability === "ready" ? "verified" : "rejected",
+        verificationFailureReason: result.reportFailureReason,
+        summary: result.summary,
         issueLinks: issues.map((issue) => issue.id), checkedFacts: [],
         modelLabel: result.modelLabel, estimatedCost: result.estimatedCost,
       });

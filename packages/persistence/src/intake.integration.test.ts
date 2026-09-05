@@ -116,6 +116,7 @@ describe("PostgresCaseCommandService", () => {
     ];
     const result = {
       resultRevisionId,
+      reportAvailability: "ready" as const,
       summary: "Synthetic case requires review.", modelLabel: "fake-pi-harness-v1", estimatedCost: "0.0000",
       findings: ruleIds.map((ruleId) => ({
         ruleId, ruleVersion: "1.0.0", ruleSetId: "demo-de-personal-loan-v1", ruleSetVersion: "1.0.0",

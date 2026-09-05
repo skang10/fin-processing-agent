@@ -29,6 +29,8 @@ export interface OfflineIssueResult {
 
 export interface OfflineCaseResult {
   readonly resultRevisionId: string;
+  readonly reportAvailability: "ready" | "unavailable";
+  readonly reportFailureReason?: string;
   readonly summary: string;
   readonly issues: readonly OfflineIssueResult[];
   readonly findings: readonly {

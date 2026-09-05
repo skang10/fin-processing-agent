@@ -165,6 +165,8 @@ export const agentReports = pgTable("agent_reports", {
   caseId: uuid("case_id").notNull().references(() => cases.id),
   runId: uuid("run_id").notNull().references(() => processingRuns.id),
   availability: text("availability").notNull(),
+  verificationStatus: text("verification_status"),
+  verificationFailureReason: text("verification_failure_reason"),
   summary: text("summary").notNull(),
   issueLinks: jsonb("issue_links").notNull(),
   checkedFacts: jsonb("checked_facts").notNull(),

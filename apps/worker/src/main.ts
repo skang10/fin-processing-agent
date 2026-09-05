@@ -65,7 +65,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   const applicationData = await coordinator.loadApplicationData(job.data.case_id, job.data.run_id);
   try {
     const inputRevisionId = await coordinator.loadInputRevisionId(job.data.case_id, job.data.run_id);
-    await coordinator.completeOffline(job.data.case_id, job.data.run_id, runOfflineFixture(applicationData["demo_fixture_id"], {
+    await coordinator.completeOffline(job.data.case_id, job.data.run_id, await runOfflineFixture(applicationData["demo_fixture_id"], {
       inputSnapshotId: inputRevisionId,
       resultRevisionId: randomUUID(),
       referenceDate: "2026-09-05",

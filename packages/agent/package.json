@@ -1,13 +1,12 @@
 {
-  "name": "@findoc/offline",
+  "name": "@findoc/agent",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@findoc/agent": "workspace:*",
-    "@findoc/core": "workspace:*",
-    "@findoc/validation": "workspace:*"
+    "@findoc/contracts": "workspace:*",
+    "@sinclair/typebox": "0.34.52"
   }
 }

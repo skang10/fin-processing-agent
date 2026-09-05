@@ -1,5 +1,6 @@
 import type { OfflineCaseResult } from "@findoc/core";
-import { evaluateRuleSet, mapDisposition, type ValidationFinding, type ValidationInput } from "@findoc/validation";
+import { FakeCaseReviewAgentHarness, runVerifiedReport, type CaseReviewAgentHarness } from "@findoc/agent";
+import { evaluateRuleSet, mapDisposition, type ValidationInput } from "@findoc/validation";
 
 export const ANNA_EXAMPLE_FIXTURE_ID = "anna-example-v1";
 
@@ -11,17 +12,30 @@ export interface OfflineFixtureContext {
   readonly referenceDate: string;
 }
 
-export function runOfflineFixture(fixtureId: unknown, context: OfflineFixtureContext): OfflineCaseResult {
+export async function runOfflineFixture(
+  fixtureId: unknown,
+  context: OfflineFixtureContext,
+  harness: CaseReviewAgentHarness = new FakeCaseReviewAgentHarness(),
+): Promise<OfflineCaseResult> {
   if (fixtureId !== ANNA_EXAMPLE_FIXTURE_ID) {
     throw new OfflineFixtureUnavailableError("No registered offline fixture was selected");
   }
   const input = annaExampleInput(context);
   const findings = evaluateRuleSet(input);
   const recommendedDisposition = mapDisposition(input, findings);
-  const issues = findings.filter((item) => item.status !== "passed" && item.status !== "not_applicable").map(issueFromFinding);
+  const reportContext = {
+    resultRevisionId: context.resultRevisionId,
+    findings,
+    recommendedDisposition,
+    allowedReferences: new Set(findings.map((finding) => `finding:${finding.ruleId}`)),
+  };
+  const report = await runVerifiedReport(harness, reportContext);
+  const issues = report.verified ? report.brief.attention_items.map(issueFromAttentionItem) : [];
   return {
     resultRevisionId: context.resultRevisionId,
-    summary: `The synthetic document package was processed. ${issues.length} items require human review.`,
+    reportAvailability: report.verified ? "ready" : "unavailable",
+    ...(report.verified ? {} : { reportFailureReason: report.reason }),
+    summary: report.verified ? report.brief.summary : "Agent report unavailable.",
     modelLabel: "fake-pi-harness-v1",
     estimatedCost: "0.0000",
     findings,
@@ -56,22 +70,19 @@ function annaExampleInput(context: OfflineFixtureContext): ValidationInput {
   };
 }
 
-function issueFromFinding(finding: ValidationFinding) {
-  const displays: Record<string, { description: string; recommendedAction: string }> = {
-    employer_conflict: {
-      description: "The declared employer differs from the qualified salary payment counterparty.",
-      recommendedAction: "Confirm the current employer and provide corrected supporting documents if needed.",
-    },
-    income_input_incomparable: {
-      description: "The monthly income value does not have sufficient evidence for comparison.",
-      recommendedAction: "Provide a legible payslip that shows the monthly net income.",
-    },
-    required_document_uncertain: {
-      description: "The bank statement boundary is uncertain, so document completeness cannot be confirmed.",
-      recommendedAction: "Resubmit the bank statement as one complete file if the displayed page boundary is incorrect.",
-    },
+function issueFromAttentionItem(item: {
+  readonly description: string;
+  readonly suggested_action: string;
+  readonly references: readonly string[];
+}) {
+  const reference = item.references.find((value) => value.startsWith("finding:"));
+  if (!reference) throw new Error("Agent attention item has no finding reference");
+  const actions: Record<string, string> = {
+    compare_claims: "Confirm the current employer and provide corrected supporting documents if needed.",
+    verify_extracted_value: "Provide a legible payslip that shows the monthly net income.",
+    review_document_boundary: "Resubmit the bank statement as one complete file if the displayed page boundary is incorrect.",
   };
-  const display = displays[finding.reasonCode];
-  if (!display) throw new Error(`No reviewer display registered for ${finding.reasonCode}`);
-  return { code: finding.ruleId, ...display };
+  const recommendedAction = actions[item.suggested_action];
+  if (!recommendedAction) throw new Error(`No applicant-readable action registered for ${item.suggested_action}`);
+  return { code: reference.slice("finding:".length), description: item.description, recommendedAction };
 }

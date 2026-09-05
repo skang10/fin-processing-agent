@@ -87,3 +87,36 @@ export const ReviewIssueSchema = Type.Object({
 });
 
 export const ReviewIssuesSchema = Type.Object({ issues: Type.Array(ReviewIssueSchema) });
+
+export const ReviewSignalSchema = Type.Union([
+  Type.Literal("document_missing"), Type.Literal("document_type_uncertain"),
+  Type.Literal("document_boundary_uncertain"), Type.Literal("field_missing"),
+  Type.Literal("field_low_confidence"), Type.Literal("evidence_missing"),
+  Type.Literal("evidence_ambiguous"), Type.Literal("conflicting_candidates"),
+  Type.Literal("validation_finding_requires_attention"), Type.Literal("instruction_like_content_observed"),
+  Type.Literal("processing_failure"), Type.Literal("agent_budget_exhausted"),
+  Type.Literal("agent_report_unavailable"),
+]);
+
+export const SuggestedActionSchema = Type.Union([
+  Type.Literal("inspect_evidence"), Type.Literal("compare_claims"),
+  Type.Literal("verify_extracted_value"), Type.Literal("review_document_boundary"),
+  Type.Literal("review_missing_document"), Type.Literal("review_conflicting_candidates"),
+  Type.Literal("review_agent_recovery"), Type.Literal("rerun_bounded_extraction"),
+  Type.Literal("edit_issue"), Type.Literal("request_changes"), Type.Literal("escalate_review"),
+]);
+
+export const CaseReviewBriefCandidateSchema = Type.Object({
+  schema_version: Type.Literal("1.0.0"),
+  result_revision_id: Type.String({ minLength: 1 }),
+  report_status: Type.Literal("ready"),
+  summary: Type.String({ minLength: 1, maxLength: 500 }),
+  attention_items: Type.Array(Type.Object({
+    signal: ReviewSignalSchema,
+    suggested_action: SuggestedActionSchema,
+    description: Type.String({ minLength: 1, maxLength: 500 }),
+    references: Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 10 }),
+  }, { additionalProperties: false }), { maxItems: 20 }),
+}, { additionalProperties: false });
+
+export type CaseReviewBriefCandidate = Static<typeof CaseReviewBriefCandidateSchema>;

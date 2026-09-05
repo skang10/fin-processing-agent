@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "packages/agent" },
     { "path": "packages/contracts" },
     { "path": "packages/core" },
     { "path": "packages/document-processing" },
