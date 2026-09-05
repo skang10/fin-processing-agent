@@ -101,7 +101,7 @@ Replace unsupported numerical targets with measured results tied to dataset, mod
 
 ### BL-007 — V1 Review UX Contracts
 
-**Status:** Read projections and API-hydrated workbench implemented; review commands and case Agent-log projection pending; aggregate monitoring deferred
+**Status:** Read projections and API-hydrated workbench implemented; review commands, post-review queues, downstream handoff contract, and case Agent-log projection pending; aggregate monitoring deferred
 
 Define implementation contracts for the approved V1 HTML UX baseline:
 
@@ -111,6 +111,11 @@ Define implementation contracts for the approved V1 HTML UX baseline:
 4. Final `request_changes`, `escalate_review`, and `clear_for_downstream` command preconditions.
 5. Structured application projections for masked contact and submission-history fields.
 6. Case Agent log with safe model, cost, timestamp, and bounded activity projections.
+7. Top-level reviewer navigation separates active `Review queue`, `Changes requested`, and read-only `Completed` cases. Completed cases must not remain mixed into the actionable Review Queue.
+8. `request_changes` moves the case to `Changes requested`; V1 must not label this state `Waiting for applicant` because the Workbench does not deliver the draft or contact the applicant.
+9. `clear_for_downstream` atomically persists the immutable final review, transitions the case lifecycle to `ready`, removes it from the active Review Queue, and exposes it in `Completed` as `Ready for handoff`.
+10. The initial V1 demo exposes completed results through a read-only, versioned downstream contract without connecting to or implying a real lending system. `Handed off` and `Handoff failed` states remain unavailable until an authorized consumer and delivery acknowledgement exist.
+11. Completed-case projections preserve the reviewed result revision, final review action, reviewer, completion time, structured claims, deterministic findings, evidence references, and audit linkage required by the downstream contract.
 
 **Target documents:**
 
@@ -118,6 +123,13 @@ Define implementation contracts for the approved V1 HTML UX baseline:
 2. `specs/SECURITY_AND_LIMITATIONS.md`
 3. `specs/operations/OBSERVABILITY_AND_FAILURES.md`
 4. Executable TypeBox schemas after the Stage Two repository skeleton exists.
+
+**Acceptance conditions:**
+
+1. Active, changes-requested, and completed cases cannot appear in the wrong top-level list.
+2. Refresh and concurrent commands converge to the persisted reviewer workflow state.
+3. Replaying `clear_for_downstream` cannot create a duplicate final review or downstream-ready record.
+4. No V1 state or copy claims applicant delivery or successful downstream consumption without an acknowledged integration.
 
 ## Deferred Production Work
 
