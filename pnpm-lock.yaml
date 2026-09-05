@@ -60,6 +60,9 @@ importers:
       '@findoc/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@findoc/offline':
+        specifier: workspace:*
+        version: link:../../packages/offline
       '@findoc/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
@@ -81,6 +84,12 @@ importers:
         version: 0.34.52
 
   packages/core: {}
+
+  packages/offline:
+    dependencies:
+      '@findoc/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/persistence:
     dependencies:

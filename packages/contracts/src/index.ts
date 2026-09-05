@@ -64,3 +64,26 @@ export type CaseProcessingJob = Static<typeof CaseProcessingJobSchema>;
 export function isCaseProcessingJob(value: unknown): value is CaseProcessingJob {
   return Value.Check(CaseProcessingJobSchema, value);
 }
+
+export const AgentReportSchema = Type.Object({
+  availability: Type.Union([Type.Literal("ready"), Type.Literal("pending"), Type.Literal("unavailable")]),
+  summary: Type.Optional(Type.String()),
+  issue_links: Type.Array(Type.String()),
+  checked_facts: Type.Array(Type.Object({
+    statement: Type.String(),
+    status: Type.String(),
+    references: Type.Array(Type.String()),
+  })),
+});
+
+export const ReviewIssueSchema = Type.Object({
+  issue_id: Type.String({ format: "uuid" }),
+  origin: Type.Union([Type.Literal("agent"), Type.Literal("human")]),
+  code: Type.String(),
+  description: Type.String(),
+  recommended_action: Type.String(),
+  review_state: Type.Union([Type.Literal("pending"), Type.Literal("confirmed"), Type.Literal("ignored")]),
+  version: Type.Integer({ minimum: 1 }),
+});
+
+export const ReviewIssuesSchema = Type.Object({ issues: Type.Array(ReviewIssueSchema) });

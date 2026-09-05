@@ -1,7 +1,8 @@
 import pino from "pino";
 import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
-import { PostgresOutboxStore, createDatabase } from "@findoc/persistence";
+import { runOfflineFixture } from "@findoc/offline";
+import { PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
 import { CASE_PROCESSING_QUEUE, OutboxRelay } from "./outbox.js";
 
 const logger = pino({ name: "worker" });
@@ -15,13 +16,16 @@ await boss.start();
 await boss.createQueue(CASE_PROCESSING_QUEUE);
 
 const relay = new OutboxRelay(new PostgresOutboxStore(db), boss);
+const coordinator = new PostgresWorkflowCoordinator(db);
 await relay.publishBatch();
 
 await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   if (!job) return;
   if (!isCaseProcessingJob(job.data)) throw new Error("Invalid case-processing job payload");
   logger.info({ case_id: job.data.case_id, run_id: job.data.run_id }, "case processing claimed");
-  // The next slice replaces this log-only handler with the versioned coordinator.
+  const applicant = await coordinator.loadApplicant(job.data.case_id, job.data.run_id);
+  await coordinator.completeOffline(job.data.case_id, job.data.run_id, runOfflineFixture(applicant));
+  logger.info({ case_id: job.data.case_id, run_id: job.data.run_id }, "offline case processing completed");
 });
 
 const relayTimer = setInterval(() => {

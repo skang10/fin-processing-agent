@@ -4,11 +4,13 @@ import { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import {
   CaseAcceptedSchema,
   CaseProjectionSchema,
+  AgentReportSchema,
   ProblemDetailsSchema,
+  ReviewIssuesSchema,
 } from "@findoc/contracts";
-import { CaseNotFoundError, IdempotencyConflictError, type CaseCommandService, type CaseQueryService } from "@findoc/core";
+import { CaseNotFoundError, IdempotencyConflictError, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService } from "@findoc/core";
 
-export function buildApp(caseCommands: CaseCommandService, caseQueries: CaseQueryService) {
+export function buildApp(caseCommands: CaseCommandService, caseQueries: CaseQueryService & CaseReviewQueryService) {
   const app = Fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
 
   app.addHook("onRequest", async (request, reply) => {
@@ -69,6 +71,35 @@ export function buildApp(caseCommands: CaseCommandService, caseQueries: CaseQuer
         final_review: `${base}/final-review`,
       },
     };
+  });
+
+  app.get("/api/v1/cases/:case_id/agent-report", {
+    schema: { response: { 200: AgentReportSchema, 404: ProblemDetailsSchema } },
+  }, async (request) => {
+    const { case_id: caseId } = request.params as { case_id: string };
+    const report = await caseQueries.getAgentReport(caseId);
+    return {
+      availability: report.availability,
+      ...(report.summary ? { summary: report.summary } : {}),
+      issue_links: [...report.issueLinks],
+      checked_facts: report.checkedFacts.map((fact) => ({
+        statement: fact.statement,
+        status: fact.status,
+        references: [...fact.references],
+      })),
+    };
+  });
+
+  app.get("/api/v1/cases/:case_id/issues", {
+    schema: { response: { 200: ReviewIssuesSchema, 404: ProblemDetailsSchema } },
+  }, async (request) => {
+    const { case_id: caseId } = request.params as { case_id: string };
+    const issues = await caseQueries.getIssues(caseId);
+    return { issues: issues.map((issue) => ({
+      issue_id: issue.issueId, origin: issue.origin, code: issue.code,
+      description: issue.description, recommended_action: issue.recommendedAction,
+      review_state: issue.reviewState, version: issue.version,
+    })) };
   });
 
   app.post(

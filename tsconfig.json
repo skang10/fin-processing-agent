@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/contracts" },
     { "path": "packages/core" },
+    { "path": "packages/offline" },
     { "path": "packages/persistence" },
     { "path": "apps/api" },
     { "path": "apps/worker" },

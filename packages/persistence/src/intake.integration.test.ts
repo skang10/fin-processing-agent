@@ -6,11 +6,16 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { IdempotencyConflictError } from "@findoc/core";
 import {
   PostgresCaseCommandService,
+  PostgresCaseQueryService,
+  PostgresWorkflowCoordinator,
+  agentReports,
   cases,
   createDatabase,
   idempotencyRecords,
   outboxEvents,
   processingRuns,
+  reviewIssues,
+  stageExecutions,
 } from "./index.js";
 
 describe("PostgresCaseCommandService", () => {
@@ -47,5 +52,22 @@ describe("PostgresCaseCommandService", () => {
     ]);
     expect([caseCount?.value, runCount?.value, eventCount?.value, keyCount?.value])
       .toEqual([1, 1, 1, 1]);
+
+    const coordinator = new PostgresWorkflowCoordinator(connection.db);
+    const result = {
+      summary: "Synthetic case requires review.", modelLabel: "fake-pi-agent-v1", estimatedCost: "0.0000",
+      issues: [{ code: "VAL_EMPLOYER_CONSISTENCY_001", description: "Employer differs.", recommendedAction: "Confirm the current employer." }],
+    };
+    await coordinator.completeOffline(accepted.caseId, accepted.runId, result);
+    await coordinator.completeOffline(accepted.caseId, accepted.runId, result);
+
+    const status = await new PostgresCaseQueryService(connection.db).get(accepted.caseId);
+    const [[stageCount], [issueCount], [reportCount]] = await Promise.all([
+      connection.db.select({ value: count() }).from(stageExecutions),
+      connection.db.select({ value: count() }).from(reviewIssues),
+      connection.db.select({ value: count() }).from(agentReports),
+    ]);
+    expect(status).toMatchObject({ lifecycle: "ready_for_review", progress: "human_review", version: 2 });
+    expect([stageCount?.value, issueCount?.value, reportCount?.value]).toEqual([4, 1, 1]);
   });
 });

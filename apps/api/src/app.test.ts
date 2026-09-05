@@ -12,6 +12,21 @@ describe("case intake", () => {
       resultAvailability: "pending" as const,
       version: 1,
     })),
+    getAgentReport: vi.fn(async () => ({
+      availability: "ready" as const,
+      summary: "Three items require review.",
+      issueLinks: ["issue_1"],
+      checkedFacts: [],
+    })),
+    getIssues: vi.fn(async () => [{
+      issueId: "4c816f67-5f2f-4e21-8c17-7eb1e53838be",
+      origin: "agent" as const,
+      code: "VAL_EMPLOYER_CONSISTENCY_001",
+      description: "The employers differ.",
+      recommendedAction: "Confirm the current employer.",
+      reviewState: "pending" as const,
+      version: 1,
+    }]),
   };
 
   it("accepts work asynchronously", async () => {
@@ -57,6 +72,18 @@ describe("case intake", () => {
       result_availability: "pending",
       links: { agent_report: "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/agent-report" },
     });
+    await app.close();
+  });
+
+  it("returns the verified report and review issues", async () => {
+    const app = buildApp({ accept: vi.fn() }, caseQueries);
+    const base = "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd";
+    const [report, issues] = await Promise.all([
+      app.inject({ method: "GET", url: `${base}/agent-report` }),
+      app.inject({ method: "GET", url: `${base}/issues` }),
+    ]);
+    expect(report.json()).toMatchObject({ availability: "ready", issue_links: ["issue_1"] });
+    expect(issues.json()).toMatchObject({ issues: [{ review_state: "pending" }] });
     await app.close();
   });
 });

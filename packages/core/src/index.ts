@@ -1,6 +1,19 @@
 export type CaseId = string;
 export type RunId = string;
 
+export interface OfflineIssueResult {
+  readonly code: string;
+  readonly description: string;
+  readonly recommendedAction: string;
+}
+
+export interface OfflineCaseResult {
+  readonly summary: string;
+  readonly issues: readonly OfflineIssueResult[];
+  readonly modelLabel: string;
+  readonly estimatedCost: string;
+}
+
 export interface CaseIntakeCommand {
   readonly applicantDisplayName: string;
   readonly idempotencyKey: string;
@@ -26,6 +39,28 @@ export interface CaseStatus {
 
 export interface CaseQueryService {
   get(caseId: CaseId): Promise<CaseStatus>;
+}
+
+export interface AgentReportView {
+  readonly availability: "ready" | "pending" | "unavailable";
+  readonly summary?: string;
+  readonly issueLinks: readonly string[];
+  readonly checkedFacts: readonly { statement: string; status: string; references: readonly string[] }[];
+}
+
+export interface ReviewIssueView {
+  readonly issueId: string;
+  readonly origin: "agent" | "human";
+  readonly code: string;
+  readonly description: string;
+  readonly recommendedAction: string;
+  readonly reviewState: "pending" | "confirmed" | "ignored";
+  readonly version: number;
+}
+
+export interface CaseReviewQueryService {
+  getAgentReport(caseId: CaseId): Promise<AgentReportView>;
+  getIssues(caseId: CaseId): Promise<readonly ReviewIssueView[]>;
 }
 
 export class CaseNotFoundError extends Error {

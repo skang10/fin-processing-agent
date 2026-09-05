@@ -10,6 +10,7 @@
   "dependencies": {
     "@findoc/contracts": "workspace:*",
     "@findoc/core": "workspace:*",
+    "@findoc/offline": "workspace:*",
     "@findoc/persistence": "workspace:*",
     "pg-boss": "12.30.0",
     "pino": "10.3.1"
