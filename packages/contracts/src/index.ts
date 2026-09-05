@@ -62,8 +62,16 @@ export const CaseProcessingJobSchema = Type.Object({
 
 export type CaseProcessingJob = Static<typeof CaseProcessingJobSchema>;
 
+const CaseProcessingJobValueSchema = Type.Object({
+  case_id: Type.String(),
+  run_id: Type.String(),
+}, { additionalProperties: false });
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function isCaseProcessingJob(value: unknown): value is CaseProcessingJob {
-  return Value.Check(CaseProcessingJobSchema, value);
+  return Value.Check(CaseProcessingJobValueSchema, value)
+    && UUID_PATTERN.test(value.case_id)
+    && UUID_PATTERN.test(value.run_id);
 }
 
 export const AgentReportSchema = Type.Object({
