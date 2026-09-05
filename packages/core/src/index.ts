@@ -5,6 +5,7 @@ export type SupportedMediaType = "application/pdf" | "image/jpeg" | "image/png";
 
 export interface ObjectStore {
   put(objectKey: string, content: AsyncIterable<Uint8Array>, mediaType: SupportedMediaType): Promise<void>;
+  remove(objectKey: string): Promise<void>;
 }
 
 export interface StoredSourceArtifact {
@@ -16,6 +17,7 @@ export interface StoredSourceArtifact {
 
 export interface SourceArtifactIntake {
   store(source: AsyncIterable<Uint8Array>): Promise<StoredSourceArtifact>;
+  discard(artifact: StoredSourceArtifact): Promise<void>;
 }
 
 export interface OfflineIssueResult {
@@ -45,6 +47,7 @@ export interface IntakeDocument {
 export interface AcceptedCase {
   readonly caseId: CaseId;
   readonly runId: RunId;
+  readonly replayed: boolean;
 }
 
 export interface CaseCommandService {

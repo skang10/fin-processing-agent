@@ -53,7 +53,7 @@ describe("PostgresCaseCommandService", () => {
     };
 
     const accepted = await service.accept(command);
-    await expect(service.accept(command)).resolves.toEqual(accepted);
+    await expect(service.accept(command)).resolves.toEqual({ ...accepted, replayed: true });
     await expect(service.accept({ ...command, applicantDisplayName: "Other" }))
       .rejects.toBeInstanceOf(IdempotencyConflictError);
 

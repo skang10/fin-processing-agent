@@ -75,7 +75,23 @@ export function buildApp(
         detail: error.message,
       });
     }
-    throw error;
+    if (typeof error === "object" && error !== null && "validation" in error) {
+      return reply.code(400).type("application/problem+json").send({
+        type: "https://example.invalid/problems/invalid_request",
+        title: "Invalid request",
+        status: 400,
+        code: "invalid_request",
+        request_id: request.id,
+      });
+    }
+    request.log.error({ err: error }, "request failed");
+    return reply.code(500).type("application/problem+json").send({
+      type: "https://example.invalid/problems/internal_error",
+      title: "The request could not be completed",
+      status: 500,
+      code: "internal_error",
+      request_id: request.id,
+    });
   });
 
   app.get("/health", async () => ({ status: "ok" }));
@@ -155,46 +171,59 @@ export function buildApp(
       const key = request.headers["idempotency-key"] as string;
       let applicantDisplayName: string;
       const documents: IntakeDocument[] = [];
-      if (request.isMultipart()) {
-        if (!sourceIntake) throw new Error("Multipart source intake is not configured");
-        let applicationData: unknown;
-        for await (const part of request.parts()) {
-          if (part.type === "file") {
-            documents.push({
-              submittedFilename: part.filename,
-              artifact: await sourceIntake.store(part.file),
-            });
-          } else if (part.fieldname === "application_data") {
-            try {
-              applicationData = JSON.parse(String(part.value));
-            } catch {
-              throw new IntakeRequestError("application_data must be valid JSON");
+      try {
+        if (request.isMultipart()) {
+          if (!sourceIntake) throw new Error("Multipart source intake is not configured");
+          let applicationData: unknown;
+          for await (const part of request.parts()) {
+            if (part.type === "file") {
+              documents.push({
+                submittedFilename: part.filename,
+                artifact: await sourceIntake.store(part.file),
+              });
+            } else if (part.fieldname === "application_data") {
+              try {
+                applicationData = JSON.parse(String(part.value));
+              } catch {
+                throw new IntakeRequestError("application_data must be valid JSON");
+              }
             }
           }
+          if (documents.length === 0) throw new IntakeRequestError("Multipart intake requires at least one document");
+          applicantDisplayName = readApplicantDisplayName(applicationData);
+        } else {
+          const body = request.body as { applicant_display_name: string };
+          applicantDisplayName = readApplicantDisplayName(body);
         }
-        if (documents.length === 0) throw new IntakeRequestError("Multipart intake requires at least one document");
-        applicantDisplayName = readApplicantDisplayName(applicationData);
-      } else {
-        const body = request.body as { applicant_display_name: string };
-        applicantDisplayName = readApplicantDisplayName(body);
+        const accepted = await caseCommands.accept({ applicantDisplayName, idempotencyKey: key, documents });
+        if (accepted.replayed) await discardUploads(sourceIntake, documents, request.log);
+        const requestId = request.id || randomUUID();
+        return reply.code(202).send({
+          case_id: accepted.caseId,
+          run_id: accepted.runId,
+          lifecycle: "processing",
+          status_url: `/api/v1/cases/${accepted.caseId}`,
+          request_id: requestId,
+        });
+      } catch (error) {
+        await discardUploads(sourceIntake, documents, request.log);
+        throw error;
       }
-      const accepted = await caseCommands.accept({
-        applicantDisplayName,
-        idempotencyKey: key,
-        documents,
-      });
-      const requestId = request.id || randomUUID();
-      return reply.code(202).send({
-        case_id: accepted.caseId,
-        run_id: accepted.runId,
-        lifecycle: "processing",
-        status_url: `/api/v1/cases/${accepted.caseId}`,
-        request_id: requestId,
-      });
     },
   );
 
   return app;
+}
+
+async function discardUploads(
+  sourceIntake: SourceArtifactIntake | undefined,
+  documents: readonly IntakeDocument[],
+  logger: { warn(data: object, message: string): void },
+): Promise<void> {
+  if (!sourceIntake || documents.length === 0) return;
+  const results = await Promise.allSettled(documents.map((document) => sourceIntake.discard(document.artifact)));
+  const failedCount = results.filter((result) => result.status === "rejected").length;
+  if (failedCount > 0) logger.warn({ failed_count: failedCount }, "failed to discard unreferenced uploads");
 }
 
 function readApplicantDisplayName(value: unknown): string {

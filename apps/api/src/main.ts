@@ -20,7 +20,7 @@ const app = buildApp(
   new PostgresCaseQueryService(db),
   { store: (source) => storeSourceArtifact(source, objectStore, {
     maximumBytes: Number(process.env["MAX_SOURCE_BYTES"] ?? 10_000_000),
-  }) },
+  }), discard: (artifact) => objectStore.remove(artifact.objectKey) },
 );
 app.addHook("onClose", async () => client.end());
 

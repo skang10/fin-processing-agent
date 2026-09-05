@@ -33,10 +33,10 @@ export class PostgresCaseCommandService implements CaseCommandService {
 
       if (existing) {
         if (existing.requestHash !== requestHash) throw new IdempotencyConflictError();
-        return existing.result as AcceptedCase;
+        return { ...(existing.result as Omit<AcceptedCase, "replayed">), replayed: true };
       }
 
-      const accepted = { caseId: randomUUID(), runId: randomUUID() };
+      const accepted = { caseId: randomUUID(), runId: randomUUID(), replayed: false };
       await tx.insert(cases).values({
         id: accepted.caseId,
         applicantDisplayName: command.applicantDisplayName,

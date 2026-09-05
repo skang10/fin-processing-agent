@@ -33,5 +33,7 @@ describe("MinioObjectStore", () => {
     expect(stat.size).toBe(bytes.byteLength);
     expect(stat.metaData["content-type"]).toBe("application/pdf");
     expect(artifact.objectKey).toMatch(/^case-test\/source\/[0-9a-f-]+$/);
+    await store.remove(artifact.objectKey);
+    await expect(client.statObject("findoc-artifacts", artifact.objectKey)).rejects.toBeDefined();
   });
 });

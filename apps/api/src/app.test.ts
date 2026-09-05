@@ -2,6 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { IdempotencyConflictError } from "@findoc/core";
 import { buildApp } from "./app.js";
 
+const boundary = "findoc-test-boundary";
+function multipartPayload() {
+  return Buffer.from([
+    `--${boundary}\r\nContent-Disposition: form-data; name="application_data"\r\n\r\n`,
+    JSON.stringify({ applicant_display_name: "Anna Beispiel" }),
+    `\r\n--${boundary}\r\nContent-Disposition: form-data; name="documents"; filename="statement.pdf"\r\nContent-Type: application/pdf\r\n\r\n`,
+    "%PDF-1.7\nDEMO",
+    `\r\n--${boundary}--\r\n`,
+  ].join(""));
+}
+
 describe("case intake", () => {
   const caseQueries = {
     get: vi.fn(async () => ({
@@ -30,7 +41,7 @@ describe("case intake", () => {
   };
 
   it("accepts work asynchronously", async () => {
-    const accept = vi.fn(async () => ({ caseId: "case_1", runId: "run_1" }));
+    const accept = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", replayed: false }));
     const app = buildApp({ accept }, caseQueries);
     const response = await app.inject({
       method: "POST",
@@ -88,7 +99,7 @@ describe("case intake", () => {
   });
 
   it("streams multipart documents through source intake before accepting the case", async () => {
-    const accept = vi.fn(async () => ({ caseId: "case_1", runId: "run_1" }));
+    const accept = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", replayed: false }));
     let uploaded = Buffer.alloc(0);
     const store = vi.fn(async (source: AsyncIterable<Uint8Array>) => {
       for await (const chunk of source) uploaded = Buffer.concat([uploaded, Buffer.from(chunk)]);
@@ -97,19 +108,12 @@ describe("case intake", () => {
         detectedMediaType: "application/pdf" as const,
       };
     });
-    const app = buildApp({ accept }, caseQueries, { store });
-    const boundary = "findoc-test-boundary";
-    const payload = Buffer.from([
-      `--${boundary}\r\nContent-Disposition: form-data; name="application_data"\r\n\r\n`,
-      JSON.stringify({ applicant_display_name: "Anna Beispiel" }),
-      `\r\n--${boundary}\r\nContent-Disposition: form-data; name="documents"; filename="statement.pdf"\r\nContent-Type: application/pdf\r\n\r\n`,
-      "%PDF-1.7\nDEMO",
-      `\r\n--${boundary}--\r\n`,
-    ].join(""));
+    const discard = vi.fn(async () => undefined);
+    const app = buildApp({ accept }, caseQueries, { store, discard });
     const response = await app.inject({
       method: "POST", url: "/api/v1/cases",
       headers: { "idempotency-key": "multipart_1", "content-type": `multipart/form-data; boundary=${boundary}` },
-      payload,
+      payload: multipartPayload(),
     });
 
     expect(response.statusCode).toBe(202);
@@ -119,6 +123,44 @@ describe("case intake", () => {
       applicantDisplayName: "Anna Beispiel",
       documents: [expect.objectContaining({ submittedFilename: "statement.pdf" })],
     }));
+    await app.close();
+  });
+
+  it("discards a newly uploaded object after an idempotent replay", async () => {
+    const artifact = { objectKey: "source/retry", sha256: "b".repeat(64), byteSize: 13, detectedMediaType: "application/pdf" as const };
+    const discard = vi.fn(async () => undefined);
+    const app = buildApp({
+      accept: vi.fn(async () => ({ caseId: "case_original", runId: "run_original", replayed: true })),
+    }, caseQueries, {
+      store: async (source) => { for await (const _ of source) void _; return artifact; },
+      discard,
+    });
+    const response = await app.inject({
+      method: "POST", url: "/api/v1/cases",
+      headers: { "idempotency-key": "retry", "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: multipartPayload(),
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(discard).toHaveBeenCalledWith(artifact);
+    await app.close();
+  });
+
+  it("discards uploaded objects when database acceptance fails", async () => {
+    const artifact = { objectKey: "source/failed", sha256: "c".repeat(64), byteSize: 13, detectedMediaType: "application/pdf" as const };
+    const discard = vi.fn(async () => undefined);
+    const app = buildApp({ accept: vi.fn(async () => { throw new Error("database unavailable"); }) }, caseQueries, {
+      store: async (source) => { for await (const _ of source) void _; return artifact; },
+      discard,
+    });
+    const response = await app.inject({
+      method: "POST", url: "/api/v1/cases",
+      headers: { "idempotency-key": "failed", "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: multipartPayload(),
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(discard).toHaveBeenCalledWith(artifact);
     await app.close();
   });
 });

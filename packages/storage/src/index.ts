@@ -113,4 +113,8 @@ export class MinioObjectStore implements ObjectStore {
       { "Content-Type": mediaType },
     );
   }
+
+  async remove(objectKey: string): Promise<void> {
+    await this.options.client.removeObject(this.options.bucket, objectKey);
+  }
 }
