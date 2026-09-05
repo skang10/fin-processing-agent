@@ -7,6 +7,12 @@
     "dev": "tsx watch src/main.ts",
     "start": "node dist/main.js"
   },
-  "dependencies": { "@findoc/core": "workspace:*", "pino": "10.3.1" },
+  "dependencies": {
+    "@findoc/contracts": "workspace:*",
+    "@findoc/core": "workspace:*",
+    "@findoc/persistence": "workspace:*",
+    "pg-boss": "12.30.0",
+    "pino": "10.3.1"
+  },
   "devDependencies": { "tsx": "4.23.13" }
 }

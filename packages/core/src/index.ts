@@ -15,6 +15,13 @@ export interface CaseCommandService {
   accept(command: CaseIntakeCommand): Promise<AcceptedCase>;
 }
 
+export class IdempotencyConflictError extends Error {
+  constructor() {
+    super("The idempotency key was already used with different input");
+    this.name = "IdempotencyConflictError";
+  }
+}
+
 export interface InspectDocumentPort {
   inspect(caseId: CaseId, runId: RunId): Promise<void>;
 }

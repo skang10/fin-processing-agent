@@ -11,6 +11,7 @@
     "@fastify/type-provider-typebox": "6.1.0",
     "@findoc/contracts": "workspace:*",
     "@findoc/core": "workspace:*",
+    "@findoc/persistence": "workspace:*",
     "fastify": "5.12.3",
     "pino": "10.3.1"
   },

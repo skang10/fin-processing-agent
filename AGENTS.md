@@ -50,7 +50,7 @@ Use the authority order defined by [`specs/INDEX.md`](specs/INDEX.md). In summar
 
 ## Current Development State
 
-The project is in Stage Two implementation. The initial pnpm monorepo skeleton contains separate API, Worker, and Review Web entry points plus shared contract and core packages. PostgreSQL, pg-boss, MinIO, PDF Inspector, OCR, Pi, and live-model adapters are not wired yet; do not represent the skeleton as a complete vertical slice.
+The project is in Stage Two implementation. The pnpm monorepo contains separate API, Worker, and Review Web entry points plus shared contract, core, and persistence packages. PostgreSQL case intake, a transactional outbox, and a pg-boss relay are implemented; the processing handler remains a log-only seam. MinIO, PDF Inspector, OCR, Pi, and live-model adapters are not wired yet, so this is not a complete vertical slice.
 
 Add commands, configuration, generated artifacts, and deployment instructions only when their implementation exists and this guide is updated in the same change.
 
@@ -152,5 +152,7 @@ The currently authoritative commands are:
 6. `pnpm dev:worker` — run the Worker skeleton locally.
 7. `pnpm dev:web` — run the approved Review Workbench prototype through Vite.
 8. `pnpm build` — compile the TypeScript project references.
+9. `pnpm db:generate` — generate a version-controlled Drizzle migration from the schema; requires `DATABASE_URL` configuration for validated command startup.
+10. `pnpm db:migrate` — apply version-controlled Drizzle migrations; requires `DATABASE_URL`.
 
-Formatting, linting, integration/browser testing, dataset, evaluation, database migration, Docker Compose, demo loading, and reset commands are not implemented yet. Inspect the repository rather than guessing them.
+Formatting, linting, integration/browser testing, dataset, evaluation, Docker Compose, demo loading, and reset commands are not implemented yet. Inspect the repository rather than guessing them.

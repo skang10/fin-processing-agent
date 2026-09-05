@@ -8,7 +8,7 @@ The project does not approve or reject loans, determine creditworthiness, contac
 
 The Stage Two skeleton provides separate API, Worker, and Review Web entry points, shared TypeBox contracts, internal processing ports, an asynchronous case-intake contract test, and an offline pipeline-order test.
 
-PostgreSQL, pg-boss, MinIO, PDF Inspector, OCR, Pi, and model adapters are the next implementation steps. The temporary API composition seam is not durable and is not a completed vertical slice.
+Case intake now has a PostgreSQL and transactional-outbox adapter. pg-boss publication, MinIO, PDF Inspector, OCR, Pi, and model adapters remain next implementation steps, so this is not yet a completed vertical slice.
 
 ## Commands
 
@@ -21,3 +21,5 @@ pnpm dev:web
 ```
 
 Node.js 22.19 or later and pnpm 11.3.0 are required.
+
+The API and database commands require `DATABASE_URL`; `.env.example` documents the local-demo shape without containing production credentials.

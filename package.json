@@ -13,6 +13,8 @@
     "dev:api": "pnpm --filter @findoc/api dev",
     "dev:web": "pnpm --filter @findoc/web dev",
     "dev:worker": "pnpm --filter @findoc/worker dev",
+    "db:generate": "pnpm --filter @findoc/persistence db:generate",
+    "db:migrate": "pnpm --filter @findoc/persistence db:migrate",
     "test": "vitest run",
     "typecheck": "tsc -b --pretty false"
   },

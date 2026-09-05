@@ -5,7 +5,7 @@ import {
   CaseAcceptedSchema,
   ProblemDetailsSchema,
 } from "@findoc/contracts";
-import type { CaseCommandService } from "@findoc/core";
+import { IdempotencyConflictError, type CaseCommandService } from "@findoc/core";
 
 export function buildApp(caseCommands: CaseCommandService) {
   const app = Fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
@@ -13,6 +13,20 @@ export function buildApp(caseCommands: CaseCommandService) {
   app.addHook("onRequest", async (request, reply) => {
     const requestId = request.id;
     void reply.header("X-Request-Id", requestId);
+  });
+
+  app.setErrorHandler(async (error, request, reply) => {
+    if (error instanceof IdempotencyConflictError) {
+      return reply.code(409).type("application/problem+json").send({
+        type: "https://example.invalid/problems/idempotency_conflict",
+        title: "The idempotency key was already used",
+        status: 409,
+        code: "idempotency_conflict",
+        request_id: request.id,
+        detail: "Use the original request or submit a new idempotency key.",
+      });
+    }
+    throw error;
   });
 
   app.get("/health", async () => ({ status: "ok" }));

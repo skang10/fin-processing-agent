@@ -1,4 +1,5 @@
 import { Static, Type } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
 
 export const CaseLifecycleSchema = Type.Union([
   Type.Literal("processing"),
@@ -45,3 +46,14 @@ export const ProblemDetailsSchema = Type.Object({
 
 export type CaseAccepted = Static<typeof CaseAcceptedSchema>;
 export type CaseProjection = Static<typeof CaseProjectionSchema>;
+
+export const CaseProcessingJobSchema = Type.Object({
+  case_id: Type.String({ format: "uuid" }),
+  run_id: Type.String({ format: "uuid" }),
+}, { additionalProperties: false });
+
+export type CaseProcessingJob = Static<typeof CaseProcessingJobSchema>;
+
+export function isCaseProcessingJob(value: unknown): value is CaseProcessingJob {
+  return Value.Check(CaseProcessingJobSchema, value);
+}
