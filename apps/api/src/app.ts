@@ -4,6 +4,8 @@ import { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import multipart from "@fastify/multipart";
 import {
   CaseAcceptedSchema,
+  CaseQueueQuerySchema,
+  CaseQueueSchema,
   CaseProjectionSchema,
   AgentReportSchema,
   EvidenceProjectionSchema,
@@ -115,6 +117,21 @@ export function buildApp(
   });
 
   app.get("/health", async () => ({ status: "ok" }));
+
+  app.get("/api/v1/cases", {
+    schema: {
+      querystring: CaseQueueQuerySchema,
+      response: { 200: CaseQueueSchema },
+    },
+  }, async (request) => {
+    const view = (request.query as { view?: "review" | "changes_requested" | "completed" }).view ?? "review";
+    const records = await caseQueries.list(view);
+    return { view, cases: records.map((record) => ({
+      case_id: record.caseId, applicant_display_name: record.applicantDisplayName,
+      summary: record.summary, issue_count: record.issueCount, workflow_status: record.workflowStatus,
+      lifecycle: record.lifecycle, waiting_since: record.waitingSince, version: record.version,
+    })) };
+  });
 
   app.get("/api/v1/cases/:case_id", {
     schema: {

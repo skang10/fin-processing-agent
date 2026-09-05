@@ -58,6 +58,31 @@ export const ProblemDetailsSchema = Type.Object({
 export type CaseAccepted = Static<typeof CaseAcceptedSchema>;
 export type CaseProjection = Static<typeof CaseProjectionSchema>;
 
+export const CaseQueueViewSchema = Type.Union([
+  Type.Literal("review"), Type.Literal("changes_requested"), Type.Literal("completed"),
+]);
+
+export const CaseQueueQuerySchema = Type.Object({
+  view: Type.Optional(CaseQueueViewSchema),
+}, { additionalProperties: false });
+
+export const CaseQueueSchema = Type.Object({
+  view: CaseQueueViewSchema,
+  cases: Type.Array(Type.Object({
+    case_id: Type.String({ format: "uuid" }),
+    applicant_display_name: Type.String(),
+    summary: Type.String(),
+    issue_count: Type.Integer({ minimum: 0 }),
+    workflow_status: Type.Union([
+      Type.Literal("processing"), Type.Literal("ready_for_review"), Type.Literal("escalated"),
+      Type.Literal("changes_requested"), Type.Literal("ready_for_handoff"),
+    ]),
+    lifecycle: CaseLifecycleSchema,
+    waiting_since: Type.String(),
+    version: Type.Integer({ minimum: 1 }),
+  }, { additionalProperties: false })),
+}, { additionalProperties: false });
+
 export const CaseProcessingJobSchema = Type.Object({
   case_id: Type.String({ format: "uuid" }),
   run_id: Type.String({ format: "uuid" }),

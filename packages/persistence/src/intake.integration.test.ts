@@ -249,6 +249,16 @@ describe("PostgresCaseCommandService", () => {
       reviewState: "confirmed", version: 2,
       requestedChange: { draftRevisionId: selectedDraft.draftRevisionId, revision: 2, included: true },
     }]);
+    const queries = new PostgresCaseQueryService(connection.db);
+    await expect(queries.list("review")).resolves.not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ caseId: reviewFixture.caseId }),
+    ]));
+    await expect(queries.list("changes_requested")).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ caseId: reviewFixture.caseId, workflowStatus: "changes_requested", issueCount: 1 }),
+    ]));
+    await expect(queries.list("completed")).resolves.not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ caseId: reviewFixture.caseId }),
+    ]));
   });
 
   it("routes an unprocessable run to one durable processing exception", async () => {

@@ -1,5 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadCaseBundle, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
+import { loadCaseBundle, loadCaseQueue, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
+
+describe('loadCaseQueue', () => {
+  it('loads the selected authoritative queue', async () => {
+    const fetcher = vi.fn(async () => ({ ok: true, json: async () => ({ view: 'completed', cases: [] }) }));
+    await expect(loadCaseQueue('completed', fetcher)).resolves.toEqual({ view: 'completed', cases: [] });
+    expect(fetcher).toHaveBeenCalledWith('/api/v1/cases?view=completed');
+  });
+
+  it('does not render a failed queue response', async () => {
+    const fetcher = vi.fn(async () => ({ ok: false }));
+    await expect(loadCaseQueue('review', fetcher)).rejects.toThrow('Case queue could not be loaded');
+  });
+});
 
 describe('loadCaseBundle', () => {
   it('loads every separately addressable review projection', async () => {

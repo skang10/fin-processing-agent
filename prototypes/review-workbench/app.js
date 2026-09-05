@@ -1,4 +1,4 @@
-import { loadCaseBundle, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
+import { loadCaseBundle, loadCaseQueue, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
 
 let cases = [
   { name: 'Anna Beispiel', id: 'FD-2026-0042', summary: 'Employer information differs', status: 'ready', statusLabel: 'Ready for review', issues: 3, waiting: '18 min' },
@@ -51,6 +51,8 @@ let zoom = 92;
 let sourceView = 'document';
 let sourceOverride = null;
 let activeFilter = 'all';
+const initialQueueView = new URLSearchParams(window.location.search).get('queue_view');
+let activeQueueView = ['review', 'changes_requested', 'completed'].includes(initialQueueView) ? initialQueueView : 'review';
 let decisions = ['pending', 'pending', 'pending'];
 let apiApplicationData = null;
 let apiDocuments = [];
@@ -78,7 +80,7 @@ function renderCases() {
       (item.name + ' ' + item.id + ' ' + item.summary).toLowerCase().includes(query);
   });
   caseList.innerHTML = visible.map(function (item) {
-    return '<tr class="case-row" tabindex="0" aria-label="Open ' + item.id + ', ' + item.name + '">' +
+    return '<tr class="case-row" data-case-id="' + escapeHtml(item.id) + '" tabindex="0" aria-label="Open ' + item.id + ', ' + item.name + '">' +
       '<td><strong>' + item.id + '</strong></td><td><strong>' + item.name + '</strong></td>' +
       '<td><strong>' + item.summary + '</strong></td><td><span class="issue-number">' + item.issues + '</span></td>' +
       '<td><span class="state-label ' + item.status + '"><i></i>' + item.statusLabel + '</span></td>' +
@@ -87,21 +89,80 @@ function renderCases() {
   }).join('');
   document.querySelector('#empty-state').hidden = visible.length > 0;
   caseList.querySelectorAll('.case-row').forEach(function (row) {
-    row.addEventListener('click', function () { show('workspace'); });
+    row.addEventListener('click', function () { openQueueCase(row.dataset.caseId); });
     row.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        show('workspace');
+        openQueueCase(row.dataset.caseId);
       }
     });
   });
 }
 
+function openQueueCase(caseId) {
+  if (apiCaseRecord?.case_id === caseId) {
+    show('workspace');
+    activateCaseTab('report');
+    return;
+  }
+  window.location.search = '?case_id=' + encodeURIComponent(caseId) + '&queue_view=' + encodeURIComponent(activeQueueView);
+}
+
+function waitingLabel(timestamp) {
+  const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(timestamp)) / 60000));
+  if (minutes < 1) return 'Now';
+  if (minutes < 60) return minutes + ' min';
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? hours + ' hr' : Math.floor(hours / 24) + ' d';
+}
+
+async function refreshQueue(view = activeQueueView, updateLocation = true) {
+  try {
+    const payload = await loadCaseQueue(view);
+    activeQueueView = view;
+    cases = payload.cases.map(function (record) {
+      const status = record.workflow_status === 'ready_for_review' ? 'ready' : record.workflow_status === 'processing' ? 'in-progress' : record.workflow_status.replaceAll('_', '-');
+      const labels = { processing: 'In progress', ready_for_review: 'Ready for review', escalated: 'Escalated', changes_requested: 'Changes requested', ready_for_handoff: 'Ready for handoff' };
+      return { name: record.applicant_display_name, id: record.case_id, summary: record.summary,
+        status, statusLabel: labels[record.workflow_status], issues: record.issue_count, waiting: waitingLabel(record.waiting_since) };
+    });
+    document.querySelector('.page-heading h1').textContent = view === 'changes_requested' ? 'Changes requested' : view === 'completed' ? 'Completed' : 'Review queue';
+    document.querySelector('.queue-panel').setAttribute('aria-label', document.querySelector('.page-heading h1').textContent);
+    document.querySelector('.filter-group').hidden = view !== 'review';
+    document.querySelectorAll('.nav-item').forEach(function (item) { item.classList.remove('active'); });
+    document.querySelector(view === 'changes_requested' ? '#changes-nav' : view === 'completed' ? '#completed-nav' : '#queue-nav').classList.add('active');
+    activeFilter = 'all';
+    document.querySelectorAll('.filter').forEach(function (item) { item.classList.toggle('active', item.dataset.filter === 'all'); });
+    updateQueueCounts();
+    renderCases();
+    show('queue');
+    if (updateLocation) window.history.replaceState(null, '', '?queue_view=' + encodeURIComponent(view));
+  } catch (error) {
+    toast(error instanceof Error ? error.message : 'Case queue could not be loaded');
+  }
+}
+
+async function updateAllQueueCounts() {
+  const views = ['review', 'changes_requested', 'completed'];
+  const payloads = await Promise.all(views.map(function (view) { return loadCaseQueue(view); }));
+  document.querySelector('#queue-nav b').textContent = payloads[0].cases.length;
+  document.querySelector('#changes-nav b').textContent = payloads[1].cases.length;
+  document.querySelector('#completed-nav b').textContent = payloads[2].cases.length;
+}
+
+function updateQueueCounts() {
+  const counts = {
+    all: cases.length,
+    ready: cases.filter(function (item) { return item.status === 'ready'; }).length,
+    'in-progress': cases.filter(function (item) { return item.status === 'in-progress'; }).length,
+    escalated: cases.filter(function (item) { return item.status === 'escalated'; }).length,
+  };
+  document.querySelectorAll('.filter').forEach(function (button) { button.querySelector('span').textContent = counts[button.dataset.filter] || 0; });
+}
+
 function show(id) {
   document.querySelectorAll('.screen').forEach(function (screen) { screen.classList.remove('active'); });
   document.querySelector('#' + id).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(function (item) { item.classList.remove('active'); });
-  document.querySelector('#queue-nav').classList.add('active');
   document.querySelector('.topbar > div:first-child strong').textContent = 'Document review';
   if (id === 'workspace') render();
   if (id === 'summary') renderSummary();
@@ -485,11 +546,13 @@ document.querySelectorAll('.filter').forEach(function (button) {
     renderCases();
   });
 });
-document.querySelector('#queue-nav').addEventListener('click', function () { show('queue'); });
+document.querySelector('#queue-nav').addEventListener('click', function () { void refreshQueue('review'); });
+document.querySelector('#changes-nav').addEventListener('click', function () { void refreshQueue('changes_requested'); });
+document.querySelector('#completed-nav').addEventListener('click', function () { void refreshQueue('completed'); });
 const caseAgentRun = document.querySelector('#case-agent-run');
 document.querySelector('#case-agent-trigger').addEventListener('click', function () { caseAgentRun.showModal(); });
 document.querySelector('#close-agent-run').addEventListener('click', function () { caseAgentRun.close(); });
-document.querySelector('#back').addEventListener('click', function () { show('queue'); });
+document.querySelector('#back').addEventListener('click', function () { void refreshQueue(activeQueueView); });
 document.querySelector('#previous').addEventListener('click', function () { if (current > 0) { current -= 1; editing = false; confirming = false; render(); } });
 document.querySelector('#next').addEventListener('click', function () { if (current < issues.length - 1) { current += 1; editing = false; confirming = false; render(); } });
 document.querySelector('#issue-list-toggle').addEventListener('click', function (event) {
@@ -550,15 +613,19 @@ function updateZoom(delta) {
   document.querySelector('#zoom-label').textContent = zoom + '%';
   document.querySelector('#paper').style.setProperty('--paper-scale', zoom / 92);
 }
-document.querySelector('#refresh-queue').addEventListener('click', function (event) {
+document.querySelector('#refresh-queue').addEventListener('click', async function (event) {
   const button = event.currentTarget;
   button.disabled = true;
   button.innerHTML = '<span class="spin">↻</span> Refreshing';
-  setTimeout(function () {
+  try {
+    await Promise.all([refreshQueue(activeQueueView), updateAllQueueCounts()]);
+    toast('Queue refreshed');
+  } catch (error) {
+    toast(error instanceof Error ? error.message : 'Queue could not be refreshed');
+  } finally {
     button.disabled = false;
     button.innerHTML = '<span>↻</span> Refresh';
-    toast('Queue refreshed from authoritative state');
-  }, 650);
+  }
 });
 
 const reportContent = document.querySelector('[data-view="report"]');
@@ -717,16 +784,6 @@ async function loadCaseFromApi() {
     apiApplicationData = bundle.applicationData;
     apiDocuments = bundle.documents;
     apiEvidenceByReference = bundle.evidenceByReference;
-    const completedAction = caseRecord.final_review_action;
-    const queueStatus = completedAction === 'request_changes' ? 'changes' : completedAction === 'escalate_review' ? 'escalated' : completedAction === 'clear_for_downstream' ? 'completed' : caseRecord.lifecycle === 'ready_for_review' ? 'ready' : 'in-progress';
-    const queueStatusLabel = completedAction === 'request_changes' ? 'Changes requested' : completedAction === 'escalate_review' ? 'Escalated' : completedAction === 'clear_for_downstream' ? 'Ready for handoff' : caseRecord.lifecycle === 'ready_for_review' ? 'Ready for review' : 'In progress';
-    cases = [{
-      name: caseRecord.applicant_display_name, id: caseRecord.case_id,
-      summary: report.summary || 'Agent report unavailable',
-      status: queueStatus,
-      statusLabel: queueStatusLabel,
-      issues: issueRecords.length, waiting: 'Now',
-    }];
     issues = issueRecords.map(function (record, index) {
       return issuePresentation(record, findings.find(function (finding) { return finding.rule_id === record.code; }), index);
     });
@@ -742,9 +799,10 @@ async function loadCaseFromApi() {
     document.querySelector('[data-case-tab="issues"] span').textContent = String(issues.length);
     document.querySelector('#case-agent-trigger strong').textContent = report.availability === 'ready' ? 'Generated review report' : 'Report unavailable';
     renderApiReport(report);
-    renderCases();
     if (issues.length) render();
     if (caseRecord.final_review_action) applyFinalOutcome(caseRecord.final_review_action);
+    show('workspace');
+    activateCaseTab('report');
   } catch (error) {
     toast(error instanceof Error ? error.message : 'Case data could not be loaded');
   }
@@ -753,4 +811,6 @@ async function loadCaseFromApi() {
 wireReportNavigation();
 renderCases();
 render();
+void refreshQueue(activeQueueView, false);
+void updateAllQueueCounts();
 void loadCaseFromApi();

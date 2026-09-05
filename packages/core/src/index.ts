@@ -140,6 +140,18 @@ export interface CaseStatus {
 
 export interface CaseQueryService {
   get(caseId: CaseId): Promise<CaseStatus>;
+  list(view: "review" | "changes_requested" | "completed"): Promise<readonly QueueCaseView[]>;
+}
+
+export interface QueueCaseView {
+  readonly caseId: CaseId;
+  readonly applicantDisplayName: string;
+  readonly summary: string;
+  readonly issueCount: number;
+  readonly workflowStatus: "processing" | "ready_for_review" | "escalated" | "changes_requested" | "ready_for_handoff";
+  readonly lifecycle: CaseStatus["lifecycle"];
+  readonly waitingSince: string;
+  readonly version: number;
 }
 
 export interface AgentReportView {

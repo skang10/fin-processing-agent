@@ -27,6 +27,12 @@ export async function loadCaseBundle(caseId, fetcher = fetch) {
   };
 }
 
+export async function loadCaseQueue(view = 'review', fetcher = fetch) {
+  const response = await fetcher('/api/v1/cases?view=' + encodeURIComponent(view));
+  if (!response.ok) throw new Error('Case queue could not be loaded');
+  return response.json();
+}
+
 async function sendJson(path, method, body, fetcher = fetch) {
   const response = await fetcher(path, {
     method,

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type EvidenceView, type FindingView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type ReviewCommandService, type ReviewIssueView } from "@findoc/core";
+import { CaseNotFoundError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type EvidenceView, type FindingView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type QueueCaseView, type ReviewCommandService, type ReviewIssueView } from "@findoc/core";
 import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
@@ -238,6 +238,39 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
 
 export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQueryService {
   constructor(private readonly db: ReturnType<typeof drizzle>) {}
+
+  async list(view: "review" | "changes_requested" | "completed"): Promise<readonly QueueCaseView[]> {
+    const records = await this.db.select({
+      caseId: cases.id, applicantDisplayName: cases.applicantDisplayName,
+      lifecycle: cases.lifecycle, version: cases.version, createdAt: cases.createdAt,
+    }).from(cases).orderBy(asc(cases.createdAt), asc(cases.id)).limit(100);
+    const projected = await Promise.all(records.map(async (record): Promise<QueueCaseView | null> => {
+      const [[report], issueRows, [finalReview]] = await Promise.all([
+        this.db.select({ summary: agentReports.summary }).from(agentReports)
+          .where(eq(agentReports.caseId, record.caseId)).orderBy(sql`${agentReports.createdAt} desc`).limit(1),
+        this.db.select({ id: reviewIssues.id }).from(reviewIssues).where(eq(reviewIssues.caseId, record.caseId)),
+        this.db.select({ action: finalReviews.action, createdAt: finalReviews.createdAt }).from(finalReviews)
+          .where(eq(finalReviews.caseId, record.caseId)).limit(1),
+      ]);
+      const action = finalReview ? asFinalAction(finalReview.action) : undefined;
+      const activeLifecycle = record.lifecycle === "processing" || record.lifecycle === "ready_for_review";
+      const belongs = view === "changes_requested" ? action === "request_changes"
+        : view === "completed" ? action === "clear_for_downstream"
+          : action === "escalate_review" || (!action && activeLifecycle);
+      if (!belongs) return null;
+      const workflowStatus: QueueCaseView["workflowStatus"] = action === "request_changes" ? "changes_requested"
+        : action === "clear_for_downstream" ? "ready_for_handoff"
+          : action === "escalate_review" ? "escalated"
+            : record.lifecycle === "processing" ? "processing" : "ready_for_review";
+      return {
+        caseId: record.caseId, applicantDisplayName: record.applicantDisplayName,
+        summary: report?.summary ?? (workflowStatus === "processing" ? "Document processing is in progress." : "Review result available."),
+        issueCount: issueRows.length, workflowStatus, lifecycle: asCaseLifecycle(record.lifecycle),
+        waitingSince: (finalReview?.createdAt ?? record.createdAt).toISOString(), version: record.version,
+      };
+    }));
+    return projected.filter((record): record is QueueCaseView => record !== null);
+  }
 
   async get(caseId: string): Promise<CaseStatus> {
     const [record] = await this.db.select({
