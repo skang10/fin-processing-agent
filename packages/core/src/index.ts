@@ -27,12 +27,8 @@ export interface OfflineIssueResult {
   readonly recommendedAction: string;
 }
 
-export interface OfflineCaseResult {
+export interface OfflineReportInput {
   readonly resultRevisionId: string;
-  readonly reportAvailability: "ready" | "unavailable";
-  readonly reportFailureReason?: string;
-  readonly summary: string;
-  readonly issues: readonly OfflineIssueResult[];
   readonly findings: readonly {
     ruleId: string;
     ruleVersion: string;
@@ -45,11 +41,23 @@ export interface OfflineCaseResult {
     materialInputRefs: readonly string[];
   }[];
   readonly recommendedDisposition: "ready_for_downstream_processing" | "additional_documents_needed" | "human_review_required";
+}
+
+export interface OfflineDeterministicResult extends OfflineReportInput {
   readonly evidence: readonly OfflineEvidenceResult[];
   readonly claims: readonly OfflineClaimResult[];
+}
+
+export interface OfflineReportResult {
+  readonly reportAvailability: "ready" | "unavailable";
+  readonly reportFailureReason?: string;
+  readonly summary: string;
+  readonly issues: readonly OfflineIssueResult[];
   readonly modelLabel: string;
   readonly estimatedCost: string;
 }
+
+export interface OfflineCaseResult extends OfflineDeterministicResult, OfflineReportResult {}
 
 export interface OfflineEvidenceResult {
   readonly evidenceId: string;
@@ -109,6 +117,7 @@ export interface CaseQueryService {
 
 export interface AgentReportView {
   readonly availability: "ready" | "pending" | "unavailable";
+  readonly resultRevision?: { readonly id: string; readonly revision: number };
   readonly summary?: string;
   readonly issueLinks: readonly string[];
   readonly checkedFacts: readonly { statement: string; sourceType: "deterministic_check"; status: "passed"; references: readonly string[] }[];
@@ -131,6 +140,37 @@ export type EvidenceView =
       readonly processorVersion: string;
     };
 
+export interface ApplicationDataView {
+  readonly groups: readonly {
+    group: "applicant" | "contact" | "employment" | "income";
+    fields: readonly { key: string; displayValue: string; jsonPointer: string }[];
+  }[];
+  readonly submissionHistory: {
+    initialSubmittedAt: string;
+    latestSubmittedAt: string;
+    applicationDataUpdatedAt: string;
+  };
+}
+
+export interface DocumentView {
+  readonly documentId: string;
+  readonly physicalDocumentId: string;
+  readonly version: number;
+  readonly submittedFilename: string;
+  readonly mediaType: string;
+  readonly pageCount: number;
+}
+
+export interface DocumentPageView {
+  readonly documentId: string;
+  readonly pageNumber: number;
+  readonly needsOcr: boolean;
+  readonly ocrReason?: string;
+  readonly hasTable: boolean;
+  readonly hasColumns: boolean;
+  readonly nativeCharacterCount: number;
+}
+
 export interface ReviewIssueView {
   readonly issueId: string;
   readonly origin: "agent" | "human";
@@ -141,10 +181,23 @@ export interface ReviewIssueView {
   readonly version: number;
 }
 
+export interface FindingView {
+  readonly findingId: string;
+  readonly ruleId: string;
+  readonly ruleVersion: string;
+  readonly status: "passed" | "warning" | "failed" | "inconclusive" | "not_applicable";
+  readonly reasonCode: string;
+  readonly references: readonly string[];
+}
+
 export interface CaseReviewQueryService {
   getAgentReport(caseId: CaseId): Promise<AgentReportView>;
   getIssues(caseId: CaseId): Promise<readonly ReviewIssueView[]>;
   getEvidence(caseId: CaseId, evidenceId: string): Promise<EvidenceView>;
+  getApplicationData(caseId: CaseId): Promise<ApplicationDataView>;
+  getDocuments(caseId: CaseId): Promise<readonly DocumentView[]>;
+  getDocumentPage(caseId: CaseId, documentId: string, pageNumber: number): Promise<DocumentPageView>;
+  getFindings(caseId: CaseId): Promise<readonly FindingView[]>;
 }
 
 export class CaseNotFoundError extends Error {

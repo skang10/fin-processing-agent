@@ -1,0 +1,1 @@
+ALTER TABLE "cases" ADD COLUMN "current_run_id" uuid;

@@ -1,10 +1,11 @@
-import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 export const cases = pgTable("cases", {
   id: uuid("id").primaryKey(),
   applicantDisplayName: text("applicant_display_name").notNull(),
   lifecycle: text("lifecycle").notNull(),
   version: integer("version").notNull().default(1),
+  currentRunId: uuid("current_run_id").references((): AnyPgColumn => processingRuns.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -104,8 +105,19 @@ export const processingRuns = pgTable("processing_runs", {
   inputRevisionId: uuid("input_revision_id").notNull().references(() => inputRevisions.id),
   workflowVersion: text("workflow_version").notNull(),
   status: text("status").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index("processing_runs_case_idx").on(table.caseId)]);
+
+export const processingRunTransitions = pgTable("processing_run_transitions", {
+  id: uuid("id").primaryKey(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id),
+  priorStatus: text("prior_status"),
+  newStatus: text("new_status").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("run_transition_idx").on(table.runId, table.createdAt)]);
 
 export const resultRevisions = pgTable("result_revisions", {
   id: uuid("id").primaryKey(),
@@ -193,6 +205,7 @@ export const agentReports = pgTable("agent_reports", {
   id: uuid("id").primaryKey(),
   caseId: uuid("case_id").notNull().references(() => cases.id),
   runId: uuid("run_id").notNull().references(() => processingRuns.id),
+  resultRevisionId: uuid("result_revision_id").references(() => resultRevisions.id),
   availability: text("availability").notNull(),
   verificationStatus: text("verification_status"),
   verificationFailureReason: text("verification_failure_reason"),

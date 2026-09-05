@@ -7,6 +7,10 @@ import {
   CaseProjectionSchema,
   AgentReportSchema,
   EvidenceProjectionSchema,
+  FindingsProjectionSchema,
+  ApplicationDataProjectionSchema,
+  DocumentPageProjectionSchema,
+  DocumentsProjectionSchema,
   ProblemDetailsSchema,
   ReviewIssuesSchema,
 } from "@findoc/contracts";
@@ -121,6 +125,7 @@ export function buildApp(
         agent_report: `${base}/agent-report`,
         application_data: `${base}/application-data`,
         documents: `${base}/documents`,
+        findings: `${base}/findings`,
         issues: `${base}/issues`,
         final_review: `${base}/final-review`,
       },
@@ -134,6 +139,7 @@ export function buildApp(
     const report = await caseQueries.getAgentReport(caseId);
     return {
       availability: report.availability,
+      ...(report.resultRevision ? { result_revision: report.resultRevision } : {}),
       ...(report.summary ? { summary: report.summary } : {}),
       issue_links: [...report.issueLinks],
       checked_facts: report.checkedFacts.map((fact) => ({
@@ -161,6 +167,66 @@ export function buildApp(
       evidence_id: evidence.evidenceId, evidence_type: evidence.evidenceType,
       document_version_id: evidence.documentVersionId, page_number: evidence.pageNumber,
       extraction_method: evidence.extractionMethod, processor_version: evidence.processorVersion,
+    };
+  });
+
+  app.get("/api/v1/cases/:case_id/findings", {
+    schema: { response: { 200: FindingsProjectionSchema, 404: ProblemDetailsSchema } },
+  }, async (request) => {
+    const { case_id: caseId } = request.params as { case_id: string };
+    const findings = await caseQueries.getFindings(caseId);
+    return { findings: findings.map((finding) => ({
+      finding_id: finding.findingId,
+      rule_id: finding.ruleId,
+      rule_version: finding.ruleVersion,
+      status: finding.status,
+      reason_code: finding.reasonCode,
+      references: [...finding.references],
+    })) };
+  });
+
+  app.get("/api/v1/cases/:case_id/application-data", {
+    schema: { response: { 200: ApplicationDataProjectionSchema, 404: ProblemDetailsSchema } },
+  }, async (request) => {
+    const { case_id: caseId } = request.params as { case_id: string };
+    const projection = await caseQueries.getApplicationData(caseId);
+    return {
+      groups: projection.groups.map((group) => ({
+        group: group.group,
+        fields: group.fields.map((field) => ({
+          key: field.key, display_value: field.displayValue, json_pointer: field.jsonPointer,
+        })),
+      })),
+      submission_history: {
+        initial_submitted_at: projection.submissionHistory.initialSubmittedAt,
+        latest_submitted_at: projection.submissionHistory.latestSubmittedAt,
+        application_data_updated_at: projection.submissionHistory.applicationDataUpdatedAt,
+      },
+    };
+  });
+
+  app.get("/api/v1/cases/:case_id/documents", {
+    schema: { response: { 200: DocumentsProjectionSchema, 404: ProblemDetailsSchema } },
+  }, async (request) => {
+    const { case_id: caseId } = request.params as { case_id: string };
+    const documents = await caseQueries.getDocuments(caseId);
+    return { documents: documents.map((document) => ({
+      document_id: document.documentId, physical_document_id: document.physicalDocumentId,
+      version: document.version, submitted_filename: document.submittedFilename,
+      media_type: document.mediaType, page_count: document.pageCount,
+    })) };
+  });
+
+  app.get("/api/v1/cases/:case_id/documents/:document_id/pages/:page_number", {
+    schema: { response: { 200: DocumentPageProjectionSchema, 404: ProblemDetailsSchema } },
+  }, async (request) => {
+    const { case_id: caseId, document_id: documentId, page_number: rawPageNumber } = request.params as { case_id: string; document_id: string; page_number: string };
+    const page = await caseQueries.getDocumentPage(caseId, documentId, Number(rawPageNumber));
+    return {
+      document_id: page.documentId, page_number: page.pageNumber, needs_ocr: page.needsOcr,
+      ...(page.ocrReason ? { ocr_reason: page.ocrReason } : {}),
+      has_table: page.hasTable, has_columns: page.hasColumns,
+      native_character_count: page.nativeCharacterCount,
     };
   });
 

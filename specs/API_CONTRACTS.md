@@ -2,11 +2,11 @@
 
 Document ID: `API`
 
-Version: 1.1.0
+Version: 1.1.1
 
 Status: Approved
 
-Last updated: 2026-09-04
+Last updated: 2026-09-05
 
 ## 1. Purpose
 
@@ -156,6 +156,7 @@ GET /api/v1/cases/{case_id}/application-data
 GET /api/v1/cases/{case_id}/documents
 GET /api/v1/cases/{case_id}/documents/{document_id}/pages/{page_number}
 GET /api/v1/cases/{case_id}/evidence/{evidence_id}
+GET /api/v1/cases/{case_id}/findings
 GET /api/v1/cases/{case_id}/issues
 GET /api/v1/cases/{case_id}/issues/{issue_id}
 GET /api/v1/cases/{case_id}/final-review
@@ -173,6 +174,8 @@ GET /api/v1/cases/{case_id}/agent-log
 `API-REQ-043` Document queries must preserve immutable physical-document version, page order, logical-document range, type, and uncertainty needed by the approved workbench without implying cross-file merging or non-contiguous grouping.
 
 `API-REQ-044` Evidence queries must distinguish page-region, page-level, and structured-input evidence and include the coordinate, rotation, source-dimension, semantic-order, provenance, and availability fields required by the evidence viewer.
+
+`API-REQ-095` `GET /findings` must return the current result revision's deterministic finding identifiers, registered rule and version, status, reason code, and authorized evidence references so that human review remains possible when the Agent report is unavailable.
 
 `API-REQ-045` Page bytes or rendered artifacts must be returned through an authorized API-mediated stream or short-lived scoped capability. Permanent object-store credentials and internal object keys must never be returned.
 
@@ -323,5 +326,6 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.1.1 | 2026-09-05 | Approved | Added the current deterministic-findings projection required for human review when the Agent report is unavailable. |
 | 1.1.0 | 2026-09-04 | Approved | Reduced V1 to polling, case-creation and final-review idempotency, optimistic concurrency for issue edits, and a bounded case Agent log; deferred SSE and aggregate Agent monitoring. |
 | 1.0.0 | 2026-09-04 | Approved | Approved the V1 HTTP, review-command, evidence, SSE, idempotency, error, Agent-monitoring, and generated-contract baseline aligned with the approved Review Workbench. No unresolved transport-authority or V1 review-command decision remains. |

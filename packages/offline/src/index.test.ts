@@ -10,7 +10,7 @@ describe("offline fixture", () => {
       employment: { employer: "Beispieltechnik GmbH" },
       income: { monthly_net: "3480.00" },
     },
-    pages: [1, 2, 3, 4].map((pageNumber) => ({ documentVersionId: "document-1", pageNumber })),
+    pages: [1, 2, 3, 4].map((pageNumber) => ({ submittedFilename: "case-package.pdf", documentVersionId: "document-1", pageNumber })),
   };
 
   it("reproduces the Anna Beispiel review result", async () => {

@@ -25,6 +25,7 @@ describe("case intake", () => {
     })),
     getAgentReport: vi.fn(async () => ({
       availability: "ready" as const,
+      resultRevision: { id: "4c816f67-5f2f-4e21-8c17-7eb1e5383995", revision: 1 },
       summary: "Three items require review.",
       issueLinks: ["issue_1"],
       checkedFacts: [{
@@ -48,6 +49,32 @@ describe("case intake", () => {
       jsonPointer: "/applicant_display_name",
       extractionMethod: "structured_input",
       processorVersion: "application-schema-1.0.0",
+    })),
+    getFindings: vi.fn(async () => [{
+      findingId: "4c816f67-5f2f-4e21-8c17-7eb1e5383996",
+      ruleId: "VAL_NAME_CONSISTENCY_001", ruleVersion: "1.0.0",
+      status: "passed" as const, reasonCode: "NAME_CONSISTENT",
+      references: ["/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/evidence/4c816f67-5f2f-4e21-8c17-7eb1e5383999"],
+    }]),
+    getApplicationData: vi.fn(async () => ({
+      groups: [
+        { group: "applicant" as const, fields: [{ key: "display_name", displayValue: "Anna Beispiel", jsonPointer: "/applicant_display_name" }] },
+        { group: "contact" as const, fields: [{ key: "email", displayValue: "a***@example.invalid", jsonPointer: "/contact/email" }] },
+      ],
+      submissionHistory: {
+        initialSubmittedAt: "2026-09-01T10:00:00.000Z",
+        latestSubmittedAt: "2026-09-02T10:00:00.000Z",
+        applicationDataUpdatedAt: "2026-09-02T10:00:00.000Z",
+      },
+    })),
+    getDocuments: vi.fn(async () => [{
+      documentId: "4c816f67-5f2f-4e21-8c17-7eb1e5383998",
+      physicalDocumentId: "4c816f67-5f2f-4e21-8c17-7eb1e5383997",
+      version: 1, submittedFilename: "statement.pdf", mediaType: "application/pdf", pageCount: 1,
+    }]),
+    getDocumentPage: vi.fn(async () => ({
+      documentId: "4c816f67-5f2f-4e21-8c17-7eb1e5383998",
+      pageNumber: 1, needsOcr: false, hasTable: true, hasColumns: false, nativeCharacterCount: 42,
     })),
   };
 
@@ -99,15 +126,21 @@ describe("case intake", () => {
     await app.close();
   });
 
-  it("returns the verified report and review issues", async () => {
+  it("returns the verified report, review issues, and deterministic findings", async () => {
     const app = buildApp({ accept: vi.fn() }, caseQueries);
     const base = "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd";
-    const [report, issues] = await Promise.all([
+    const [report, issues, findings] = await Promise.all([
       app.inject({ method: "GET", url: `${base}/agent-report` }),
       app.inject({ method: "GET", url: `${base}/issues` }),
+      app.inject({ method: "GET", url: `${base}/findings` }),
     ]);
-    expect(report.json()).toMatchObject({ availability: "ready", issue_links: ["issue_1"] });
+    expect(report.json()).toMatchObject({
+      availability: "ready",
+      result_revision: { id: "4c816f67-5f2f-4e21-8c17-7eb1e5383995", revision: 1 },
+      issue_links: ["issue_1"],
+    });
     expect(issues.json()).toMatchObject({ issues: [{ review_state: "pending" }] });
+    expect(findings.json()).toMatchObject({ findings: [{ rule_id: "VAL_NAME_CONSISTENCY_001", status: "passed" }] });
     await app.close();
   });
 
@@ -125,6 +158,20 @@ describe("case intake", () => {
       extraction_method: "structured_input",
       processor_version: "application-schema-1.0.0",
     });
+    await app.close();
+  });
+
+  it("returns masked application data and current document page metadata", async () => {
+    const app = buildApp({ accept: vi.fn() }, caseQueries);
+    const base = "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd";
+    const [applicationData, documents, page] = await Promise.all([
+      app.inject({ method: "GET", url: `${base}/application-data` }),
+      app.inject({ method: "GET", url: `${base}/documents` }),
+      app.inject({ method: "GET", url: `${base}/documents/4c816f67-5f2f-4e21-8c17-7eb1e5383998/pages/1` }),
+    ]);
+    expect(applicationData.json()).toMatchObject({ groups: [{ group: "applicant" }, { group: "contact", fields: [{ display_value: "a***@example.invalid" }] }] });
+    expect(documents.json()).toMatchObject({ documents: [{ submitted_filename: "statement.pdf", page_count: 1 }] });
+    expect(page.json()).toMatchObject({ page_number: 1, has_table: true, native_character_count: 42 });
     await app.close();
   });
 

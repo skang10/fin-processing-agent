@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { OfflineCaseResult, OfflineClaimResult, OfflineEvidenceResult } from "@findoc/core";
+import type { OfflineCaseResult, OfflineClaimResult, OfflineDeterministicResult, OfflineEvidenceResult, OfflineReportInput, OfflineReportResult } from "@findoc/core";
 import { FakeCaseReviewAgentHarness, runVerifiedReport, type CaseReviewAgentHarness } from "@findoc/agent";
 import { evaluateRuleSet, mapDisposition, type ValidationInput } from "@findoc/validation";
 
@@ -13,14 +13,10 @@ export interface OfflineFixtureContext {
   readonly referenceDate: string;
   readonly applicationSnapshotId: string;
   readonly applicationData: Readonly<Record<string, unknown>>;
-  readonly pages: readonly { documentVersionId: string; pageNumber: number }[];
+  readonly pages: readonly { submittedFilename: string; documentVersionId: string; pageNumber: number }[];
 }
 
-export async function runOfflineFixture(
-  fixtureId: unknown,
-  context: OfflineFixtureContext,
-  harness: CaseReviewAgentHarness = new FakeCaseReviewAgentHarness(),
-): Promise<OfflineCaseResult> {
+export function buildOfflineFixture(fixtureId: unknown, context: OfflineFixtureContext): OfflineDeterministicResult {
   if (fixtureId !== ANNA_EXAMPLE_FIXTURE_ID) {
     throw new OfflineFixtureUnavailableError("No registered offline fixture was selected");
   }
@@ -28,27 +24,43 @@ export async function runOfflineFixture(
   const input = annaExampleInput(context, fixture);
   const findings = evaluateRuleSet(input);
   const recommendedDisposition = mapDisposition(input, findings);
-  const reportContext = {
+  return {
     resultRevisionId: context.resultRevisionId,
     findings,
     recommendedDisposition,
-    allowedReferences: new Set(findings.map((finding) => `finding:${finding.ruleId}`)),
+    evidence: fixture.evidence,
+    claims: fixture.claims,
   };
-  const report = await runVerifiedReport(harness, reportContext);
+}
+
+export async function runOfflineReport(
+  result: OfflineReportInput,
+  harness: CaseReviewAgentHarness = new FakeCaseReviewAgentHarness(),
+): Promise<OfflineReportResult> {
+  const report = await runVerifiedReport(harness, {
+    resultRevisionId: result.resultRevisionId,
+    findings: result.findings,
+    recommendedDisposition: result.recommendedDisposition,
+    allowedReferences: new Set(result.findings.map((finding) => `finding:${finding.ruleId}`)),
+  });
   const issues = report.verified ? report.brief.attention_items.map(issueFromAttentionItem) : [];
   return {
-    resultRevisionId: context.resultRevisionId,
     reportAvailability: report.verified ? "ready" : "unavailable",
     ...(report.verified ? {} : { reportFailureReason: report.reason }),
     summary: report.verified ? report.brief.summary : "Agent report unavailable.",
     modelLabel: "fake-pi-harness-v1",
     estimatedCost: "0.0000",
-    findings,
-    recommendedDisposition,
-    evidence: fixture.evidence,
-    claims: fixture.claims,
     issues,
   };
+}
+
+export async function runOfflineFixture(
+  fixtureId: unknown,
+  context: OfflineFixtureContext,
+  harness: CaseReviewAgentHarness = new FakeCaseReviewAgentHarness(),
+): Promise<OfflineCaseResult> {
+  const deterministic = buildOfflineFixture(fixtureId, context);
+  return { ...deterministic, ...await runOfflineReport(deterministic, harness) };
 }
 
 interface AnnaExampleRecords {
@@ -59,7 +71,12 @@ interface AnnaExampleRecords {
 }
 
 function annaExampleRecords(context: OfflineFixtureContext): AnnaExampleRecords {
-  if (context.pages.length < 4) throw new OfflineFixtureUnavailableError("The registered fixture requires at least four inspected pages");
+  const requiredPages = {
+    identity: findFixturePage(context, "case-package.pdf", 1),
+    payslip: findFixturePage(context, "case-package.pdf", 2),
+    boundary: findFixturePage(context, "case-package.pdf", 3),
+    bank: findFixturePage(context, "case-package.pdf", 4),
+  };
   const employer = readString(context.applicationData, ["employment", "employer"]);
   const declaredIncome = readString(context.applicationData, ["income", "monthly_net"]);
   readString(context.applicationData, ["applicant_display_name"]);
@@ -80,15 +97,16 @@ function annaExampleRecords(context: OfflineFixtureContext): AnnaExampleRecords 
     evidenceId: id, evidenceType: "structured_input", applicationSnapshotId: context.applicationSnapshotId,
     jsonPointer, extractionMethod: "structured_input", processorVersion: "application-schema-1.0.0",
   });
-  const page = (id: string, index: number): OfflineEvidenceResult => ({
-    evidenceId: id, evidenceType: "page_level", documentVersionId: context.pages[index]!.documentVersionId,
-    pageNumber: context.pages[index]!.pageNumber, extractionMethod: "offline_fixture", processorVersion: ANNA_EXAMPLE_FIXTURE_ID,
+  const page = (id: string, source: { documentVersionId: string; pageNumber: number }): OfflineEvidenceResult => ({
+    evidenceId: id, evidenceType: "page_level", documentVersionId: source.documentVersionId,
+    pageNumber: source.pageNumber, extractionMethod: "offline_fixture", processorVersion: ANNA_EXAMPLE_FIXTURE_ID,
   });
   const evidence = [
     structured(evidenceIds.applicant, "/applicant_display_name"),
     structured(evidenceIds.declaredEmployer, "/employment/employer"),
     structured(evidenceIds.declaredIncome, "/income/monthly_net"),
-    page(evidenceIds.identity, 0), page(evidenceIds.payslip, 1), page(evidenceIds.boundary, 2), page(evidenceIds.bank, 3),
+    page(evidenceIds.identity, requiredPages.identity), page(evidenceIds.payslip, requiredPages.payslip),
+    page(evidenceIds.boundary, requiredPages.boundary), page(evidenceIds.bank, requiredPages.bank),
   ];
   const claim = (claimIdValue: string, fieldSchemaId: string, valueType: OfflineClaimResult["valueType"], rawValue: string, normalizedValue: unknown, evidenceIdValue: string): OfflineClaimResult => ({
     claimId: claimIdValue, fieldSchemaId, valueType, rawValue, normalizedValue,
@@ -106,6 +124,12 @@ function annaExampleRecords(context: OfflineFixtureContext): AnnaExampleRecords 
     claim(claimIds.identityExpiry, "identity.expiry_date", "date", "2030-08-31", "2030-08-31", evidenceIds.identity),
   ];
   return { evidence, claims, evidenceIds, claimIds };
+}
+
+function findFixturePage(context: OfflineFixtureContext, submittedFilename: string, pageNumber: number) {
+  const page = context.pages.find((item) => item.submittedFilename === submittedFilename && item.pageNumber === pageNumber);
+  if (!page) throw new OfflineFixtureUnavailableError(`Fixture source ${submittedFilename} page ${pageNumber} is unavailable`);
+  return page;
 }
 
 function annaExampleInput(context: OfflineFixtureContext, fixture: AnnaExampleRecords): ValidationInput {

@@ -1,9 +1,8 @@
-import { randomUUID } from "node:crypto";
 import pino from "pino";
 import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
 import { PdfInspectorAdapter } from "@findoc/document-processing";
-import { OfflineFixtureUnavailableError, runOfflineFixture } from "@findoc/offline";
+import { buildOfflineFixture, OfflineFixtureUnavailableError, runOfflineReport } from "@findoc/offline";
 import { PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
 import { createMinioObjectStore, readObjectBytes } from "@findoc/storage";
 import { CASE_PROCESSING_QUEUE, OutboxRelay } from "./outbox.js";
@@ -37,6 +36,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   if (!job) return;
   if (!isCaseProcessingJob(job.data)) throw new Error("Invalid case-processing job payload");
   logger.info({ case_id: job.data.case_id, run_id: job.data.run_id }, "case processing claimed");
+  await coordinator.markRunRunning(job.data.case_id, job.data.run_id);
   if (!await coordinator.hasInputDocuments(job.data.case_id, job.data.run_id)) {
     await coordinator.failRun(job.data.case_id, job.data.run_id, "required_documents_missing");
     logger.warn({ case_id: job.data.case_id, run_id: job.data.run_id }, "case routed to processing exception");
@@ -65,14 +65,18 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   const applicationData = await coordinator.loadApplicationData(job.data.case_id, job.data.run_id);
   try {
     const sourceContext = await coordinator.loadOfflineSourceContext(job.data.case_id, job.data.run_id);
-    await coordinator.completeOffline(job.data.case_id, job.data.run_id, await runOfflineFixture(applicationData["demo_fixture_id"], {
+    const deterministic = buildOfflineFixture(applicationData["demo_fixture_id"], {
       inputSnapshotId: sourceContext.inputRevisionId,
-      resultRevisionId: randomUUID(),
+      resultRevisionId: job.data.run_id,
       referenceDate: "2026-09-05",
       applicationSnapshotId: sourceContext.applicationSnapshotId,
       applicationData,
       pages: sourceContext.pages,
-    }));
+    });
+    await coordinator.persistOfflineDeterministic(job.data.case_id, job.data.run_id, deterministic);
+    const persistedResult = await coordinator.loadOfflineReportInput(job.data.case_id, job.data.run_id);
+    const report = await runOfflineReport(persistedResult);
+    await coordinator.completeOfflineReport(job.data.case_id, job.data.run_id, persistedResult.resultRevisionId, report);
   } catch (error) {
     if (!(error instanceof OfflineFixtureUnavailableError)) throw error;
     await coordinator.failRun(job.data.case_id, job.data.run_id, "offline_fixture_unavailable");

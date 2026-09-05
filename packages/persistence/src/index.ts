@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, IdempotencyConflictError, type AcceptedCase, type AgentReportView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type EvidenceView, type OfflineCaseResult, type ReviewIssueView } from "@findoc/core";
-import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, recommendedDispositions, resultRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
+import { CaseNotFoundError, IdempotencyConflictError, type AcceptedCase, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type EvidenceView, type FindingView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type ReviewIssueView } from "@findoc/core";
+import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, resultRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
@@ -61,8 +61,13 @@ export class PostgresCaseCommandService implements CaseCommandService {
         caseId: accepted.caseId,
         inputRevisionId,
         workflowVersion: WORKFLOW_VERSION,
-        status: "queued",
+        status: "created",
       });
+      await tx.insert(processingRunTransitions).values({
+        id: randomUUID(), runId: accepted.runId, priorStatus: null,
+        newStatus: "created", reason: "case_accepted",
+      });
+      await tx.update(cases).set({ currentRunId: accepted.runId }).where(eq(cases.id, accepted.caseId));
       for (const document of command.documents ?? []) {
         const artifactId = randomUUID();
         const physicalDocumentId = randomUUID();
@@ -138,14 +143,20 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     await this.assertCaseExists(caseId);
     const [report] = await this.db.select({
       availability: agentReports.availability,
+      resultRevisionId: resultRevisions.id,
+      resultRevisionNumber: resultRevisions.revision,
       summary: agentReports.summary,
       issueLinks: agentReports.issueLinks,
       checkedFacts: agentReports.checkedFacts,
-    }).from(agentReports).where(eq(agentReports.caseId, caseId))
+    }).from(agentReports).leftJoin(resultRevisions, eq(agentReports.resultRevisionId, resultRevisions.id))
+      .where(eq(agentReports.caseId, caseId))
       .orderBy(sql`${agentReports.createdAt} desc`).limit(1);
     if (!report) return { availability: "pending", issueLinks: [], checkedFacts: [] };
     return {
       availability: report.availability === "ready" ? "ready" : "unavailable",
+      ...(report.resultRevisionId && report.resultRevisionNumber !== null
+        ? { resultRevision: { id: report.resultRevisionId, revision: report.resultRevisionNumber } }
+        : {}),
       summary: report.summary,
       issueLinks: report.issueLinks as string[],
       checkedFacts: report.checkedFacts as AgentReportView["checkedFacts"],
@@ -195,6 +206,98 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       };
     }
     throw new Error("Persisted evidence subtype is invalid");
+  }
+
+  async getApplicationData(caseId: string): Promise<ApplicationDataView> {
+    const [record] = await this.db.select({
+      content: applicationSnapshots.content,
+      createdAt: applicationSnapshots.createdAt,
+    }).from(cases)
+      .innerJoin(processingRuns, eq(cases.currentRunId, processingRuns.id))
+      .innerJoin(inputRevisions, eq(processingRuns.inputRevisionId, inputRevisions.id))
+      .innerJoin(applicationSnapshots, eq(inputRevisions.applicationSnapshotId, applicationSnapshots.id))
+      .where(eq(cases.id, caseId)).limit(1);
+    if (!record || typeof record.content !== "object" || record.content === null || Array.isArray(record.content)) throw new CaseNotFoundError();
+    return projectApplicationData(record.content as Record<string, unknown>, record.createdAt);
+  }
+
+  async getDocuments(caseId: string): Promise<readonly DocumentView[]> {
+    const records = await this.db.select({
+      documentId: documentVersions.id,
+      physicalDocumentId: documentVersions.physicalDocumentId,
+      version: documentVersions.version,
+      submittedFilename: documentVersions.submittedFilename,
+      mediaType: documentVersions.detectedMediaType,
+      pageCount: count(pages.id),
+    }).from(cases)
+      .innerJoin(processingRuns, eq(cases.currentRunId, processingRuns.id))
+      .innerJoin(inputDocumentSelections, eq(processingRuns.inputRevisionId, inputDocumentSelections.inputRevisionId))
+      .innerJoin(documentVersions, eq(inputDocumentSelections.documentVersionId, documentVersions.id))
+      .leftJoin(documentInspections, and(eq(documentInspections.runId, processingRuns.id), eq(documentInspections.documentVersionId, documentVersions.id)))
+      .leftJoin(pages, eq(pages.documentInspectionId, documentInspections.id))
+      .where(eq(cases.id, caseId))
+      .groupBy(documentVersions.id, documentVersions.physicalDocumentId, documentVersions.version, documentVersions.submittedFilename, documentVersions.detectedMediaType)
+      .orderBy(asc(documentVersions.createdAt));
+    await this.assertCaseExists(caseId);
+    return records.map((record) => ({ ...record, pageCount: Number(record.pageCount) }));
+  }
+
+  async getDocumentPage(caseId: string, documentId: string, pageNumber: number): Promise<DocumentPageView> {
+    const [record] = await this.db.select({
+      documentId: documentVersions.id,
+      pageNumber: pages.pageNumber,
+      needsOcr: pages.needsOcr,
+      ocrReason: pages.ocrReason,
+      hasTable: pages.hasTable,
+      hasColumns: pages.hasColumns,
+      nativeCharacterCount: pages.nativeCharacterCount,
+    }).from(cases)
+      .innerJoin(processingRuns, eq(cases.currentRunId, processingRuns.id))
+      .innerJoin(inputDocumentSelections, eq(processingRuns.inputRevisionId, inputDocumentSelections.inputRevisionId))
+      .innerJoin(documentVersions, eq(inputDocumentSelections.documentVersionId, documentVersions.id))
+      .innerJoin(documentInspections, and(eq(documentInspections.runId, processingRuns.id), eq(documentInspections.documentVersionId, documentVersions.id)))
+      .innerJoin(pages, eq(pages.documentInspectionId, documentInspections.id))
+      .where(and(eq(cases.id, caseId), eq(documentVersions.id, documentId), eq(pages.pageNumber, pageNumber))).limit(1);
+    if (!record) throw new CaseNotFoundError();
+    return {
+      documentId: record.documentId, pageNumber: record.pageNumber, needsOcr: record.needsOcr,
+      ...(record.ocrReason ? { ocrReason: record.ocrReason } : {}),
+      hasTable: record.hasTable, hasColumns: record.hasColumns,
+      nativeCharacterCount: record.nativeCharacterCount,
+    };
+  }
+
+  async getFindings(caseId: string): Promise<readonly FindingView[]> {
+    const records = await this.db.select({
+      findingId: validationFindings.id,
+      ruleId: validationFindings.ruleId,
+      ruleVersion: validationFindings.ruleVersion,
+      status: validationFindings.status,
+      reasonCode: validationFindings.reasonCode,
+      references: validationFindings.materialInputRefs,
+    }).from(cases)
+      .innerJoin(processingRuns, eq(cases.currentRunId, processingRuns.id))
+      .innerJoin(resultRevisions, eq(resultRevisions.runId, processingRuns.id))
+      .innerJoin(validationFindings, eq(validationFindings.resultRevisionId, resultRevisions.id))
+      .where(eq(cases.id, caseId)).orderBy(asc(validationFindings.ruleId));
+    await this.assertCaseExists(caseId);
+    const directEvidence = await this.db.select({ evidenceId: evidenceRecords.id }).from(evidenceRecords)
+      .innerJoin(processingRuns, eq(evidenceRecords.runId, processingRuns.id))
+      .innerJoin(cases, eq(cases.currentRunId, processingRuns.id)).where(eq(cases.id, caseId));
+    const evidenceIds = new Set(directEvidence.map((item) => item.evidenceId));
+    const claimLinks = await this.db.select({ claimId: claimEvidenceLinks.claimId, evidenceId: claimEvidenceLinks.evidenceId })
+      .from(claimEvidenceLinks).innerJoin(claimRecords, eq(claimEvidenceLinks.claimId, claimRecords.id))
+      .innerJoin(processingRuns, eq(claimRecords.runId, processingRuns.id))
+      .innerJoin(cases, eq(cases.currentRunId, processingRuns.id)).where(eq(cases.id, caseId));
+    const evidenceByClaim = new Map<string, string[]>();
+    for (const link of claimLinks) evidenceByClaim.set(link.claimId, [...(evidenceByClaim.get(link.claimId) ?? []), link.evidenceId]);
+    return records.map((record) => ({
+      ...record,
+      status: asFindingStatus(record.status),
+      references: [...new Set((record.references as string[]).flatMap((reference) =>
+        evidenceIds.has(reference) ? [reference] : evidenceByClaim.get(reference) ?? []))]
+        .map((evidenceId) => `/api/v1/cases/${caseId}/evidence/${evidenceId}`),
+    }));
   }
 
   private async assertCaseExists(caseId: string): Promise<void> {
@@ -293,7 +396,7 @@ export class PostgresWorkflowCoordinator {
   async loadOfflineSourceContext(caseId: string, runId: string): Promise<{
     inputRevisionId: string;
     applicationSnapshotId: string;
-    pages: readonly { documentVersionId: string; pageNumber: number }[];
+    pages: readonly { documentVersionId: string; submittedFilename: string; pageNumber: number }[];
   }> {
     const [run] = await this.db.select({
       inputRevisionId: processingRuns.inputRevisionId,
@@ -301,9 +404,15 @@ export class PostgresWorkflowCoordinator {
     }).from(processingRuns).innerJoin(inputRevisions, eq(processingRuns.inputRevisionId, inputRevisions.id))
       .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
     if (!run) throw new CaseNotFoundError();
-    const pageRecords = await this.db.select({ documentVersionId: pages.documentVersionId, pageNumber: pages.pageNumber })
-      .from(pages).innerJoin(documentInspections, eq(pages.documentInspectionId, documentInspections.id))
-      .where(eq(documentInspections.runId, runId)).orderBy(asc(documentInspections.createdAt), asc(pages.pageNumber));
+    const pageRecords = await this.db.select({
+      documentVersionId: pages.documentVersionId,
+      submittedFilename: documentVersions.submittedFilename,
+      pageNumber: pages.pageNumber,
+    }).from(pages)
+      .innerJoin(documentInspections, eq(pages.documentInspectionId, documentInspections.id))
+      .innerJoin(documentVersions, eq(pages.documentVersionId, documentVersions.id))
+      .where(eq(documentInspections.runId, runId))
+      .orderBy(asc(documentVersions.submittedFilename), asc(pages.pageNumber));
     return { ...run, pages: pageRecords };
   }
 
@@ -357,7 +466,23 @@ export class PostgresWorkflowCoordinator {
     });
   }
 
-  async completeOffline(caseId: string, runId: string, result: OfflineCaseResult): Promise<void> {
+  async markRunRunning(caseId: string, runId: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${runId}, 0))`);
+      const [run] = await tx.select({ status: processingRuns.status }).from(processingRuns)
+        .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
+      if (!run) throw new CaseNotFoundError();
+      if (run.status === "running" || run.status === "completed" || run.status === "failed") return;
+      if (run.status !== "created") throw new Error(`Unsupported run status ${run.status}`);
+      const startedAt = new Date();
+      await tx.update(processingRuns).set({ status: "running", startedAt }).where(eq(processingRuns.id, runId));
+      await tx.insert(processingRunTransitions).values({
+        id: randomUUID(), runId, priorStatus: "created", newStatus: "running", reason: "job_claimed",
+      });
+    });
+  }
+
+  async persistOfflineDeterministic(caseId: string, runId: string, result: OfflineDeterministicResult): Promise<void> {
     await this.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${runId}, 0))`);
       const [run] = await tx.select({
@@ -369,8 +494,13 @@ export class PostgresWorkflowCoordinator {
         .innerJoin(applicationSnapshots, eq(inputRevisions.applicationSnapshotId, applicationSnapshots.id))
         .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
       if (!run) throw new CaseNotFoundError();
-      if (run.status === "completed") return;
-      if (run.status === "failed") return;
+      if (run.status === "failed" || run.status === "completed") return;
+      if (run.status !== "running") throw new Error("Run must be running before deterministic result persistence");
+      const [existing] = await tx.select({ id: resultRevisions.id }).from(resultRevisions).where(eq(resultRevisions.runId, runId)).limit(1);
+      if (existing) {
+        if (existing.id !== result.resultRevisionId) throw new Error("Run already has a different result revision");
+        return;
+      }
       if (result.findings.length !== 5 || result.findings.some((item) => item.inputSnapshotId !== run.inputRevisionId || item.resultRevisionId !== result.resultRevisionId)) {
         throw new Error("Offline result is not bound to this run input");
       }
@@ -380,17 +510,10 @@ export class PostgresWorkflowCoordinator {
       validateOfflineProvenance(result, run.applicationSnapshotId, run.applicationContent, new Set(allowedPages.map((page) => `${page.documentVersionId}:${page.pageNumber}`)));
 
       const completedAt = new Date();
-      const stages = ["inspect_and_classify", "extract", "validate", "agent_report"];
+      const stages = ["inspect", "extract", "validate"];
       await tx.insert(stageExecutions).values(stages.map((stageType, sequence) => ({
-        id: randomUUID(), runId, stageType, sequence: sequence + 1, status: "completed", completedAt,
+        id: randomUUID(), runId, stageType, sequence: sequence + 1, status: "succeeded", completedAt,
       })));
-
-      const issues = result.issues.map((issue) => ({
-        id: randomUUID(), caseId, runId, origin: "agent", code: issue.code,
-        description: issue.description, recommendedAction: issue.recommendedAction,
-        reviewState: "pending",
-      }));
-      if (issues.length > 0) await tx.insert(reviewIssues).values(issues);
 
       await tx.insert(resultRevisions).values({
         id: result.resultRevisionId, caseId, runId, inputRevisionId: run.inputRevisionId,
@@ -423,15 +546,68 @@ export class PostgresWorkflowCoordinator {
         reasonCodes: result.findings.filter((item) => item.status !== "passed" && item.status !== "not_applicable").map((item) => item.reasonCode),
       });
 
+    });
+  }
+
+  async loadOfflineReportInput(caseId: string, runId: string): Promise<OfflineReportInput> {
+    const [revision] = await this.db.select({
+      resultRevisionId: resultRevisions.id,
+      inputRevisionId: resultRevisions.inputRevisionId,
+    }).from(resultRevisions)
+      .where(and(eq(resultRevisions.caseId, caseId), eq(resultRevisions.runId, runId))).limit(1);
+    if (!revision) throw new CaseNotFoundError();
+    const [findingRecords, dispositionRecords] = await Promise.all([
+      this.db.select().from(validationFindings).where(eq(validationFindings.resultRevisionId, revision.resultRevisionId)),
+      this.db.select({ disposition: recommendedDispositions.disposition }).from(recommendedDispositions)
+        .where(eq(recommendedDispositions.resultRevisionId, revision.resultRevisionId)).limit(1),
+    ]);
+    const disposition = dispositionRecords[0]?.disposition;
+    if (disposition !== "ready_for_downstream_processing" && disposition !== "additional_documents_needed" && disposition !== "human_review_required") throw new Error("Persisted disposition is invalid");
+    return {
+      resultRevisionId: revision.resultRevisionId,
+      findings: findingRecords.map((item) => ({
+        ruleId: item.ruleId, ruleVersion: item.ruleVersion, ruleSetId: item.ruleSetId,
+        ruleSetVersion: item.ruleSetVersion, inputSnapshotId: revision.inputRevisionId,
+        resultRevisionId: revision.resultRevisionId, status: item.status, reasonCode: item.reasonCode,
+        materialInputRefs: item.materialInputRefs as string[],
+      })),
+      recommendedDisposition: disposition,
+    };
+  }
+
+  async completeOfflineReport(caseId: string, runId: string, resultRevisionId: string, report: OfflineReportResult): Promise<void> {
+    const checkedFacts = await buildCheckedFactsFromDatabase(this.db, caseId, runId, resultRevisionId);
+    await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${runId}, 0))`);
+      const [run] = await tx.select({ status: processingRuns.status }).from(processingRuns)
+        .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
+      if (!run) throw new CaseNotFoundError();
+      if (run.status === "completed" || run.status === "failed") return;
+      if (run.status !== "running") throw new Error("Run must be running before report completion");
+      const [revision] = await tx.select({ id: resultRevisions.id }).from(resultRevisions)
+        .where(and(eq(resultRevisions.id, resultRevisionId), eq(resultRevisions.runId, runId))).limit(1);
+      if (!revision) throw new Error("Agent report is not bound to a persisted result revision");
+      const issues = report.issues.map((issue) => ({
+        id: randomUUID(), caseId, runId, origin: "agent", code: issue.code,
+        description: issue.description, recommendedAction: issue.recommendedAction, reviewState: "pending",
+      }));
+      if (issues.length > 0) await tx.insert(reviewIssues).values(issues);
       await tx.insert(agentReports).values({
-        id: randomUUID(), caseId, runId, availability: result.reportAvailability,
-        verificationStatus: result.reportAvailability === "ready" ? "verified" : "rejected",
-        verificationFailureReason: result.reportFailureReason,
-        summary: result.summary,
-        issueLinks: issues.map((issue) => issue.id), checkedFacts: buildCheckedFacts(caseId, result),
-        modelLabel: result.modelLabel, estimatedCost: result.estimatedCost,
+        id: randomUUID(), caseId, runId, resultRevisionId, availability: report.reportAvailability,
+        verificationStatus: report.reportAvailability === "ready" ? "verified" : "rejected",
+        verificationFailureReason: report.reportFailureReason, summary: report.summary,
+        issueLinks: issues.map((issue) => issue.id),
+        checkedFacts,
+        modelLabel: report.modelLabel, estimatedCost: report.estimatedCost,
       });
-      await tx.update(processingRuns).set({ status: "completed" }).where(eq(processingRuns.id, runId));
+      const completedAt = new Date();
+      await tx.insert(stageExecutions).values({
+        id: randomUUID(), runId, stageType: "agent_report", sequence: 4, status: "succeeded", completedAt,
+      });
+      await tx.update(processingRuns).set({ status: "completed", completedAt }).where(eq(processingRuns.id, runId));
+      await tx.insert(processingRunTransitions).values({
+        id: randomUUID(), runId, priorStatus: "running", newStatus: "completed", reason: "report_terminal",
+      });
       await tx.update(cases).set({ lifecycle: "ready_for_review", version: sql`${cases.version} + 1` })
         .where(eq(cases.id, caseId));
       await tx.insert(caseStateTransitions).values({
@@ -448,8 +624,13 @@ export class PostgresWorkflowCoordinator {
         .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
       if (!run) throw new CaseNotFoundError();
       if (run.status === "failed" || run.status === "completed") return;
-      await tx.update(processingRuns).set({ status: "failed" })
+      if (run.status !== "created" && run.status !== "running") throw new Error(`Unsupported run status ${run.status}`);
+      const completedAt = new Date();
+      await tx.update(processingRuns).set({ status: "failed", completedAt })
         .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId)));
+      await tx.insert(processingRunTransitions).values({
+        id: randomUUID(), runId, priorStatus: run.status, newStatus: "failed", reason,
+      });
       await tx.update(cases).set({ lifecycle: "processing_exception", version: sql`${cases.version} + 1` })
         .where(and(eq(cases.id, caseId), eq(cases.lifecycle, "processing")));
       await tx.insert(caseStateTransitions).values({
@@ -460,7 +641,7 @@ export class PostgresWorkflowCoordinator {
   }
 }
 
-function validateOfflineProvenance(result: OfflineCaseResult, applicationSnapshotId: string, applicationContent: unknown, allowedPages: ReadonlySet<string>): void {
+function validateOfflineProvenance(result: OfflineDeterministicResult, applicationSnapshotId: string, applicationContent: unknown, allowedPages: ReadonlySet<string>): void {
   const evidenceIds = new Set(result.evidence.map((item) => item.evidenceId));
   const claimIds = new Set(result.claims.map((item) => item.claimId));
   if (evidenceIds.size !== result.evidence.length || claimIds.size !== result.claims.length) throw new Error("Duplicate offline provenance identity");
@@ -478,7 +659,12 @@ function validateOfflineProvenance(result: OfflineCaseResult, applicationSnapsho
   }
 }
 
-function buildCheckedFacts(caseId: string, result: OfflineCaseResult): AgentReportView["checkedFacts"] {
+async function buildCheckedFactsFromDatabase(
+  db: ReturnType<typeof drizzle>,
+  caseId: string,
+  runId: string,
+  resultRevisionId: string,
+): Promise<AgentReportView["checkedFacts"]> {
   const statements: Readonly<Record<string, string>> = {
     VAL_DOC_COMPLETENESS_001: "All required document types are present and usable.",
     VAL_NAME_CONSISTENCY_001: "The applicant name is consistent across the available documents.",
@@ -486,13 +672,22 @@ function buildCheckedFacts(caseId: string, result: OfflineCaseResult): AgentRepo
     VAL_INCOME_CONSISTENCY_001: "The comparable monthly income values are consistent.",
     VAL_ID_EXPIRY_001: "The identity document expiry date is on or after the review reference date.",
   };
-  const evidenceIds = new Set(result.evidence.map((item) => item.evidenceId));
-  const claimsById = new Map(result.claims.map((claim) => [claim.claimId, claim]));
-  return result.findings.filter((finding) => finding.status === "passed").map((finding) => {
+  const [findings, evidence, links] = await Promise.all([
+    db.select({ ruleId: validationFindings.ruleId, status: validationFindings.status, materialInputRefs: validationFindings.materialInputRefs })
+      .from(validationFindings).where(eq(validationFindings.resultRevisionId, resultRevisionId)),
+    db.select({ evidenceId: evidenceRecords.id }).from(evidenceRecords).where(eq(evidenceRecords.runId, runId)),
+    db.select({ claimId: claimEvidenceLinks.claimId, evidenceId: claimEvidenceLinks.evidenceId })
+      .from(claimEvidenceLinks).innerJoin(claimRecords, eq(claimEvidenceLinks.claimId, claimRecords.id))
+      .where(eq(claimRecords.runId, runId)),
+  ]);
+  const evidenceIds = new Set(evidence.map((item) => item.evidenceId));
+  const evidenceByClaim = new Map<string, string[]>();
+  for (const link of links) evidenceByClaim.set(link.claimId, [...(evidenceByClaim.get(link.claimId) ?? []), link.evidenceId]);
+  return findings.filter((finding) => finding.status === "passed").map((finding) => {
     const referencedEvidence = new Set<string>();
-    for (const reference of finding.materialInputRefs) {
+    for (const reference of finding.materialInputRefs as string[]) {
       if (evidenceIds.has(reference)) referencedEvidence.add(reference);
-      for (const evidenceId of claimsById.get(reference)?.evidenceIds ?? []) referencedEvidence.add(evidenceId);
+      for (const evidenceId of evidenceByClaim.get(reference) ?? []) referencedEvidence.add(evidenceId);
     }
     if (referencedEvidence.size === 0) throw new Error(`Passed finding ${finding.ruleId} has no evidence`);
     const statement = statements[finding.ruleId];
@@ -502,6 +697,11 @@ function buildCheckedFacts(caseId: string, result: OfflineCaseResult): AgentRepo
       references: [...referencedEvidence].sort().map((evidenceId) => `/api/v1/cases/${caseId}/evidence/${evidenceId}`),
     };
   });
+}
+
+function asFindingStatus(value: string): FindingView["status"] {
+  if (value === "passed" || value === "warning" || value === "failed" || value === "inconclusive" || value === "not_applicable") return value;
+  throw new Error(`Unsupported persisted finding status: ${value}`);
 }
 
 function jsonPointerExists(value: unknown, pointer: string): boolean {
@@ -514,6 +714,66 @@ function jsonPointerExists(value: unknown, pointer: string): boolean {
     current = (current as Record<string, unknown>)[key];
   }
   return true;
+}
+
+function projectApplicationData(content: Readonly<Record<string, unknown>>, createdAt: Date): ApplicationDataView {
+  const field = (key: string, path: readonly string[], transform: (value: string) => string = (value) => value) => {
+    const value = nestedString(content, path);
+    return value === undefined ? undefined : { key, displayValue: transform(value), jsonPointer: `/${path.join("/")}` };
+  };
+  const compact = <T>(items: readonly (T | undefined)[]): T[] => items.filter((item): item is T => item !== undefined);
+  const groups: ApplicationDataView["groups"] = [
+    { group: "applicant", fields: compact([
+      field("display_name", ["applicant_display_name"]), field("birth_date", ["birth_date"]),
+      field("location", ["location"]), field("preferred_language", ["preferred_language"]),
+    ]) },
+    { group: "contact", fields: compact([
+      field("email", ["contact", "email"], maskEmail), field("phone", ["contact", "phone"], maskPhone),
+    ]) },
+    { group: "employment", fields: compact([
+      field("employer", ["employment", "employer"]), field("employment_type", ["employment", "type"]),
+      field("started_on", ["employment", "started_on"]),
+    ]) },
+    { group: "income", fields: compact([
+      field("monthly_net", ["income", "monthly_net"]), field("currency", ["income", "currency"]),
+      field("basis", ["income", "basis"]),
+    ]) },
+  ];
+  const created = createdAt.toISOString();
+  return {
+    groups,
+    submissionHistory: {
+      initialSubmittedAt: isoTimestamp(content["initial_submitted_at"]) ?? created,
+      latestSubmittedAt: isoTimestamp(content["latest_submitted_at"]) ?? created,
+      applicationDataUpdatedAt: isoTimestamp(content["application_data_updated_at"]) ?? created,
+    },
+  };
+}
+
+function nestedString(value: Readonly<Record<string, unknown>>, path: readonly string[]): string | undefined {
+  let current: unknown = value;
+  for (const part of path) {
+    if (typeof current !== "object" || current === null || Array.isArray(current)) return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return typeof current === "string" && current.length > 0 ? current : undefined;
+}
+
+function maskEmail(value: string): string {
+  const separator = value.indexOf("@");
+  if (separator <= 0 || separator === value.length - 1) return "Unavailable";
+  return `${value[0]}***${value.slice(separator)}`;
+}
+
+function maskPhone(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 2 ? `•••• ${digits.slice(-2)}` : "Unavailable";
+}
+
+function isoTimestamp(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? undefined : new Date(timestamp).toISOString();
 }
 
 export interface StoredDocumentReference {

@@ -1,0 +1,1 @@
+ALTER TABLE "cases" ADD CONSTRAINT "cases_current_run_id_processing_runs_id_fk" FOREIGN KEY ("current_run_id") REFERENCES "public"."processing_runs"("id") ON DELETE no action ON UPDATE no action;

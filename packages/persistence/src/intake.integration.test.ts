@@ -24,6 +24,7 @@ import {
   evidenceRecords,
   outboxEvents,
   processingRuns,
+  processingRunTransitions,
   physicalDocuments,
   pages,
   recommendedDispositions,
@@ -54,7 +55,12 @@ describe("PostgresCaseCommandService", () => {
     const service = new PostgresCaseCommandService(connection.db, "actor_1");
     const command = {
       applicantDisplayName: "Anna Beispiel",
-      applicationData: { applicant_display_name: "Anna Beispiel", demo_fixture_id: "anna-example-v1" },
+      applicationData: {
+        applicant_display_name: "Anna Beispiel", demo_fixture_id: "anna-example-v1",
+        contact: { email: "anna@example.invalid", phone: "+49 170 1234567" },
+        employment: { employer: "Beispieltechnik GmbH" },
+        income: { monthly_net: "3480.00", currency: "EUR", basis: "net" },
+      },
       idempotencyKey: "key_1",
       documents: [{
         submittedFilename: "statement.pdf",
@@ -91,6 +97,13 @@ describe("PostgresCaseCommandService", () => {
     const coordinator = new PostgresWorkflowCoordinator(connection.db);
     await expect(coordinator.loadApplicationData(accepted.caseId, accepted.runId)).resolves.toEqual(command.applicationData);
     await expect(coordinator.hasInputDocuments(accepted.caseId, accepted.runId)).resolves.toBe(true);
+    const queriesBeforeProcessing = new PostgresCaseQueryService(connection.db);
+    const applicationProjection = await queriesBeforeProcessing.getApplicationData(accepted.caseId);
+    expect(applicationProjection.groups.find((group) => group.group === "contact")?.fields.map((field) => field.displayValue))
+      .toEqual(["a***@example.invalid", "•••• 67"]);
+    await expect(queriesBeforeProcessing.getDocuments(accepted.caseId)).resolves.toMatchObject([{
+      submittedFilename: "statement.pdf", pageCount: 0,
+    }]);
     const [document] = await coordinator.loadUninspectedDocuments(accepted.caseId, accepted.runId);
     expect(document).toMatchObject({ mediaType: "application/pdf" });
     if (!document) throw new Error("Expected document fixture");
@@ -110,6 +123,9 @@ describe("PostgresCaseCommandService", () => {
       connection.db.select({ value: count() }).from(pages),
     ]);
     expect([inspectionCount?.value, pageCount?.value]).toEqual([1, 1]);
+    await expect(queriesBeforeProcessing.getDocumentPage(accepted.caseId, document.documentVersionId, 1)).resolves.toMatchObject({
+      pageNumber: 1, nativeCharacterCount: 42,
+    });
 
     const inputRevisionId = await coordinator.loadInputRevisionId(accepted.caseId, accepted.runId);
     const sourceContext = await coordinator.loadOfflineSourceContext(accepted.caseId, accepted.runId);
@@ -144,8 +160,13 @@ describe("PostgresCaseCommandService", () => {
       }],
       issues: [{ code: "VAL_EMPLOYER_CONSISTENCY_001", description: "Employer differs.", recommendedAction: "Confirm the current employer." }],
     };
-    await coordinator.completeOffline(accepted.caseId, accepted.runId, result);
-    await coordinator.completeOffline(accepted.caseId, accepted.runId, result);
+    await coordinator.markRunRunning(accepted.caseId, accepted.runId);
+    await coordinator.persistOfflineDeterministic(accepted.caseId, accepted.runId, result);
+    await coordinator.persistOfflineDeterministic(accepted.caseId, accepted.runId, result);
+    const persistedReportInput = await coordinator.loadOfflineReportInput(accepted.caseId, accepted.runId);
+    expect(persistedReportInput.findings[0]?.inputSnapshotId).toBe(inputRevisionId);
+    await coordinator.completeOfflineReport(accepted.caseId, accepted.runId, resultRevisionId, result);
+    await coordinator.completeOfflineReport(accepted.caseId, accepted.runId, resultRevisionId, result);
 
     const queries = new PostgresCaseQueryService(connection.db);
     const status = await queries.get(accepted.caseId);
@@ -171,8 +192,12 @@ describe("PostgresCaseCommandService", () => {
     const report = await queries.getAgentReport(accepted.caseId);
     expect(report.checkedFacts).toHaveLength(4);
     expect(report.checkedFacts[0]?.references[0]).toContain(`/evidence/${evidenceId}`);
+    await expect(queries.getFindings(accepted.caseId)).resolves.toHaveLength(5);
     const [transitionCount] = await connection.db.select({ value: count() }).from(caseStateTransitions);
     expect(transitionCount?.value).toBe(2);
+    const [runTransitionCount] = await connection.db.select({ value: count() }).from(processingRunTransitions)
+      .where(eq(processingRunTransitions.runId, accepted.runId));
+    expect(runTransitionCount?.value).toBe(3);
   });
 
   it("routes an unprocessable run to one durable processing exception", async () => {
@@ -186,6 +211,7 @@ describe("PostgresCaseCommandService", () => {
     const coordinator = new PostgresWorkflowCoordinator(connection.db);
 
     await expect(coordinator.hasInputDocuments(accepted.caseId, accepted.runId)).resolves.toBe(false);
+    await coordinator.markRunRunning(accepted.caseId, accepted.runId);
     await coordinator.failRun(accepted.caseId, accepted.runId, "required_documents_missing");
     await coordinator.failRun(accepted.caseId, accepted.runId, "required_documents_missing");
 
@@ -197,5 +223,8 @@ describe("PostgresCaseCommandService", () => {
     const [transitionCount] = await connection.db.select({ value: count() }).from(caseStateTransitions)
       .where(eq(caseStateTransitions.caseId, accepted.caseId));
     expect(transitionCount?.value).toBe(2);
+    const [runTransitionCount] = await connection.db.select({ value: count() }).from(processingRunTransitions)
+      .where(eq(processingRunTransitions.runId, accepted.runId));
+    expect(runTransitionCount?.value).toBe(3);
   });
 });

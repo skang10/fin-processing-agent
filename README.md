@@ -8,7 +8,7 @@ The project does not approve or reject loans, determine creditworthiness, contac
 
 The Stage Two skeleton provides separate API, Worker, and Review Web entry points, shared TypeBox contracts, internal processing ports, an asynchronous case-intake contract test, and an offline pipeline-order test.
 
-Case intake now accepts multipart PDF/JPEG/PNG streams, stores source bytes through MinIO, transactionally registers immutable artifact and document-version metadata, and discards newly uploaded objects after failed or replayed intake. The Worker reads bounded source objects, runs the pinned PDF Inspector adapter for PDFs, and persists page-level OCR-routing metadata before the offline coordinator publishes a fake Agent Report and review issues. Derived native-text artifacts, evidence, OCR execution, restricted sandbox isolation, the real Pi harness, and model adapters remain next implementation steps.
+Case intake accepts multipart PDF/JPEG/PNG streams, stores source bytes through MinIO, transactionally registers immutable artifact and document-version metadata, and discards newly uploaded objects after failed or replayed intake. The Worker reads bounded source objects, runs the pinned PDF Inspector adapter for PDFs, persists page-level OCR-routing metadata, seals a deterministic result with evidence-linked claims, findings, and disposition, then gives that persisted result to the fake Case Review Agent. The API exposes the report, issues, deterministic findings, evidence, masked application data, and document metadata. Derived native-text artifacts, general extraction and reconciliation, OCR execution, rendered page delivery, restricted sandbox isolation, the real Pi harness, and live-model adapters remain next implementation steps.
 
 ## Commands
 

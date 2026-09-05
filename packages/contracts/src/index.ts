@@ -37,6 +37,7 @@ export const CaseProjectionSchema = Type.Object({
     agent_report: Type.String(),
     application_data: Type.String(),
     documents: Type.String(),
+    findings: Type.String(),
     issues: Type.String(),
     final_review: Type.String(),
   }),
@@ -67,6 +68,9 @@ export function isCaseProcessingJob(value: unknown): value is CaseProcessingJob 
 
 export const AgentReportSchema = Type.Object({
   availability: Type.Union([Type.Literal("ready"), Type.Literal("pending"), Type.Literal("unavailable")]),
+  result_revision: Type.Optional(Type.Object({
+    id: Type.String({ format: "uuid" }), revision: Type.Integer({ minimum: 1 }),
+  }, { additionalProperties: false })),
   summary: Type.Optional(Type.String()),
   issue_links: Type.Array(Type.String()),
   checked_facts: Type.Array(Type.Object({
@@ -96,6 +100,55 @@ export const EvidenceProjectionSchema = Type.Union([
     page_number: Type.Integer({ minimum: 1 }),
   }, { additionalProperties: false }),
 ]);
+
+export const FindingsProjectionSchema = Type.Object({
+  findings: Type.Array(Type.Object({
+    finding_id: Type.String({ format: "uuid" }),
+    rule_id: Type.String(),
+    rule_version: Type.String(),
+    status: Type.Union([
+      Type.Literal("passed"), Type.Literal("warning"), Type.Literal("failed"),
+      Type.Literal("inconclusive"), Type.Literal("not_applicable"),
+    ]),
+    reason_code: Type.String(),
+    references: Type.Array(Type.String()),
+  }, { additionalProperties: false })),
+}, { additionalProperties: false });
+
+export const ApplicationDataProjectionSchema = Type.Object({
+  groups: Type.Array(Type.Object({
+    group: Type.Union([Type.Literal("applicant"), Type.Literal("contact"), Type.Literal("employment"), Type.Literal("income")]),
+    fields: Type.Array(Type.Object({
+      key: Type.String(), display_value: Type.String(), json_pointer: Type.String(),
+    }, { additionalProperties: false })),
+  }, { additionalProperties: false })),
+  submission_history: Type.Object({
+    initial_submitted_at: Type.String(),
+    latest_submitted_at: Type.String(),
+    application_data_updated_at: Type.String(),
+  }, { additionalProperties: false }),
+}, { additionalProperties: false });
+
+export const DocumentsProjectionSchema = Type.Object({
+  documents: Type.Array(Type.Object({
+    document_id: Type.String({ format: "uuid" }),
+    physical_document_id: Type.String({ format: "uuid" }),
+    version: Type.Integer({ minimum: 1 }),
+    submitted_filename: Type.String(),
+    media_type: Type.String(),
+    page_count: Type.Integer({ minimum: 0 }),
+  }, { additionalProperties: false })),
+}, { additionalProperties: false });
+
+export const DocumentPageProjectionSchema = Type.Object({
+  document_id: Type.String({ format: "uuid" }),
+  page_number: Type.Integer({ minimum: 1 }),
+  needs_ocr: Type.Boolean(),
+  ocr_reason: Type.Optional(Type.String()),
+  has_table: Type.Boolean(),
+  has_columns: Type.Boolean(),
+  native_character_count: Type.Integer({ minimum: 0 }),
+}, { additionalProperties: false });
 
 export const ReviewIssueSchema = Type.Object({
   issue_id: Type.String({ format: "uuid" }),
