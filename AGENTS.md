@@ -148,11 +148,12 @@ The currently authoritative commands are:
 2. `pnpm typecheck` — run TypeScript project-reference checks.
 3. `pnpm test` — run the implemented unit and API contract tests.
 4. `pnpm check` — run type checking followed by tests.
-5. `pnpm dev:api` — run the API skeleton locally.
-6. `pnpm dev:worker` — run the Worker skeleton locally.
-7. `pnpm dev:web` — run the approved Review Workbench prototype through Vite.
-8. `pnpm build` — compile the TypeScript project references.
-9. `pnpm db:generate` — generate a version-controlled Drizzle migration from the schema; requires `DATABASE_URL` configuration for validated command startup.
-10. `pnpm db:migrate` — apply version-controlled Drizzle migrations; requires `DATABASE_URL`.
+5. `pnpm test:integration` — run Docker-backed PostgreSQL integration tests.
+6. `pnpm dev:api` — run the API skeleton locally.
+7. `pnpm dev:worker` — run the Worker skeleton locally.
+8. `pnpm dev:web` — run the approved Review Workbench prototype through Vite.
+9. `pnpm build` — compile the TypeScript project references.
+10. `pnpm db:generate` — generate a version-controlled Drizzle migration from the schema; requires `DATABASE_URL` configuration for validated command startup.
+11. `pnpm db:migrate` — apply version-controlled Drizzle migrations; requires `DATABASE_URL`.
 
 Formatting, linting, integration/browser testing, dataset, evaluation, Docker Compose, demo loading, and reset commands are not implemented yet. Inspect the repository rather than guessing them.

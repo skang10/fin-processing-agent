@@ -33,6 +33,13 @@ export const CaseProjectionSchema = Type.Object({
     Type.Literal("unavailable"),
   ]),
   version: Type.Integer({ minimum: 1 }),
+  links: Type.Object({
+    agent_report: Type.String(),
+    application_data: Type.String(),
+    documents: Type.String(),
+    issues: Type.String(),
+    final_review: Type.String(),
+  }),
 });
 
 export const ProblemDetailsSchema = Type.Object({

@@ -15,6 +15,26 @@ export interface CaseCommandService {
   accept(command: CaseIntakeCommand): Promise<AcceptedCase>;
 }
 
+export interface CaseStatus {
+  readonly caseId: CaseId;
+  readonly applicantDisplayName: string;
+  readonly lifecycle: "processing" | "ready_for_review" | "review_complete" | "processing_exception";
+  readonly progress: "submitted" | "extracted" | "agent_checked" | "human_review" | "outcome";
+  readonly resultAvailability: "pending" | "ready" | "unavailable";
+  readonly version: number;
+}
+
+export interface CaseQueryService {
+  get(caseId: CaseId): Promise<CaseStatus>;
+}
+
+export class CaseNotFoundError extends Error {
+  constructor() {
+    super("Case not found");
+    this.name = "CaseNotFoundError";
+  }
+}
+
 export class IdempotencyConflictError extends Error {
   constructor() {
     super("The idempotency key was already used with different input");

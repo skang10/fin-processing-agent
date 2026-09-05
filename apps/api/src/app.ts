@@ -3,11 +3,12 @@ import Fastify from "fastify";
 import { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import {
   CaseAcceptedSchema,
+  CaseProjectionSchema,
   ProblemDetailsSchema,
 } from "@findoc/contracts";
-import { IdempotencyConflictError, type CaseCommandService } from "@findoc/core";
+import { CaseNotFoundError, IdempotencyConflictError, type CaseCommandService, type CaseQueryService } from "@findoc/core";
 
-export function buildApp(caseCommands: CaseCommandService) {
+export function buildApp(caseCommands: CaseCommandService, caseQueries: CaseQueryService) {
   const app = Fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
 
   app.addHook("onRequest", async (request, reply) => {
@@ -26,10 +27,49 @@ export function buildApp(caseCommands: CaseCommandService) {
         detail: "Use the original request or submit a new idempotency key.",
       });
     }
+    if (error instanceof CaseNotFoundError) {
+      return reply.code(404).type("application/problem+json").send({
+        type: "https://example.invalid/problems/not_found",
+        title: "Case not found",
+        status: 404,
+        code: "not_found",
+        request_id: request.id,
+      });
+    }
     throw error;
   });
 
   app.get("/health", async () => ({ status: "ok" }));
+
+  app.get("/api/v1/cases/:case_id", {
+    schema: {
+      params: {
+        type: "object",
+        required: ["case_id"],
+        properties: { case_id: { type: "string", format: "uuid" } },
+      },
+      response: { 200: CaseProjectionSchema, 404: ProblemDetailsSchema },
+    },
+  }, async (request) => {
+    const { case_id: caseId } = request.params as { case_id: string };
+    const record = await caseQueries.get(caseId);
+    const base = `/api/v1/cases/${record.caseId}`;
+    return {
+      case_id: record.caseId,
+      applicant_display_name: record.applicantDisplayName,
+      lifecycle: record.lifecycle,
+      progress: record.progress,
+      result_availability: record.resultAvailability,
+      version: record.version,
+      links: {
+        agent_report: `${base}/agent-report`,
+        application_data: `${base}/application-data`,
+        documents: `${base}/documents`,
+        issues: `${base}/issues`,
+        final_review: `${base}/final-review`,
+      },
+    };
+  });
 
   app.post(
     "/api/v1/cases",

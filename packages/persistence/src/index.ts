@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { IdempotencyConflictError, type AcceptedCase, type CaseCommandService, type CaseIntakeCommand } from "@findoc/core";
+import { CaseNotFoundError, IdempotencyConflictError, type AcceptedCase, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseStatus } from "@findoc/core";
 import { cases, idempotencyRecords, outboxEvents, processingRuns } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
@@ -66,6 +66,33 @@ export class PostgresCaseCommandService implements CaseCommandService {
       return accepted;
     });
   }
+}
+
+export class PostgresCaseQueryService implements CaseQueryService {
+  constructor(private readonly db: ReturnType<typeof drizzle>) {}
+
+  async get(caseId: string): Promise<CaseStatus> {
+    const [record] = await this.db.select({
+      caseId: cases.id,
+      applicantDisplayName: cases.applicantDisplayName,
+      lifecycle: cases.lifecycle,
+      version: cases.version,
+    }).from(cases).where(eq(cases.id, caseId)).limit(1);
+    if (!record) throw new CaseNotFoundError();
+
+    const lifecycle = asCaseLifecycle(record.lifecycle);
+    return {
+      ...record,
+      lifecycle,
+      progress: lifecycle === "processing" ? "submitted" : lifecycle === "ready_for_review" ? "human_review" : "outcome",
+      resultAvailability: lifecycle === "processing" ? "pending" : lifecycle === "processing_exception" ? "unavailable" : "ready",
+    };
+  }
+}
+
+function asCaseLifecycle(value: string): CaseStatus["lifecycle"] {
+  if (value === "processing" || value === "ready_for_review" || value === "review_complete" || value === "processing_exception") return value;
+  throw new Error(`Unsupported persisted case lifecycle: ${value}`);
 }
 
 export function hashIntake(command: CaseIntakeCommand): string {

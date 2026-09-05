@@ -16,6 +16,7 @@
     "db:generate": "pnpm --filter @findoc/persistence db:generate",
     "db:migrate": "pnpm --filter @findoc/persistence db:migrate",
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc -b --pretty false"
   },
   "devDependencies": {

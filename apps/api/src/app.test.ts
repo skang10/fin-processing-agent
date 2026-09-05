@@ -3,9 +3,20 @@ import { IdempotencyConflictError } from "@findoc/core";
 import { buildApp } from "./app.js";
 
 describe("case intake", () => {
+  const caseQueries = {
+    get: vi.fn(async () => ({
+      caseId: "4c816f67-5f2f-4e21-8c17-7eb1e53838bd",
+      applicantDisplayName: "Anna Beispiel",
+      lifecycle: "processing" as const,
+      progress: "submitted" as const,
+      resultAvailability: "pending" as const,
+      version: 1,
+    })),
+  };
+
   it("accepts work asynchronously", async () => {
     const accept = vi.fn(async () => ({ caseId: "case_1", runId: "run_1" }));
-    const app = buildApp({ accept });
+    const app = buildApp({ accept }, caseQueries);
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/cases",
@@ -20,7 +31,7 @@ describe("case intake", () => {
   });
 
   it("returns a stable conflict for incompatible idempotent replay", async () => {
-    const app = buildApp({ accept: vi.fn(async () => { throw new IdempotencyConflictError(); }) });
+    const app = buildApp({ accept: vi.fn(async () => { throw new IdempotencyConflictError(); }) }, caseQueries);
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/cases",
@@ -30,6 +41,22 @@ describe("case intake", () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({ code: "idempotency_conflict" });
+    await app.close();
+  });
+
+  it("returns the authoritative polling projection with lazy resource links", async () => {
+    const app = buildApp({ accept: vi.fn() }, caseQueries);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      lifecycle: "processing",
+      result_availability: "pending",
+      links: { agent_report: "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/agent-report" },
+    });
     await app.close();
   });
 });
