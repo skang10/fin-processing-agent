@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/contracts" },
     { "path": "packages/core" },
+    { "path": "packages/document-processing" },
     { "path": "packages/offline" },
     { "path": "packages/persistence" },
     { "path": "packages/storage" },

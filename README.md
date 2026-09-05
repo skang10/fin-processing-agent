@@ -8,7 +8,7 @@ The project does not approve or reject loans, determine creditworthiness, contac
 
 The Stage Two skeleton provides separate API, Worker, and Review Web entry points, shared TypeBox contracts, internal processing ports, an asynchronous case-intake contract test, and an offline pipeline-order test.
 
-Case intake now accepts multipart PDF/JPEG/PNG streams, stores source bytes through MinIO, transactionally registers immutable artifact and document-version metadata, and discards newly uploaded objects after failed or replayed intake. The pg-boss offline coordinator publishes a fake Agent Report and review issues. Application snapshots, evidence, PDF Inspector, OCR, the real Pi harness, and model adapters remain next implementation steps, so this is not yet a complete document-processing vertical slice.
+Case intake now accepts multipart PDF/JPEG/PNG streams, stores source bytes through MinIO, transactionally registers immutable artifact and document-version metadata, and discards newly uploaded objects after failed or replayed intake. The pg-boss offline coordinator publishes a fake Agent Report and review issues. A pinned PDF Inspector adapter has a native synthetic-PDF smoke test and isolates library output behind project types. Application snapshots, persisted pages and evidence, OCR, Worker-side sandbox integration, the real Pi harness, and model adapters remain next implementation steps.
 
 ## Commands
 
