@@ -1,10 +1,12 @@
-const cases = [
+import { loadCaseBundle } from './api.js';
+
+let cases = [
   { name: 'Anna Beispiel', id: 'FD-2026-0042', summary: 'Employer information differs', status: 'ready', statusLabel: 'Ready for review', issues: 3, waiting: '18 min' },
   { name: 'Emil Probe', id: 'FD-2026-0038', summary: 'Income document needs confirmation', status: 'in-progress', statusLabel: 'In progress', issues: 1, waiting: '9 min' },
   { name: 'Klara Test', id: 'FD-2026-0035', summary: 'Uploaded documents need separation', status: 'ready', statusLabel: 'Ready for review', issues: 2, waiting: '34 min' }
 ];
 
-const issues = [
+let issues = [
   {
     type: 'Cross-document conflict', tone: 'failed', title: 'Employer mismatch',
     why: 'The declared employer and salary payment counterparty do not resolve to the same organization.',
@@ -47,7 +49,9 @@ let zoom = 92;
 let sourceView = 'document';
 let sourceOverride = null;
 let activeFilter = 'all';
-const decisions = ['pending', 'pending', 'pending'];
+let decisions = ['pending', 'pending', 'pending'];
+let apiApplicationData = null;
+let apiDocuments = [];
 const reviewNotes = {};
 const includedRequests = {};
 let internalReviewNote = '';
@@ -124,6 +128,14 @@ function renderSource(issue) {
 }
 
 function applicationData(activeIssue) {
+  if (apiApplicationData) {
+    return '<h2>Application</h2>' + apiApplicationData.groups.map(function (group) {
+      return '<section class="application-section"><h3>' + escapeHtml(group.group) + '</h3><div class="application-fields">' +
+        group.fields.map(function (field) {
+          return '<div><span>' + escapeHtml(field.key.replaceAll('_', ' ')) + '</span><strong>' + escapeHtml(field.display_value) + '</strong></div>';
+        }).join('') + '</div></section>';
+    }).join('');
+  }
   return '<h2>Application</h2>' +
     '<section class="application-section"><h3>Applicant</h3><div class="application-fields"><div><span>Full name</span><strong>Anna Beispiel</strong></div><div><span>Date of birth</span><strong>14 March 1991</strong></div><div><span>Location</span><strong>Berlin, Germany</strong></div><div><span>Preferred language</span><strong>German</strong></div></div></section>' +
     '<section class="application-section"><h3>Contact</h3><div class="application-fields"><div><span>Email</span><strong>an••••@example.de</strong></div><div><span>Phone</span><strong>+49 •••• 4821</strong></div><div><span>Preferred channel</span><strong>Email</strong></div></div></section>' +
@@ -442,25 +454,6 @@ function activateCaseTab(view) {
 document.querySelectorAll('[data-case-tab]').forEach(function (button) {
   button.addEventListener('click', function () { activateCaseTab(button.dataset.caseTab); });
 });
-document.querySelectorAll('[data-report-issue]').forEach(function (button) {
-  button.addEventListener('click', function () {
-    current = Number(button.dataset.reportIssue);
-    sourceView = 'document';
-    sourceOverride = null;
-    editing = false;
-    confirming = false;
-    render();
-    activateCaseTab('issues');
-  });
-});
-document.querySelectorAll('[data-checked-source]').forEach(function (button) {
-  button.addEventListener('click', function () {
-    current = Number(button.dataset.sourceIssue);
-    sourceView = button.dataset.checkedSource;
-    sourceOverride = button.dataset.sourceKind ? { kind: button.dataset.sourceKind, name: button.dataset.sourceName, page: button.dataset.sourcePage } : null;
-    renderSource(issues[current]);
-  });
-});
 document.querySelectorAll('.case-action').forEach(function (button) {
   button.addEventListener('click', function () {
     const hasApplicantRequest = hasIncludedApplicantRequest();
@@ -495,5 +488,91 @@ function toast(message) {
   toast.timer = setTimeout(function () { element.classList.remove('show'); }, 2400);
 }
 
+function issuePresentation(record, finding, index) {
+  const presentation = {
+    VAL_DOC_COMPLETENESS_001: { title: 'Document boundary', type: 'Document review', tone: 'warning', paper: 'boundary', pageNumber: 3 },
+    VAL_EMPLOYER_CONSISTENCY_001: { title: 'Employer mismatch', type: 'Cross-document conflict', tone: 'failed', paper: 'bank', pageNumber: 4 },
+    VAL_INCOME_CONSISTENCY_001: { title: 'Monthly income', type: 'Evidence review', tone: 'warning', paper: 'pay', pageNumber: 2 },
+  }[record.code] || { title: 'Review issue ' + (index + 1), type: 'Agent finding', tone: 'warning', paper: 'boundary', pageNumber: 1 };
+  const references = finding ? finding.references : [];
+  return {
+    type: presentation.type, tone: presentation.tone, title: presentation.title,
+    why: record.description, recommendation: record.recommended_action,
+    doc: apiDocuments[0] ? apiDocuments[0].submitted_filename : 'Submitted document',
+    page: 'Page ' + presentation.pageNumber + (apiDocuments[0] ? ' of ' + apiDocuments[0].page_count : ''),
+    pageNumber: presentation.pageNumber, paper: presentation.paper,
+    value: '', valueLabel: '',
+    values: references.map(function (reference, referenceIndex) {
+      return { label: 'Referenced evidence ' + (referenceIndex + 1), role: 'Agent checked source', value: 'Open source evidence', source: reference, evidence: true };
+    }),
+  };
+}
+
+function renderApiReport(report) {
+  document.querySelector('.report-copy').textContent = report.summary || 'Agent report unavailable.';
+  document.querySelector('.report-links').innerHTML = issues.map(function (issue, index) {
+    return '<button data-report-issue="' + index + '"><b>' + String(index + 1).padStart(2, '0') + '</b><span>' + escapeHtml(issue.title) + '</span><em>→</em></button>';
+  }).join('');
+  document.querySelector('.checked-facts').innerHTML = report.checked_facts.map(function (fact, index) {
+    return '<button data-checked-source="document" data-source-issue="0"><i>✓</i><span><strong>' +
+      escapeHtml(fact.statement) + '</strong><small>' + fact.references.length + ' referenced source' + (fact.references.length === 1 ? '' : 's') +
+      '</small><em>Checked fact ' + (index + 1) + '</em></span><b>→</b></button>';
+  }).join('');
+  wireReportNavigation();
+}
+
+function wireReportNavigation() {
+  document.querySelectorAll('[data-report-issue]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      current = Number(button.dataset.reportIssue); sourceView = 'document'; sourceOverride = null;
+      editing = false; confirming = false; render(); activateCaseTab('issues');
+    });
+  });
+  document.querySelectorAll('[data-checked-source]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      current = Math.min(Number(button.dataset.sourceIssue), Math.max(issues.length - 1, 0));
+      sourceView = button.dataset.checkedSource; sourceOverride = null;
+      if (issues.length) renderSource(issues[current]);
+    });
+  });
+}
+
+async function loadCaseFromApi() {
+  const caseId = new URLSearchParams(window.location.search).get('case_id');
+  if (!caseId) return;
+  try {
+    const bundle = await loadCaseBundle(caseId);
+    const caseRecord = bundle.caseRecord;
+    const report = bundle.report;
+    const findings = bundle.findings;
+    const issueRecords = bundle.issues;
+    apiApplicationData = bundle.applicationData;
+    apiDocuments = bundle.documents;
+    cases = [{
+      name: caseRecord.applicant_display_name, id: caseRecord.case_id,
+      summary: report.summary || 'Agent report unavailable',
+      status: caseRecord.lifecycle === 'ready_for_review' ? 'ready' : 'in-progress',
+      statusLabel: caseRecord.lifecycle === 'ready_for_review' ? 'Ready for review' : 'In progress',
+      issues: issueRecords.length, waiting: 'Now',
+    }];
+    issues = issueRecords.map(function (record, index) {
+      return issuePresentation(record, findings.find(function (finding) { return finding.rule_id === record.code; }), index);
+    });
+    decisions = issueRecords.map(function (record) { return record.review_state === 'pending' ? 'pending' : record.review_state === 'ignored' ? 'dismissed' : 'confirmed'; });
+    current = 0;
+    document.querySelectorAll('.case-id').forEach(function (element) { element.textContent = caseRecord.case_id; });
+    document.querySelectorAll('.case-identity strong').forEach(function (element) { element.textContent = caseRecord.applicant_display_name; });
+    document.querySelector('[data-case-tab="issues"] span').textContent = String(issues.length);
+    document.querySelector('#case-agent-trigger strong').textContent = report.availability === 'ready' ? 'Generated review report' : 'Report unavailable';
+    renderApiReport(report);
+    renderCases();
+    if (issues.length) render();
+  } catch (error) {
+    toast(error instanceof Error ? error.message : 'Case data could not be loaded');
+  }
+}
+
+wireReportNavigation();
 renderCases();
 render();
+void loadCaseFromApi();
