@@ -532,6 +532,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .summary-issues small { max-width: 360px; margin-top: 4px; color: var(--muted); font-family: inherit; font-size: 8px; line-height: 1.4; }
 .summary-issues b { color: var(--success); font-size: 9px; }
 .summary-state { width: 21px; height: 21px; border-radius: 50%; background: var(--success-soft); color: var(--success); display: grid; place-items: center; font-size: 9px; }
+.summary-state.pending { background: var(--warning-soft); color: var(--warning); }
+.summary-state.dismissed { background: var(--surface-soft); color: var(--muted); }
 .summary-state.further { background: var(--warning-soft); color: var(--warning); }
 .diff-block { border: 1px solid var(--line); background: #fff; }
 .diff-block > div { min-height: 58px; padding: 11px 14px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 150px 1fr 1fr; align-items: center; gap: 12px; font-size: 9px; }

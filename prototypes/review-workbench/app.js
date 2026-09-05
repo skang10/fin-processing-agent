@@ -44,6 +44,7 @@ let issues = [
 
 let current = 0;
 let editing = false;
+let creatingIssue = false;
 let confirming = false;
 let zoom = 92;
 let sourceView = 'document';
@@ -52,6 +53,8 @@ let activeFilter = 'all';
 let decisions = ['pending', 'pending', 'pending'];
 let apiApplicationData = null;
 let apiDocuments = [];
+let apiEvidenceByReference = {};
+let activeApplicationPointer = null;
 const reviewNotes = {};
 const includedRequests = {};
 let internalReviewNote = '';
@@ -105,6 +108,7 @@ function render() {
   const issue = issues[current];
   const resolved = decisions.filter(function (decision) { return decision !== 'pending'; }).length;
   document.querySelector('#resolved-count').textContent = resolved + ' of ' + issues.length + ' reviewed';
+  document.querySelector('[data-case-tab="issues"] span').textContent = String(issues.length);
   document.querySelector('#previous').disabled = current === 0;
   document.querySelector('#next').disabled = current === issues.length - 1;
   document.querySelector('#issue-content').innerHTML = editing ? correctionForm(issue) : confirming ? confirmationForm(issue) : issueDetail(issue);
@@ -132,7 +136,7 @@ function applicationData(activeIssue) {
     return '<h2>Application</h2>' + apiApplicationData.groups.map(function (group) {
       return '<section class="application-section"><h3>' + escapeHtml(group.group) + '</h3><div class="application-fields">' +
         group.fields.map(function (field) {
-          return '<div><span>' + escapeHtml(field.key.replaceAll('_', ' ')) + '</span><strong>' + escapeHtml(field.display_value) + '</strong></div>';
+          return '<div class="' + (field.json_pointer === activeApplicationPointer ? 'application-focus' : '') + '"><span>' + escapeHtml(field.key.replaceAll('_', ' ')) + '</span><strong>' + escapeHtml(field.display_value) + '</strong></div>';
         }).join('') + '</div></section>';
     }).join('');
   }
@@ -167,7 +171,8 @@ function renderIssueList() {
 }
 
 function renderThumbnails(activePage) {
-  document.querySelector('#thumbnails').innerHTML = [1, 2, 3, 4, 5].map(function (page) {
+  const pageCount = apiDocuments[0] ? apiDocuments[0].page_count : 5;
+  document.querySelector('#thumbnails').innerHTML = Array.from({ length: pageCount }, function (_, index) { return index + 1; }).map(function (page) {
     return '<button class="thumbnail ' + (page === activePage ? 'active' : '') + '" aria-label="Page ' + page + '">' +
       '<span><i></i><i></i><i></i><i></i></span><small>' + page + '</small></button>';
   }).join('');
@@ -184,15 +189,18 @@ function issueDetail(issue) {
   const outcome = decisions[current];
   const values = issue.values.map(function (item, index) {
     const value = item.value;
-    return (index ? '<div class="comparison-divider">Compared with</div>' : '') + '<article class="claim-card"><div class="claim-head"><span>' + item.role + '</span></div>' +
-      '<small class="field-name">' + item.label + '</small><strong>' + value + '</strong><button class="evidence-link ' + (item.evidence ? 'active' : '') + '" data-evidence="' + Boolean(item.evidence) + '">View ' + item.source + '</button></article>';
+    const evidenceControl = item.reference
+      ? '<button class="evidence-link active" data-evidence-reference="' + encodeURIComponent(item.reference) + '">' + escapeHtml(item.source) + ' →</button>'
+      : '<button class="evidence-link ' + (item.evidence ? 'active' : '') + '" data-legacy-evidence="' + Boolean(item.evidence) + '">View ' + escapeHtml(item.source) + '</button>';
+    return '<article class="claim-card"><div class="claim-head"><span>' + escapeHtml(item.role) + '</span></div>' +
+      '<small class="field-name">' + escapeHtml(item.label) + '</small><strong>' + escapeHtml(value) + '</strong>' + evidenceControl + '</article>';
   }).join('');
   const outcomeIcon = outcome === 'dismissed' ? '×' : outcome === 'edited' ? '✎' : '✓';
   const outcomeBlock = outcome !== 'pending'
     ? '<div class="recorded-outcome"><span class="outcome-icon">' + outcomeIcon + '</span><div><strong>' + outcomeLabel(outcome) + '</strong>' + (reviewNotes[current] ? '<small>' + escapeHtml(reviewNotes[current]) + '</small>' : '') + '</div><button id="change-outcome"><span aria-hidden="true">↶</span> Undo</button></div>'
     : '<div class="review-actions"><button class="button quiet" id="dismiss">Ignore issue</button><button class="button primary" id="confirm">Confirm issue</button></div>';
   return '<div class="review-prompt"><p>' + issue.why + '</p></div>' +
-    '<div class="claim-comparison"><div class="block-label"><span>Comparison</span></div>' +
+    '<div class="claim-comparison"><div class="block-label"><span>Evidence reviewed</span></div>' +
     values + '</div>' + outcomeBlock;
 }
 
@@ -238,7 +246,16 @@ function wireIssueActions() {
   if (change) change.addEventListener('click', function () { decisions[current] = 'pending'; editing = false; confirming = false; render(); });
   ['#cancel', '#cancel-bottom'].forEach(function (selector) {
     const button = document.querySelector(selector);
-    if (button) button.addEventListener('click', function () { editing = false; render(); });
+    if (button) button.addEventListener('click', function () {
+      if (creatingIssue) {
+        issues.splice(current, 1);
+        decisions.splice(current, 1);
+        current = Math.max(0, current - 1);
+        creatingIssue = false;
+      }
+      editing = false;
+      render();
+    });
   });
   ['#cancel-confirm', '#cancel-confirm-bottom'].forEach(function (selector) {
     const button = document.querySelector(selector);
@@ -256,19 +273,56 @@ function wireIssueActions() {
     event.preventDefault();
     issue.title = event.currentTarget.querySelector('input').value;
     issue.why = event.currentTarget.querySelector('textarea').value;
+    creatingIssue = false;
     decide('edited');
   });
   document.querySelectorAll('.evidence-link').forEach(function (button) {
     button.addEventListener('click', function () {
-      sourceView = button.dataset.evidence === 'true' ? 'document' : 'application';
+      if (button.dataset.evidenceReference) {
+        openEvidenceReference(decodeURIComponent(button.dataset.evidenceReference));
+        return;
+      }
+      sourceView = button.dataset.legacyEvidence === 'true' ? 'document' : 'application';
       sourceOverride = null;
       renderSource(issues[current]);
-      const paper = document.querySelector('#paper');
-      paper.classList.remove('evidence-pulse');
-      requestAnimationFrame(function () { paper.classList.add('evidence-pulse'); });
-      toast(button.dataset.evidence === 'true' ? 'Evidence highlighted on page' : 'Structured application evidence selected');
+      toast(button.dataset.legacyEvidence === 'true' ? 'Evidence highlighted on page' : 'Application field selected');
     });
   });
+}
+
+function pagePaperKind(pageNumber) {
+  return pageNumber === 1 ? 'identity' : pageNumber === 2 ? 'pay' : pageNumber === 4 ? 'bank' : 'boundary';
+}
+
+function openEvidenceReference(reference) {
+  const evidence = apiEvidenceByReference[reference];
+  if (!evidence) {
+    toast('Evidence is unavailable');
+    return;
+  }
+  if (evidence.evidence_type === 'structured_input') {
+    sourceView = 'application';
+    sourceOverride = null;
+    activeApplicationPointer = evidence.json_pointer;
+    renderSource(issues[current]);
+    toast('Application field selected');
+    return;
+  }
+  const documentRecord = apiDocuments.find(function (item) { return item.document_id === evidence.document_version_id; }) || apiDocuments[0];
+  const pageNumber = evidence.page_number;
+  sourceView = 'document';
+  activeApplicationPointer = null;
+  sourceOverride = {
+    name: documentRecord ? documentRecord.submitted_filename : 'Submitted document',
+    page: 'Page ' + pageNumber + (documentRecord ? ' of ' + documentRecord.page_count : ''),
+    kind: pagePaperKind(pageNumber),
+  };
+  renderSource(issues[current]);
+  renderThumbnails(pageNumber);
+  const paper = document.querySelector('#paper');
+  paper.classList.remove('evidence-pulse');
+  requestAnimationFrame(function () { paper.classList.add('evidence-pulse'); });
+  toast('Document evidence selected on page ' + pageNumber);
 }
 
 function decide(kind) {
@@ -285,6 +339,7 @@ function decide(kind) {
     current = next;
     render();
   } else if (decisions.every(function (decision) { return decision !== 'pending'; })) {
+    render();
     setTimeout(function () { activateCaseTab('submit'); }, 220);
   } else {
     current = decisions.findIndex(function (decision) { return decision === 'pending'; });
@@ -298,7 +353,8 @@ function renderSummary() {
   document.querySelector('#summary-issues').innerHTML = issues.map(function (issue, index) {
     const canRequest = Boolean(reviewNotes[index]) && (decisions[index] === 'confirmed' || decisions[index] === 'edited');
     const included = includedRequests[index] !== false;
-    return '<div class="summary-issue-row ' + (canRequest && !included ? 'excluded' : '') + '"><button data-summary-issue="' + index + '"><span class="summary-state ' + decisions[index] + '">' + (decisions[index] === 'dismissed' ? '×' : '✓') + '</span><span><strong>' +
+    const marker = decisions[index] === 'pending' ? '!' : decisions[index] === 'dismissed' ? '×' : '✓';
+    return '<div class="summary-issue-row ' + (canRequest && !included ? 'excluded' : '') + '"><button data-summary-issue="' + index + '"><span class="summary-state ' + decisions[index] + '">' + marker + '</span><span><strong>' +
       issue.title + '</strong><small>' + outcomeLabel(decisions[index]) + '</small></span><i>→</i></button>' + (canRequest ? '<label><input type="checkbox" data-request-include="' + index + '" ' + (included ? 'checked' : '') + '> Include in message</label>' : '') + '</div>';
   }).join('');
   document.querySelectorAll('[data-summary-issue]').forEach(function (button) {
@@ -382,11 +438,12 @@ document.querySelector('#create-issue').addEventListener('click', function () {
     type: 'Reviewer-created', tone: 'neutral', title: 'New review issue',
     why: 'Add the issue details and supporting evidence.',
     recommendation: 'Please describe what information or document you need the applicant to provide.',
-    doc: 'Uploaded package.pdf', page: 'Page 1 of 5', pageNumber: 1, paper: 'boundary',
+    doc: 'Uploaded package.pdf', page: 'Page 1 of ' + (apiDocuments[0]?.page_count || 5), pageNumber: 1, paper: 'boundary',
     value: '', valueLabel: '', values: []
   });
   decisions.push('pending');
   current = issues.length - 1;
+  creatingIssue = true;
   editing = true;
   confirming = false;
   render();
@@ -496,15 +553,33 @@ function issuePresentation(record, finding, index) {
   }[record.code] || { title: 'Review issue ' + (index + 1), type: 'Agent finding', tone: 'warning', paper: 'boundary', pageNumber: 1 };
   const references = finding ? finding.references : [];
   return {
-    type: presentation.type, tone: presentation.tone, title: presentation.title,
+    code: record.code, type: presentation.type, tone: presentation.tone, title: presentation.title,
     why: record.description, recommendation: record.recommended_action,
     doc: apiDocuments[0] ? apiDocuments[0].submitted_filename : 'Submitted document',
     page: 'Page ' + presentation.pageNumber + (apiDocuments[0] ? ' of ' + apiDocuments[0].page_count : ''),
     pageNumber: presentation.pageNumber, paper: presentation.paper,
     value: '', valueLabel: '',
-    values: references.map(function (reference, referenceIndex) {
-      return { label: 'Referenced evidence ' + (referenceIndex + 1), role: 'Agent checked source', value: 'Open source evidence', source: reference, evidence: true };
+    values: references.map(function (reference) {
+      return evidencePresentation(reference);
     }),
+  };
+}
+
+function evidencePresentation(reference) {
+  const evidence = apiEvidenceByReference[reference];
+  if (!evidence) return { label: 'Source unavailable', role: 'Evidence', value: 'Unavailable', source: 'Evidence unavailable', reference: reference };
+  if (evidence.evidence_type === 'structured_input') {
+    const field = apiApplicationData && apiApplicationData.groups.flatMap(function (group) { return group.fields; })
+      .find(function (candidate) { return candidate.json_pointer === evidence.json_pointer; });
+    return {
+      label: field ? field.key.replaceAll('_', ' ') : 'Application field', role: 'Application data',
+      value: field ? field.display_value : 'Submitted value', source: 'Open application field', reference: reference,
+    };
+  }
+  const documentRecord = apiDocuments.find(function (item) { return item.document_id === evidence.document_version_id; }) || apiDocuments[0];
+  return {
+    label: 'Document evidence', role: documentRecord ? documentRecord.submitted_filename : 'Submitted document',
+    value: 'Page ' + evidence.page_number, source: 'Open page ' + evidence.page_number, reference: reference,
   };
 }
 
@@ -514,8 +589,9 @@ function renderApiReport(report) {
     return '<button data-report-issue="' + index + '"><b>' + String(index + 1).padStart(2, '0') + '</b><span>' + escapeHtml(issue.title) + '</span><em>→</em></button>';
   }).join('');
   document.querySelector('.checked-facts').innerHTML = report.checked_facts.map(function (fact, index) {
-    return '<button data-checked-source="document" data-source-issue="0"><i>✓</i><span><strong>' +
-      escapeHtml(fact.statement) + '</strong><small>' + fact.references.length + ' referenced source' + (fact.references.length === 1 ? '' : 's') +
+    const reference = fact.references.find(function (candidate) { return apiEvidenceByReference[candidate]; });
+    return '<button data-checked-reference="' + encodeURIComponent(reference || '') + '" ' + (reference ? '' : 'disabled') + '><i>✓</i><span><strong>' +
+      escapeHtml(fact.statement) + '</strong><small>' + fact.references.length + ' source' + (fact.references.length === 1 ? '' : 's') + ' checked' +
       '</small><em>Checked fact ' + (index + 1) + '</em></span><b>→</b></button>';
   }).join('');
   wireReportNavigation();
@@ -528,11 +604,9 @@ function wireReportNavigation() {
       editing = false; confirming = false; render(); activateCaseTab('issues');
     });
   });
-  document.querySelectorAll('[data-checked-source]').forEach(function (button) {
+  document.querySelectorAll('[data-checked-reference]').forEach(function (button) {
     button.addEventListener('click', function () {
-      current = Math.min(Number(button.dataset.sourceIssue), Math.max(issues.length - 1, 0));
-      sourceView = button.dataset.checkedSource; sourceOverride = null;
-      if (issues.length) renderSource(issues[current]);
+      openEvidenceReference(decodeURIComponent(button.dataset.checkedReference));
     });
   });
 }
@@ -548,6 +622,7 @@ async function loadCaseFromApi() {
     const issueRecords = bundle.issues;
     apiApplicationData = bundle.applicationData;
     apiDocuments = bundle.documents;
+    apiEvidenceByReference = bundle.evidenceByReference;
     cases = [{
       name: caseRecord.applicant_display_name, id: caseRecord.case_id,
       summary: report.summary || 'Agent report unavailable',
