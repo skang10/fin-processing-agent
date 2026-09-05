@@ -2,11 +2,11 @@
 
 Document ID: `DAT`
 
-Version: 2.1.0
+Version: 2.1.1
 
 Status: Approved
 
-Last updated: 2026-09-04
+Last updated: 2026-09-05
 
 ## 1. Purpose
 
@@ -289,6 +289,8 @@ An Artifact is immutable stored content plus integrity and lineage metadata. Lar
 `DAT-REQ-050` The active or current run for a case must be an explicit projection or reference and must not be inferred from greatest creation timestamp alone.
 
 `DAT-REQ-186` A processing run created to re-extract after a human boundary correction must reference the triggering immutable boundary-correction revision and the prior processing run; it must retain the same input revision unless source inputs also changed.
+
+`DAT-REQ-187` Reserved during the review-revision migration and must not be assigned or reused.
 
 `DAT-REQ-173` A processing run must use exactly one status from `IDX` section 12.2 and must retain append-only status-transition history.
 
@@ -635,6 +637,7 @@ The following details are intentionally deferred to later owning specifications:
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.1.1 | 2026-09-05 | Approved | Reserved the previously unassigned `DAT-REQ-187` identifier explicitly for machine-verifiable requirement continuity. |
 | 2.1.0 | 2026-09-04 | Approved | Added review issues, requested-change drafts without delivery authority, final-review action consistency, and structured application review projections for the V1 HTML baseline. |
 | 2.0.0 | 2026-09-04 | Approved | Added Agent session modes and immutable, verified Case Review Brief revisions without making Agent output authoritative workflow state. |
 | 1.1.0 | 2026-09-03 | Approved | Added processing-run lineage for explicit re-extraction after a human boundary correction. |

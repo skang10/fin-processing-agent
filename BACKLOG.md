@@ -6,7 +6,7 @@ This backlog tracks accepted decisions that still require a dedicated specificat
 
 ### BL-001 — Finite Cross-Document Validation Rule Sets
 
-**Status:** Accepted and specified; awaiting ADR, evaluation evidence, and implementation
+**Status:** Accepted and specified with ADR; awaiting evaluation evidence and implementation
 
 Cross-document validation must execute only rules from a finite, explicitly registered, versioned rule set. V1 uses compiled TypeScript rule plugins and a versioned YAML or JSON manifest. Models cannot create, modify, activate, or change validation-rule semantics at runtime.
 
@@ -39,7 +39,7 @@ Validation findings, risk or review signals, and recommended-disposition mapping
 
 ### BL-002 — Bounded Pi Case Review Agent
 
-**Status:** Accepted and specified; awaiting ADR and implementation spike
+**Status:** Accepted and specified with ADR; awaiting implementation spike
 
 Embed the `pi-coding-agent` software development kit as a bounded pre-screening Agent for every processable case. It produces a verified Case Review Brief and may enter Adaptive Extraction mode only for eligible gaps. Disable built-in coding tools, Shell access, arbitrary file and network access, dynamic extensions, runtime package installation, and automatic resource discovery.
 
@@ -61,9 +61,9 @@ The implementation spike must prove:
 
 ### BL-003 — PDF Inspector Integration Baseline
 
-**Status:** Accepted; awaiting ADR and dataset evidence
+**Status:** Accepted and specified with ADR; awaiting dataset evidence and implementation spike
 
-Use `firecrawl/pdf-inspector` as the initial PDF classification, native text and coordinate extraction, layout, table, rendering, selective OCR routing, and PP-OCRv6 integration foundation. Keep PDF rendering and OCR behind project interfaces.
+Use `firecrawl/pdf-inspector` as the initial PDF classification, native text and coordinate extraction, layout, table, rendering integration, and selective OCR-routing foundation. Keep PDF rendering and the independent PP-OCRv6-targeted `OcrEngine` behind project interfaces.
 
 The evaluation must report results for German and English synthetic identity documents, payslips, bank statements, native PDFs, scanned pages, mixed PDFs, and complex tables. Versions of PDF Inspector, PDFium, ONNX Runtime, and OCR model assets must be pinned and recorded.
 
@@ -75,9 +75,9 @@ The evaluation must report results for German and English synthetic identity doc
 
 ### BL-004 — VLM Selection Benchmark
 
-**Status:** Pending evidence
+**Status:** Proposed ADR; pending benchmark evidence
 
-Evaluate two candidate external VLMs on the same versioned subset of the golden set. Compare field accuracy, evidence-region quality, schema compliance, latency, usage, and estimated cost. Select a default and fallback only after results exist.
+Evaluate at least two compatible external VLM configurations on the same versioned golden subset. Compare issue precision and recall, evidence grounding, verified-report completion, bounded-extraction schema compliance, latency, usage, and estimated cost. Select a default and fallback only after results exist.
 
 The resulting choice belongs in `specs/decisions/ADR_003_VLM_SELECTION.md`. Product specifications must remain provider-neutral.
 
@@ -101,7 +101,7 @@ Replace unsupported numerical targets with measured results tied to dataset, mod
 
 ### BL-007 — V1 Review UX Contracts
 
-**Status:** API contract approved; case-level Agent log retained, aggregate monitoring deferred
+**Status:** API, security, and case-level Agent-log contracts approved; aggregate monitoring deferred
 
 Define implementation contracts for the approved V1 HTML UX baseline:
 
@@ -116,7 +116,8 @@ Define implementation contracts for the approved V1 HTML UX baseline:
 
 1. `specs/API_CONTRACTS.md`
 2. `specs/SECURITY_AND_LIMITATIONS.md`
-3. Executable TypeBox schemas after the Stage Two repository skeleton exists.
+3. `specs/operations/OBSERVABILITY_AND_FAILURES.md`
+4. Executable TypeBox schemas after the Stage Two repository skeleton exists.
 
 ## Deferred Production Work
 

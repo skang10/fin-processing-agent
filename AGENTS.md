@@ -50,7 +50,7 @@ Use the authority order defined by [`specs/INDEX.md`](specs/INDEX.md). In summar
 
 ## Current Development State
 
-The Stage Two core specifications are approved and vertical-slice implementation is permitted. The implementation monorepo and its commands do not yet exist; the immediate next implementation step is to create the approved repository skeleton.
+The owning specification set and accepted Pi, PDF Inspector, and rule-architecture ADRs are complete; VLM selection remains evidence-gated. Vertical-slice implementation is permitted. The implementation monorepo and its commands do not yet exist; the immediate next implementation step is to create the approved repository skeleton.
 
 Until that skeleton exists, agents must not invent package scripts, test commands, generated artifacts, directory paths, environment variables, or deployment instructions. After it exists, update this section with the authoritative commands.
 

@@ -4,7 +4,7 @@ Document ID: `SEC`
 
 Version: 1.0.0
 
-Status: In Review
+Status: Approved
 
 Last updated: 2026-09-04
 
@@ -130,4 +130,4 @@ No unresolved V1 authority or synthetic-demo security decision blocks review.
 
 | Version | Date | Status | Change |
 |---|---|---|---|
-| 1.0.0 | 2026-09-04 | In Review | Defined a deliberately minimal forty-requirement security baseline for the synthetic V1 vertical slice. |
+| 1.0.0 | 2026-09-04 | Approved | Approved a deliberately minimal forty-requirement security baseline for the synthetic V1 vertical slice. No unresolved V1 authority or synthetic-demo security decision remains. |

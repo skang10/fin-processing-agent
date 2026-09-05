@@ -2,11 +2,11 @@
 
 Document ID: `PRD`
 
-Version: 3.1.0
+Version: 3.1.1
 
 Status: Approved
 
-Last updated: 2026-09-04
+Last updated: 2026-09-05
 
 ## 1. Purpose
 
@@ -349,6 +349,8 @@ Structured application data is a source of claims and does not require an applic
 
 `PRD-REQ-101` The first vertical slice must provide six manually verified end-to-end synthetic golden cases; the completed V1 target remains a versioned curated set of twenty.
 
+`PRD-REQ-102` Removed in V1.0.1 with the V1 robustness-dataset concept; this identifier must not be reused.
+
 `PRD-REQ-103` The curated cases must cover native-text, scanned/OCR, mixed or multi-document, complex-table/VLM, and cross-document-conflict behavior.
 
 `PRD-REQ-104` Dataset tooling must support generation, truth validation, immutable dataset build, demo loading, evaluation, and reporting.
@@ -458,6 +460,7 @@ The following evidence-dependent choices are intentionally owned elsewhere and r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.1.1 | 2026-09-05 | Approved | Added the removed `PRD-REQ-102` tombstone so the published identifier remains machine-verifiable. |
 | 3.1.0 | 2026-09-04 | Approved | Reduced the first vertical slice to six golden cases and deferred the separate aggregate Agent-monitoring surface while retaining the bounded case Agent log. |
 | 3.0.0 | 2026-09-04 | Approved | Adopted the V1 HTML UX baseline: Agent Report entry, issue review, applicant-readable request drafts without delivery, compact case progress, and separate Agent monitoring; deferred direct field and boundary correction from the V1 reviewer surface. |
 | 2.1.0 | 2026-09-04 | Approved | Removed the V1 `processing_blocked` disposition and retained technical blocking conditions as failed workflow state without a disposition. |

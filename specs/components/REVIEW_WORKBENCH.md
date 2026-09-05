@@ -2,11 +2,11 @@
 
 Document ID: `UI`
 
-Version: 3.1.0
+Version: 3.1.1
 
 Status: Approved
 
-Last updated: 2026-09-04
+Last updated: 2026-09-05
 
 ## 1. Purpose
 
@@ -88,7 +88,13 @@ flowchart TD
 
 `UI-REQ-018` Deprecated in V3.0; stale-result handling is governed by `UI-REQ-161`.
 
-`UI-REQ-019` through `UI-REQ-022` are deprecated from the V1 reviewer surface. Detailed failures, stage states, component versions, and historical run selection belong to operational monitoring or a later explicitly scoped history experience.
+`UI-REQ-019` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-020` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-021` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-022` Deprecated from the V1 reviewer surface. Detailed failures, stage states, component versions, and historical run selection belong to operational monitoring or a later explicitly scoped history experience.
 
 ## 6. Incremental Updates
 
@@ -150,15 +156,57 @@ flowchart TD
 
 `UI-REQ-048` Deprecated in V3.0; V1 issue semantics are governed by `UI-REQ-163`.
 
-`UI-REQ-049` through `UI-REQ-054` are deprecated from the default V1 issue presentation. Raw confidence, processor versions, rule identifiers, matching opinions, and detailed disposition reasons remain retained backend or operational data and may be introduced later through deliberate progressive disclosure.
+`UI-REQ-049` Deprecated from the default V1 issue presentation.
+
+`UI-REQ-050` Deprecated from the default V1 issue presentation.
+
+`UI-REQ-051` Deprecated from the default V1 issue presentation.
+
+`UI-REQ-052` Deprecated from the default V1 issue presentation.
+
+`UI-REQ-053` Deprecated from the default V1 issue presentation.
+
+`UI-REQ-054` Deprecated from the default V1 issue presentation. Raw confidence, processor versions, rule identifiers, matching opinions, and detailed disposition reasons remain retained backend or operational data and may be introduced later through deliberate progressive disclosure.
 
 ## 10. Deferred Direct Correction
 
-`UI-REQ-055` through `UI-REQ-064` are deprecated from the V1 reviewer surface. V1 edits review issues and requested-change drafts; it does not directly rewrite extracted claim values. The immutable correction model remains reserved for a later approved workflow.
+`UI-REQ-055` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-056` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-057` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-058` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-059` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-060` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-061` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-062` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-063` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-064` Deprecated from the V1 reviewer surface. V1 edits review issues and requested-change drafts; it does not directly rewrite extracted claim values. The immutable correction model remains reserved for a later approved workflow.
 
 ## 11. Deferred Boundary Correction
 
-`UI-REQ-065` through `UI-REQ-072` are deprecated from the V1 reviewer surface. V1 may review and confirm a document-boundary issue, but it does not provide an interactive boundary editor or start reprocessing from the browser.
+`UI-REQ-065` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-066` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-067` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-068` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-069` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-070` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-071` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-072` Deprecated from the V1 reviewer surface. V1 may review and confirm a document-boundary issue, but it does not provide an interactive boundary editor or start reprocessing from the browser.
 
 ## 12. Review Actions
 
@@ -262,11 +310,43 @@ The workbench presents `clear_for_downstream` as **Complete document review** so
 
 `UI-REQ-080` The reviewer workbench must not expose a separate Pipeline view; case-level processing state is represented by the compact shared progression in `UI-REQ-150`.
 
-`UI-REQ-081` through `UI-REQ-085` are superseded for V1 by the bounded case Agent log in `UI-REQ-155`. Missing provider usage or cost must still be labeled unavailable rather than zero.
+`UI-REQ-081` Superseded for V1 by the bounded case Agent log in `UI-REQ-155`.
+
+`UI-REQ-082` Superseded for V1 by the bounded case Agent log in `UI-REQ-155`.
+
+`UI-REQ-083` Superseded for V1 by the bounded case Agent log in `UI-REQ-155`.
+
+`UI-REQ-084` Superseded for V1 by the bounded case Agent log in `UI-REQ-155`.
+
+`UI-REQ-085` Superseded for V1 by the bounded case Agent log in `UI-REQ-155`. Missing provider usage or cost must still be labeled unavailable rather than zero.
 
 ## 14. Deferred Reviewer Audit Timeline
 
-`UI-REQ-086` through `UI-REQ-091` are deprecated from the V1 reviewer surface. Domain audit events remain required by `DATA_MODEL.md`; authorized audit inspection belongs to a later API and operational experience and must remain distinct from Agent logs.
+`UI-REQ-086` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-087` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-088` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-089` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-090` Deprecated from the V1 reviewer surface.
+
+`UI-REQ-091` Deprecated from the V1 reviewer surface. Domain audit events remain required by `DATA_MODEL.md`; authorized audit inspection belongs to a later API and operational experience and must remain distinct from Agent logs.
+
+`UI-REQ-092` Removed in V1.2 with the development golden-annotation surface.
+
+`UI-REQ-093` Removed in V1.2 with the development golden-annotation surface.
+
+`UI-REQ-094` Removed in V1.2 with the development golden-annotation surface.
+
+`UI-REQ-095` Removed in V1.2 with the development golden-annotation surface.
+
+`UI-REQ-096` Removed in V1.2 with the development golden-annotation surface.
+
+`UI-REQ-097` Removed in V1.2 with the development golden-annotation surface.
+
+`UI-REQ-098` Removed in V1.2 with the development golden-annotation surface.
 
 ## 15. Authentication, Authorization, and Privacy
 
@@ -336,6 +416,8 @@ The workbench is acceptable for implementation when automated browser and contra
 
 `UI-REQ-126` Deprecated in V3.0; unavailable and stale state is governed by `UI-REQ-166`.
 
+`UI-REQ-127` Removed in V1.2 with the development golden-annotation surface.
+
 `UI-REQ-128` Keyboard and textual alternatives cover core navigation, evidence, correction, and review workflows.
 
 `UI-REQ-129` No page, modal, menu, API-bound command, or hidden control exposes loan approval, loan decline, disbursement, account opening, customer contact, final AML, or final KYC behavior.
@@ -374,6 +456,7 @@ No unresolved Review Workbench boundary decision blocks review of this document.
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.1.1 | 2026-09-05 | Approved | Added individual deprecated and removed requirement tombstones so all published UI identifiers remain machine-verifiable. |
 | 3.1.0 | 2026-09-04 | Approved | Reduced V1 to polling and a bounded case Agent log; deferred SSE and the separate aggregate Agent-monitoring surface. |
 | 3.0.0 | 2026-09-04 | Approved | Approved the V1 HTML UX baseline: Agent Report entry, workflow-state queue, issue review, applicant-readable drafts without delivery, compact progress, bounded case Agent log, and separate monitoring; deprecated direct correction, Pipeline, and reviewer audit views from V1. No unresolved boundary decision remains. |
 | 2.2 | 2026-09-04 | Draft for review | Added a separate Agent monitoring surface for aggregate health, safe session events, usage, cost, and read-only configuration. |

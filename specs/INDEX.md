@@ -2,11 +2,11 @@
 
 Document ID: `IDX`
 
-Version: 2.7.0
+Version: 3.0.0
 
 Status: Approved
 
-Last updated: 2026-09-04
+Last updated: 2026-09-05
 
 ## 1. Purpose
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-This index, `PRODUCT_AND_SCOPE.md`, `SYSTEM_ARCHITECTURE.md`, `DATA_MODEL.md`, `components/DOCUMENT_PROCESSING.md`, `components/ADAPTIVE_EXTRACTION_AGENT.md`, `components/VALIDATION_AND_DISPOSITION.md`, `components/REVIEW_WORKBENCH.md`, `API_CONTRACTS.md`, and `ML_PIPELINE_AND_EVALUATION.md` are approved. `SECURITY_AND_LIMITATIONS.md` is in review; all remaining planned specifications are pending. The migration source remains the working behavioral baseline for subjects that do not yet have an approved owner.
+All owning specifications in the catalog are approved, including `operations/DEPLOYMENT.md`. `ADR_001_PI_AGENT_HARNESS.md`, `ADR_002_PDF_INSPECTOR.md`, and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
 
 ## 3. Product Baseline
 
@@ -74,13 +74,13 @@ Normative product scope belongs to `PRODUCT_AND_SCOPE.md`. This section is an in
 | 8 | `components/REVIEW_WORKBENCH.md` | `UI` | Review Queue, Agent Report, evidence viewer, issue review, requested-change drafts, final review, and bounded case Agent log | Approved |
 | 9 | `API_CONTRACTS.md` | `API` | HTTP endpoints, polling, bounded idempotency, concurrency, error format, authentication context, and generated OpenAPI ownership | Approved |
 | 10 | `ML_PIPELINE_AND_EVALUATION.md` | `MLE` | Datasets, dataset pipeline, metrics, model selection, confidence, evaluation, and regression | Approved |
-| 11 | `SECURITY_AND_LIMITATIONS.md` | `SEC` | Threat model, prompt injection, file controls, authorization boundary, secrets, and operational security controls | In Review |
-| 12 | `operations/OBSERVABILITY_AND_FAILURES.md` | `OPS` | Logs, traces, metrics, retries, degradation, recovery, and operational diagnosis | Pending |
-| 13 | `operations/DEPLOYMENT.md` | `DEP` | Docker Compose delivery, configuration, containers, storage dependencies, and cloud reference mapping | Pending |
-| 14 | `decisions/ADR_001_PI_AGENT_HARNESS.md` | `ADR-001` | Selection and hardening of the Pi Agent harness | Pending |
-| 15 | `decisions/ADR_002_PDF_INSPECTOR.md` | `ADR-002` | Selection and integration boundary of PDF Inspector | Pending |
-| 16 | `decisions/ADR_003_VLM_SELECTION.md` | `ADR-003` | Evidence-based selection of default and fallback VLMs | Pending evidence |
-| 17 | `decisions/ADR_004_RULE_ARCHITECTURE.md` | `ADR-004` | TypeScript rule plugins, registry, manifests, and deterministic mapping | Pending |
+| 11 | `SECURITY_AND_LIMITATIONS.md` | `SEC` | Threat model, prompt injection, file controls, authorization boundary, secrets, and operational security controls | Approved |
+| 12 | `operations/OBSERVABILITY_AND_FAILURES.md` | `OPS` | Logs, traces, failures, retries, degradation, recovery, and case Agent-log diagnostics | Approved |
+| 13 | `operations/DEPLOYMENT.md` | `DEP` | Docker Compose delivery, configuration, containers, storage dependencies, and cloud reference mapping | Approved |
+| 14 | `decisions/ADR_001_PI_AGENT_HARNESS.md` | `ADR-001` | Selection and hardening of the Pi Agent harness | Accepted |
+| 15 | `decisions/ADR_002_PDF_INSPECTOR.md` | `ADR-002` | Selection and integration boundary of PDF Inspector | Accepted |
+| 16 | `decisions/ADR_003_VLM_SELECTION.md` | `ADR-003` | Evidence-based selection of default and fallback VLMs | Proposed; pending evidence |
+| 17 | `decisions/ADR_004_RULE_ARCHITECTURE.md` | `ADR-004` | TypeScript rule plugins, registry, manifests, and deterministic mapping | Accepted |
 
 ## 5. Ownership Boundaries
 
@@ -367,6 +367,9 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.0.0 | 2026-09-05 | Approved | Completed and approved the owning specification set, accepted the Pi, PDF Inspector, and rule-architecture ADRs, retained VLM selection as evidence-gated, and superseded the migration source. |
+| 2.9.0 | 2026-09-05 | Approved | Approved Security and Observability and registered the minimal local Deployment specification for review. |
+| 2.8.0 | 2026-09-05 | Approved | Registered the minimal first-slice Observability and Failures specification for review. |
 | 2.7.0 | 2026-09-04 | Approved | Reduced the first V1 vertical slice to polling, case-level Agent activity, six initial golden cases, and staged infrastructure delivery. |
 | 2.6.0 | 2026-09-04 | Approved | Approved the focused V1 ML Pipeline and Evaluation specification and registered Security and Limitations for review. |
 | 2.5.0 | 2026-09-04 | Approved | Registered the focused V1 ML Pipeline and Evaluation specification for review. |

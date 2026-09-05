@@ -2,11 +2,11 @@
 
 Document ID: `DOC`
 
-Version: 1.0
+Version: 1.1.0
 
 Status: Approved
 
-Last updated: 2026-09-03
+Last updated: 2026-09-05
 
 ## 1. Purpose
 
@@ -192,7 +192,7 @@ flowchart LR
 
 `DOC-REQ-060` The routing decision must record reason codes, relevant measurements, policy version, and whether OCR was required, skipped, or failed.
 
-`DOC-REQ-061` The initial `OcrEngine` adapter must use the PP-OCRv6 integration available through PDF Inspector.
+`DOC-REQ-061` The initial `OcrEngine` adapter must target PP-OCRv6 behind a project-owned interface. PDF Inspector supplies page and region OCR-routing inputs; the implementation spike must verify the independent OCR runtime and integration contract rather than assume PDF Inspector fixes the OCR engine.
 
 `DOC-REQ-062` The `OcrEngine` interface must permit replacement by another local, private-cloud, or approved implementation without changing downstream domain contracts.
 
@@ -377,4 +377,5 @@ No unresolved document-processing boundary decision blocks review of this docume
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.1.0 | 2026-09-05 | Approved | Clarified that PDF Inspector owns inspection and OCR routing while PP-OCRv6 is an independently verified `OcrEngine` target. |
 | 1.0 | 2026-09-03 | Approved | Approved the intake, inspection, rendering, native extraction, OCR, classification, grouping, and local-table baseline. |

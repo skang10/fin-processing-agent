@@ -54,7 +54,7 @@ The system has no permission or interface to disburse funds, open accounts, appr
 1. Local processing is the default. PDF native extraction and selective OCR precede VLM use.
 2. [`firecrawl/pdf-inspector`](https://github.com/firecrawl/pdf-inspector) is the initial PDF classification, native extraction, layout, rendering, and selective OCR foundation.
 3. PDF processing runs in an isolated, resource-limited worker. The prototype implements basic file validation, not enterprise malware scanning or Content Disarm and Reconstruction (CDR).
-4. The initial OCR implementation is the PP-OCRv6 integration exposed by PDF Inspector, behind a replaceable `OcrEngine` interface.
+4. PDF Inspector supplies OCR-routing inputs. The initial independent `OcrEngine` target is PP-OCRv6 behind a replaceable interface, subject to an implementation spike and pinned runtime verification.
 5. External VLM use is allowed for the prototype. A provider-neutral gateway must allow later private-cloud or local deployment.
 6. A VLM receives only selected pages, bounded consecutive-page windows, or cropped regions. It never receives an entire case package.
 7. Models produce candidates, classifications, constrained matching opinions, or non-authoritative review briefs. They do not create validation rules, determine authoritative validation findings or dispositions, or select business decisions.
@@ -198,13 +198,13 @@ Each path must be reproducible with a fixed golden case and an offline fake-mode
 
 ## Specification Authority
 
-The current migration source is:
+The superseded migration source retained for history is:
 
 ```text
 Intelligent_Document_Processing_Agent_Specification.md
 ```
 
-It is source material only. As requirements move into the approved `specs/` set, the owning specification becomes authoritative. After migration, the source document must be marked `Superseded` and archived or retained with a prominent archival notice.
+It is archived source material only and is marked `Superseded`. The approved owning specifications in `specs/` are authoritative.
 
 `specs/INDEX.md` owns the specification map. Each normative requirement has one owning specification. Other documents reference the owner rather than duplicate normative text.
 
@@ -273,7 +273,7 @@ ADRs are created when their decisions are ready. The Pi, PDF Inspector, and rule
 
 For every requested specification:
 
-1. Read `AGENTS.md`, this handoff, `LIMITATIONS.md`, the migration source, and `specs/INDEX.md` if it exists.
+1. Read `AGENTS.md`, this handoff, `LIMITATIONS.md`, and `specs/INDEX.md`; consult the superseded migration source only for historical context not needed by an approved owner.
 2. Read only the specifications that directly affect the requested document.
 3. Identify conflicts, missing decisions, assumptions, and owning documents before writing.
 4. Create or update only the requested specification and required direct references.

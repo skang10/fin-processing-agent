@@ -4,7 +4,7 @@
 
 Version: 2.0
 
-Status: Reviewed migration source
+Status: Superseded
 
 Project type: Interview demonstration and production-shaped machine learning prototype
 
@@ -16,11 +16,13 @@ Supported input-document languages: German and English
 
 ## 1. Purpose
 
-This specification defines the reviewed baseline for Financial Document AI Agent. The system demonstrates how a reliable machine learning pipeline can inspect financial documents, extract evidence-linked claims, recover from difficult extraction cases with a bounded Agent, compare facts across documents, and route unresolved results to a human reviewer.
+> **Archived migration source:** This document was superseded on 2026-09-05 by the approved owning specifications indexed in [`specs/INDEX.md`](specs/INDEX.md). It is retained only for migration history and must not be used as an implementation baseline.
+
+This specification formerly defined the reviewed migration baseline for Financial Document AI Agent. The system demonstrates how a reliable machine learning pipeline can inspect financial documents, extract evidence-linked claims, recover from difficult extraction cases with a bounded Agent, compare facts across documents, and route unresolved results to a human reviewer.
 
 The initial release is not a production banking system. It must use synthetic or explicitly demo-safe data and must be presented with the limitations defined in [`LIMITATIONS.md`](LIMITATIONS.md).
 
-This file is a migration source. As requirements move into approved documents under `specs/`, the owning specification becomes authoritative. After migration is complete, this file must be marked `Superseded` and archived or retained with a prominent archival notice.
+This file is an archived migration source. Approved documents under `specs/` are authoritative.
 
 ## 2. Product Boundary
 
