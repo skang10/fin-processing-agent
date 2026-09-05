@@ -1,0 +1,12 @@
+{
+  "name": "@findoc/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": { "@findoc/core": "workspace:*", "pino": "10.3.1" },
+  "devDependencies": { "tsx": "4.23.13" }
+}

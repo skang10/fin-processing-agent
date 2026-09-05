@@ -50,9 +50,9 @@ Use the authority order defined by [`specs/INDEX.md`](specs/INDEX.md). In summar
 
 ## Current Development State
 
-The owning specification set and accepted Pi, PDF Inspector, and rule-architecture ADRs are complete; VLM selection remains evidence-gated. Vertical-slice implementation is permitted. The implementation monorepo and its commands do not yet exist; the immediate next implementation step is to create the approved repository skeleton.
+The project is in Stage Two implementation. The initial pnpm monorepo skeleton contains separate API, Worker, and Review Web entry points plus shared contract and core packages. PostgreSQL, pg-boss, MinIO, PDF Inspector, OCR, Pi, and live-model adapters are not wired yet; do not represent the skeleton as a complete vertical slice.
 
-Until that skeleton exists, agents must not invent package scripts, test commands, generated artifacts, directory paths, environment variables, or deployment instructions. After it exists, update this section with the authoritative commands.
+Add commands, configuration, generated artifacts, and deployment instructions only when their implementation exists and this guide is updated in the same change.
 
 ## Working Rules
 
@@ -142,16 +142,15 @@ Do not introduce Bun, Nx, Turborepo, Temporal, Kafka, Redis, Kubernetes, Terrafo
 
 ## Commands
 
-No implementation commands are defined yet. After the monorepo skeleton exists, this section must list the authoritative commands for:
+The currently authoritative commands are:
 
-1. Dependency installation.
-2. Formatting and linting.
-3. Type checking.
-4. Unit, contract, integration, and browser tests.
-5. Dataset generation and validation.
-6. Offline and live-model evaluation.
-7. Database migration.
-8. Docker Compose startup and teardown.
-9. Demo-data loading and reset.
+1. `pnpm install` — install the frozen workspace dependencies.
+2. `pnpm typecheck` — run TypeScript project-reference checks.
+3. `pnpm test` — run the implemented unit and API contract tests.
+4. `pnpm check` — run type checking followed by tests.
+5. `pnpm dev:api` — run the API skeleton locally.
+6. `pnpm dev:worker` — run the Worker skeleton locally.
+7. `pnpm dev:web` — run the approved Review Workbench prototype through Vite.
+8. `pnpm build` — compile the TypeScript project references.
 
-Until then, inspect the repository rather than guessing a command.
+Formatting, linting, integration/browser testing, dataset, evaluation, database migration, Docker Compose, demo loading, and reset commands are not implemented yet. Inspect the repository rather than guessing them.

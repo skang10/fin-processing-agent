@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "outDir": "dist-config",
+    "rootDir": "."
+  },
+  "include": ["vite.config.ts"]
+}
