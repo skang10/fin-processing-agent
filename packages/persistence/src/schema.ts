@@ -201,6 +201,50 @@ export const reviewIssues = pgTable("review_issues", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("review_issue_run_code_uq").on(table.runId, table.code)]);
 
+export const reviewIssueActions = pgTable("review_issue_actions", {
+  id: uuid("id").primaryKey(),
+  issueId: uuid("issue_id").notNull().references(() => reviewIssues.id),
+  resultRevisionId: uuid("result_revision_id").notNull().references(() => resultRevisions.id),
+  action: text("action").notNull(),
+  reason: text("reason"),
+  actorId: text("actor_id").notNull(),
+  commandId: text("command_id").notNull(),
+  resultingVersion: integer("resulting_version").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("review_issue_action_command_uq").on(table.actorId, table.commandId)]);
+
+export const requestedChangeRevisions = pgTable("requested_change_revisions", {
+  id: uuid("id").primaryKey(),
+  issueId: uuid("issue_id").notNull().references(() => reviewIssues.id),
+  resultRevisionId: uuid("result_revision_id").notNull().references(() => resultRevisions.id),
+  revision: integer("revision").notNull(),
+  agentProposedText: text("agent_proposed_text"),
+  currentText: text("current_text").notNull(),
+  included: boolean("included").notNull(),
+  actorId: text("actor_id").notNull(),
+  commandId: text("command_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("requested_change_issue_revision_uq").on(table.issueId, table.revision),
+  uniqueIndex("requested_change_command_uq").on(table.actorId, table.commandId),
+]);
+
+export const finalReviews = pgTable("final_reviews", {
+  id: uuid("id").primaryKey(),
+  caseId: uuid("case_id").notNull().references(() => cases.id),
+  resultRevisionId: uuid("result_revision_id").notNull().references(() => resultRevisions.id),
+  action: text("action").notNull(),
+  selectedDraftRevisionIds: jsonb("selected_draft_revision_ids").notNull(),
+  internalNote: text("internal_note"),
+  actorId: text("actor_id").notNull(),
+  commandId: text("command_id").notNull(),
+  resultingCaseVersion: integer("resulting_case_version").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("final_review_case_uq").on(table.caseId),
+  uniqueIndex("final_review_command_uq").on(table.actorId, table.commandId),
+]);
+
 export const agentReports = pgTable("agent_reports", {
   id: uuid("id").primaryKey(),
   caseId: uuid("case_id").notNull().references(() => cases.id),

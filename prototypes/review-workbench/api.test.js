@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadCaseBundle } from './api.js';
+import { loadCaseBundle, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
 
 describe('loadCaseBundle', () => {
   it('loads every separately addressable review projection', async () => {
@@ -42,5 +42,24 @@ describe('loadCaseBundle', () => {
   it('does not render a partial bundle as authoritative', async () => {
     const fetcher = vi.fn(async (url) => ({ ok: !String(url).endsWith('/findings'), json: async () => ({}) }));
     await expect(loadCaseBundle('case-1', fetcher)).rejects.toThrow('Case data could not be loaded');
+  });
+});
+
+describe('review commands', () => {
+  it('sends issue, draft, and final-review mutations as JSON', async () => {
+    const fetcher = vi.fn(async () => ({ ok: true, json: async () => ({ version: 2 }) }));
+    await resolveIssue('case-1', 'issue-1', 'confirm', { command_id: 'one' }, fetcher);
+    await saveRequestedChange('case-1', 'issue-1', { command_id: 'two', text: 'Update it', included: true }, fetcher);
+    await submitFinalReview('case-1', { command_id: 'three', action: 'request_changes' }, fetcher);
+    expect(fetcher.mock.calls.map((call) => [call[0], call[1].method])).toEqual([
+      ['/api/v1/cases/case-1/issues/issue-1/confirm', 'POST'],
+      ['/api/v1/cases/case-1/issues/issue-1/requested-change', 'PUT'],
+      ['/api/v1/cases/case-1/final-review', 'POST'],
+    ]);
+  });
+
+  it('surfaces safe command errors', async () => {
+    const fetcher = vi.fn(async () => ({ ok: false, json: async () => ({ detail: 'Review state changed' }) }));
+    await expect(submitFinalReview('case-1', {}, fetcher)).rejects.toThrow('Review state changed');
   });
 });

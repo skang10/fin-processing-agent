@@ -102,6 +102,32 @@ export interface CaseCommandService {
   accept(command: CaseIntakeCommand): Promise<AcceptedCase>;
 }
 
+export interface ReviewCommandContext {
+  readonly caseId: CaseId;
+  readonly resultRevisionId: string;
+  readonly commandId: string;
+}
+
+export interface ReviewCommandService {
+  resolveIssue(command: ReviewCommandContext & {
+    readonly issueId: string;
+    readonly expectedIssueVersion: number;
+    readonly action: "accept_signal" | "dismiss_signal";
+    readonly reason?: string;
+  }): Promise<{ readonly issueVersion: number; readonly reviewState: "confirmed" | "ignored" }>;
+  saveRequestedChange(command: ReviewCommandContext & {
+    readonly issueId: string;
+    readonly text: string;
+    readonly included: boolean;
+  }): Promise<{ readonly draftRevisionId: string; readonly revision: number }>;
+  submitFinalReview(command: ReviewCommandContext & {
+    readonly expectedCaseVersion: number;
+    readonly action: "request_changes" | "escalate_review" | "clear_for_downstream";
+    readonly selectedDraftRevisionIds: readonly string[];
+    readonly internalNote?: string;
+  }): Promise<{ readonly finalReviewId: string; readonly caseVersion: number; readonly action: "request_changes" | "escalate_review" | "clear_for_downstream" }>;
+}
+
 export interface CaseStatus {
   readonly caseId: CaseId;
   readonly applicantDisplayName: string;
@@ -109,6 +135,7 @@ export interface CaseStatus {
   readonly progress: "submitted" | "extracted" | "agent_checked" | "human_review" | "outcome";
   readonly resultAvailability: "pending" | "ready" | "unavailable";
   readonly version: number;
+  readonly finalReviewAction?: "request_changes" | "escalate_review" | "clear_for_downstream";
 }
 
 export interface CaseQueryService {
@@ -179,6 +206,7 @@ export interface ReviewIssueView {
   readonly recommendedAction: string;
   readonly reviewState: "pending" | "confirmed" | "ignored";
   readonly version: number;
+  readonly requestedChange?: { readonly draftRevisionId: string; readonly revision: number; readonly text: string; readonly included: boolean };
 }
 
 export interface FindingView {
@@ -211,6 +239,13 @@ export class IdempotencyConflictError extends Error {
   constructor() {
     super("The idempotency key was already used with different input");
     this.name = "IdempotencyConflictError";
+  }
+}
+
+export class ReviewConflictError extends Error {
+  constructor(readonly code: "stale_review" | "review_incomplete" | "invalid_review_action", message: string) {
+    super(message);
+    this.name = "ReviewConflictError";
   }
 }
 

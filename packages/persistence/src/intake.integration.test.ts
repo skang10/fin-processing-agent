@@ -37,6 +37,7 @@ import {
 describe("PostgresCaseCommandService", () => {
   let container: Awaited<ReturnType<PostgreSqlContainer["start"]>>;
   let connection: ReturnType<typeof createDatabase>;
+  let reviewFixture: { caseId: string; resultRevisionId: string; issueId: string };
 
   beforeAll(async () => {
     container = await new PostgreSqlContainer("postgres:16.4-alpine").start();
@@ -198,6 +199,56 @@ describe("PostgresCaseCommandService", () => {
     const [runTransitionCount] = await connection.db.select({ value: count() }).from(processingRunTransitions)
       .where(eq(processingRunTransitions.runId, accepted.runId));
     expect(runTransitionCount?.value).toBe(3);
+    const [persistedIssue] = await connection.db.select({ id: reviewIssues.id }).from(reviewIssues)
+      .where(eq(reviewIssues.caseId, accepted.caseId)).limit(1);
+    if (!persistedIssue) throw new Error("Expected review issue fixture");
+    reviewFixture = { caseId: accepted.caseId, resultRevisionId, issueId: persistedIssue.id };
+  });
+
+  it("persists issue resolution, requested-change revisions, and final review atomically", async () => {
+    const service = new PostgresCaseCommandService(connection.db, "reviewer_1");
+    await expect(service.submitFinalReview({
+      caseId: reviewFixture.caseId, resultRevisionId: reviewFixture.resultRevisionId,
+      commandId: "incomplete_final", expectedCaseVersion: 2, action: "request_changes",
+      selectedDraftRevisionIds: [],
+    })).rejects.toMatchObject({ code: "review_incomplete" });
+    const resolved = await service.resolveIssue({
+      ...reviewFixture, expectedIssueVersion: 1, action: "accept_signal", commandId: "confirm_1",
+    });
+    expect(resolved).toEqual({ issueVersion: 2, reviewState: "confirmed" });
+    await expect(service.resolveIssue({
+      ...reviewFixture, expectedIssueVersion: 1, action: "accept_signal", commandId: "confirm_1",
+    })).resolves.toEqual(resolved);
+    const firstDraft = await service.saveRequestedChange({
+      ...reviewFixture, text: "Please provide a current employer document.", included: false, commandId: "draft_1",
+    });
+    expect(firstDraft.revision).toBe(1);
+    await expect(service.submitFinalReview({
+      caseId: reviewFixture.caseId, resultRevisionId: reviewFixture.resultRevisionId,
+      commandId: "excluded_final", expectedCaseVersion: 2, action: "request_changes",
+      selectedDraftRevisionIds: [firstDraft.draftRevisionId],
+    })).rejects.toMatchObject({ code: "invalid_review_action" });
+    const selectedDraft = await service.saveRequestedChange({
+      ...reviewFixture, text: "Please provide a current employer document.", included: true, commandId: "draft_2",
+    });
+    const final = await service.submitFinalReview({
+      caseId: reviewFixture.caseId, resultRevisionId: reviewFixture.resultRevisionId,
+      commandId: "final_1", expectedCaseVersion: 2, action: "request_changes",
+      selectedDraftRevisionIds: [selectedDraft.draftRevisionId], internalNote: "Reviewed synthetic fixture.",
+    });
+    expect(final).toMatchObject({ action: "request_changes", caseVersion: 3 });
+    await expect(service.submitFinalReview({
+      caseId: reviewFixture.caseId, resultRevisionId: reviewFixture.resultRevisionId,
+      commandId: "final_1", expectedCaseVersion: 2, action: "request_changes",
+      selectedDraftRevisionIds: [selectedDraft.draftRevisionId],
+    })).resolves.toEqual(final);
+    await expect(new PostgresCaseQueryService(connection.db).get(reviewFixture.caseId)).resolves.toMatchObject({
+      lifecycle: "review_complete", finalReviewAction: "request_changes", version: 3,
+    });
+    await expect(new PostgresCaseQueryService(connection.db).getIssues(reviewFixture.caseId)).resolves.toMatchObject([{
+      reviewState: "confirmed", version: 2,
+      requestedChange: { draftRevisionId: selectedDraft.draftRevisionId, revision: 2, included: true },
+    }]);
   });
 
   it("routes an unprocessable run to one durable processing exception", async () => {

@@ -1,4 +1,4 @@
-import { loadCaseBundle } from './api.js';
+import { loadCaseBundle, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
 
 let cases = [
   { name: 'Anna Beispiel', id: 'FD-2026-0042', summary: 'Employer information differs', status: 'ready', statusLabel: 'Ready for review', issues: 3, waiting: '18 min' },
@@ -46,6 +46,7 @@ let current = 0;
 let editing = false;
 let creatingIssue = false;
 let confirming = false;
+let ignoring = false;
 let zoom = 92;
 let sourceView = 'document';
 let sourceOverride = null;
@@ -54,6 +55,8 @@ let decisions = ['pending', 'pending', 'pending'];
 let apiApplicationData = null;
 let apiDocuments = [];
 let apiEvidenceByReference = {};
+let apiCaseRecord = null;
+let apiReport = null;
 let activeApplicationPointer = null;
 const reviewNotes = {};
 const includedRequests = {};
@@ -111,7 +114,7 @@ function render() {
   document.querySelector('[data-case-tab="issues"] span').textContent = String(issues.length);
   document.querySelector('#previous').disabled = current === 0;
   document.querySelector('#next').disabled = current === issues.length - 1;
-  document.querySelector('#issue-content').innerHTML = editing ? correctionForm(issue) : confirming ? confirmationForm(issue) : issueDetail(issue);
+  document.querySelector('#issue-content').innerHTML = editing ? correctionForm(issue) : confirming ? confirmationForm(issue) : ignoring ? ignoreForm() : issueDetail(issue);
   renderSource(issue);
   renderIssueList();
   renderThumbnails(issue.pageNumber);
@@ -162,6 +165,7 @@ function renderIssueList() {
       current = Number(button.dataset.index);
       editing = false;
       confirming = false;
+      ignoring = false;
       render();
     });
   });
@@ -221,6 +225,14 @@ function correctionForm(issue) {
     '<div class="form-actions"><button type="button" class="button quiet" id="cancel-bottom">Cancel</button><button class="button primary">Save issue</button></div></form>';
 }
 
+function ignoreForm() {
+  return '<div class="issue-heading"><button class="inline-back" id="cancel-ignore">← Back to issue</button>' +
+    '<div class="issue-kicker"><span class="finding-tone neutral">Ignore issue</span></div></div>' +
+    '<form id="ignore-form" class="correct-form"><label>Reason<textarea rows="4" required placeholder="Explain why this issue does not require action"></textarea></label>' +
+    '<div class="revision-note"><strong>Internal review record</strong><span>This reason is not included in the applicant message.</span></div>' +
+    '<div class="form-actions"><button type="button" class="button quiet" id="cancel-ignore-bottom">Cancel</button><button class="button primary">Save and ignore</button></div></form>';
+}
+
 function documentPaper(kind) {
   if (kind === 'identity') return '<div class="synthetic">SYNTHETIC DEMO</div><div class="doc-title"><span class="doc-logo">ID</span><div><strong>Identity document</strong><small>Demo document</small></div></div><div class="application-fields"><div><span>Name</span><strong>Anna Beispiel</strong></div><div class="application-focus"><span>Expiry date</span><strong>14 May 2031</strong></div></div>';
   if (kind === 'bank') return '<div class="synthetic">SYNTHETIC DEMO</div><div class="doc-title"><span class="doc-logo">NB</span><div><strong>Nordblick Demo Bank</strong><small>Kontoauszug, August 2026</small></div></div>' +
@@ -241,9 +253,9 @@ function wireIssueActions() {
   const confirm = document.querySelector('#confirm');
   const dismiss = document.querySelector('#dismiss');
   const change = document.querySelector('#change-outcome');
-  if (confirm) confirm.addEventListener('click', function () { confirming = true; render(); });
-  if (dismiss) dismiss.addEventListener('click', function () { decide('dismissed'); });
-  if (change) change.addEventListener('click', function () { decisions[current] = 'pending'; editing = false; confirming = false; render(); });
+  if (confirm) confirm.addEventListener('click', function () { confirming = true; ignoring = false; render(); });
+  if (dismiss) dismiss.addEventListener('click', function () { ignoring = true; confirming = false; render(); });
+  if (change) change.addEventListener('click', function () { toast('Saved review decisions cannot be undone; edit the issue or refresh its authoritative state.'); });
   ['#cancel', '#cancel-bottom'].forEach(function (selector) {
     const button = document.querySelector(selector);
     if (button) button.addEventListener('click', function () {
@@ -261,12 +273,19 @@ function wireIssueActions() {
     const button = document.querySelector(selector);
     if (button) button.addEventListener('click', function () { confirming = false; render(); });
   });
-  const confirmationFormElement = document.querySelector('#confirmation-form');
-  if (confirmationFormElement) confirmationFormElement.addEventListener('submit', function (event) {
+  ['#cancel-ignore', '#cancel-ignore-bottom'].forEach(function (selector) {
+    const button = document.querySelector(selector);
+    if (button) button.addEventListener('click', function () { ignoring = false; render(); });
+  });
+  const ignoreFormElement = document.querySelector('#ignore-form');
+  if (ignoreFormElement) ignoreFormElement.addEventListener('submit', async function (event) {
     event.preventDefault();
-    reviewNotes[current] = event.currentTarget.querySelector('textarea').value.trim();
-    includedRequests[current] = true;
-    decide('confirmed');
+    await persistDecision('dismissed', event.currentTarget.querySelector('textarea').value.trim());
+  });
+  const confirmationFormElement = document.querySelector('#confirmation-form');
+  if (confirmationFormElement) confirmationFormElement.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    await persistDecision('confirmed', event.currentTarget.querySelector('textarea').value.trim());
   });
   const form = document.querySelector('#inline-form');
   if (form) form.addEventListener('submit', function (event) {
@@ -347,6 +366,37 @@ function decide(kind) {
   }
 }
 
+async function persistDecision(kind, noteOrReason) {
+  const issue = issues[current];
+  if (!apiCaseRecord || !apiReport?.result_revision || !issue.issueId) {
+    if (kind === 'confirmed') { reviewNotes[current] = noteOrReason; includedRequests[current] = false; }
+    decide(kind);
+    return;
+  }
+  try {
+    const result = await resolveIssue(apiCaseRecord.case_id, issue.issueId, kind === 'confirmed' ? 'confirm' : 'ignore', {
+      result_revision_id: apiReport.result_revision.id,
+      command_id: crypto.randomUUID(),
+      expected_issue_version: issue.version,
+      ...(kind === 'dismissed' ? { reason: noteOrReason } : {}),
+    });
+    issue.version = result.version;
+    if (kind === 'confirmed') {
+      const draft = await saveRequestedChange(apiCaseRecord.case_id, issue.issueId, {
+        result_revision_id: apiReport.result_revision.id,
+        command_id: crypto.randomUUID(), text: noteOrReason, included: false,
+      });
+      issue.requestedChange = { draft_revision_id: draft.draft_revision_id, revision: draft.revision, text: noteOrReason, included: false };
+      reviewNotes[current] = noteOrReason;
+      includedRequests[current] = false;
+    }
+    ignoring = false;
+    decide(kind);
+  } catch (error) {
+    toast(error instanceof Error ? error.message : 'Review decision could not be saved');
+  }
+}
+
 function outcomeLabel(value) { return value === 'pending' ? 'Pending' : value === 'dismissed' ? 'Ignored' : value === 'edited' ? 'Edited & confirmed' : 'Confirmed'; }
 
 function renderSummary() {
@@ -367,11 +417,27 @@ function renderSummary() {
     });
   });
   document.querySelectorAll('[data-request-include]').forEach(function (checkbox) {
-    checkbox.addEventListener('change', function () {
+    checkbox.addEventListener('change', async function () {
       const index = Number(checkbox.dataset.requestInclude);
       includedRequests[index] = checkbox.checked;
       checkbox.closest('.summary-issue-row').classList.toggle('excluded', !checkbox.checked);
       updateApplicantPreview();
+      const issue = issues[index];
+      if (apiCaseRecord && apiReport?.result_revision && issue.issueId && reviewNotes[index]) {
+        try {
+          const draft = await saveRequestedChange(apiCaseRecord.case_id, issue.issueId, {
+            result_revision_id: apiReport.result_revision.id, command_id: crypto.randomUUID(),
+            text: reviewNotes[index], included: checkbox.checked,
+          });
+          issue.requestedChange = { draft_revision_id: draft.draft_revision_id, revision: draft.revision, text: reviewNotes[index], included: checkbox.checked };
+        } catch (error) {
+          includedRequests[index] = !checkbox.checked;
+          checkbox.checked = !checkbox.checked;
+          checkbox.closest('.summary-issue-row').classList.toggle('excluded', !checkbox.checked);
+          updateApplicantPreview();
+          toast(error instanceof Error ? error.message : 'Requested change could not be saved');
+        }
+      }
     });
   });
   updateApplicantPreview();
@@ -512,7 +578,7 @@ document.querySelectorAll('[data-case-tab]').forEach(function (button) {
   button.addEventListener('click', function () { activateCaseTab(button.dataset.caseTab); });
 });
 document.querySelectorAll('.case-action').forEach(function (button) {
-  button.addEventListener('click', function () {
+  button.addEventListener('click', async function () {
     const hasApplicantRequest = hasIncludedApplicantRequest();
     if (button.dataset.caseAction === 'changes' && !hasApplicantRequest) {
       toast('Include at least one request before requesting changes');
@@ -522,20 +588,45 @@ document.querySelectorAll('.case-action').forEach(function (button) {
       toast('Exclude applicant requests before completing the review');
       return;
     }
+    if (apiCaseRecord && apiReport?.result_revision) {
+      try {
+        const action = button.dataset.caseAction === 'clear' ? 'clear_for_downstream' : button.dataset.caseAction === 'changes' ? 'request_changes' : 'escalate_review';
+        const selectedDraftRevisionIds = issues.map(function (issue, index) {
+          return includedRequests[index] !== false ? issue.requestedChange?.draft_revision_id : null;
+        }).filter(Boolean);
+        const result = await submitFinalReview(apiCaseRecord.case_id, {
+          result_revision_id: apiReport.result_revision.id, command_id: crypto.randomUUID(),
+          expected_case_version: apiCaseRecord.version, action,
+          selected_draft_revision_ids: selectedDraftRevisionIds,
+          ...(internalReviewNote.trim() ? { internal_note: internalReviewNote.trim() } : {}),
+        });
+        apiCaseRecord.version = result.case_version;
+        apiCaseRecord.lifecycle = 'review_complete';
+        apiCaseRecord.final_review_action = result.action;
+      } catch (error) {
+        toast(error instanceof Error ? error.message : 'Final review could not be saved');
+        return;
+      }
+    }
     document.querySelectorAll('.case-action').forEach(function (item) { item.disabled = true; });
     button.textContent = button.dataset.caseAction === 'clear' ? 'Document review completed' : button.dataset.caseAction === 'changes' ? 'Changes requested' : 'Review escalated';
-    const humanStep = document.querySelector('.progress-step.active');
-    humanStep.classList.remove('active');
-    humanStep.classList.add('complete');
-    humanStep.querySelector('i').textContent = '✓';
-    const outcomeStep = document.querySelector('#outcome-step');
-    const outcome = button.dataset.caseAction;
-    outcomeStep.className = 'progress-step ' + (outcome === 'clear' ? 'outcome-complete' : outcome === 'changes' ? 'outcome-change' : 'outcome-escalate');
-    outcomeStep.querySelector('i').textContent = '✓';
-    outcomeStep.querySelector('span').textContent = outcome === 'clear' ? 'Completed' : outcome === 'changes' ? 'Changes requested' : 'Review escalated';
+    applyFinalOutcome(button.dataset.caseAction === 'clear' ? 'clear_for_downstream' : button.dataset.caseAction === 'changes' ? 'request_changes' : 'escalate_review');
     toast(button.textContent);
   });
 });
+
+function applyFinalOutcome(action) {
+    const humanStep = document.querySelector('.progress-step.active');
+    if (humanStep) {
+      humanStep.classList.remove('active');
+      humanStep.classList.add('complete');
+      humanStep.querySelector('i').textContent = '✓';
+    }
+    const outcomeStep = document.querySelector('#outcome-step');
+    outcomeStep.className = 'progress-step ' + (action === 'clear_for_downstream' ? 'outcome-complete' : action === 'request_changes' ? 'outcome-change' : 'outcome-escalate');
+    outcomeStep.querySelector('i').textContent = '✓';
+    outcomeStep.querySelector('span').textContent = action === 'clear_for_downstream' ? 'Completed' : action === 'request_changes' ? 'Changes requested' : 'Review escalated';
+}
 
 function toast(message) {
   const element = document.querySelector('#toast');
@@ -553,6 +644,7 @@ function issuePresentation(record, finding, index) {
   }[record.code] || { title: 'Review issue ' + (index + 1), type: 'Agent finding', tone: 'warning', paper: 'boundary', pageNumber: 1 };
   const references = finding ? finding.references : [];
   return {
+    issueId: record.issue_id, version: record.version, requestedChange: record.requested_change,
     code: record.code, type: presentation.type, tone: presentation.tone, title: presentation.title,
     why: record.description, recommendation: record.recommended_action,
     doc: apiDocuments[0] ? apiDocuments[0].submitted_filename : 'Submitted document',
@@ -618,22 +710,32 @@ async function loadCaseFromApi() {
     const bundle = await loadCaseBundle(caseId);
     const caseRecord = bundle.caseRecord;
     const report = bundle.report;
+    apiCaseRecord = caseRecord;
+    apiReport = report;
     const findings = bundle.findings;
     const issueRecords = bundle.issues;
     apiApplicationData = bundle.applicationData;
     apiDocuments = bundle.documents;
     apiEvidenceByReference = bundle.evidenceByReference;
+    const completedAction = caseRecord.final_review_action;
+    const queueStatus = completedAction === 'request_changes' ? 'changes' : completedAction === 'escalate_review' ? 'escalated' : completedAction === 'clear_for_downstream' ? 'completed' : caseRecord.lifecycle === 'ready_for_review' ? 'ready' : 'in-progress';
+    const queueStatusLabel = completedAction === 'request_changes' ? 'Changes requested' : completedAction === 'escalate_review' ? 'Escalated' : completedAction === 'clear_for_downstream' ? 'Ready for handoff' : caseRecord.lifecycle === 'ready_for_review' ? 'Ready for review' : 'In progress';
     cases = [{
       name: caseRecord.applicant_display_name, id: caseRecord.case_id,
       summary: report.summary || 'Agent report unavailable',
-      status: caseRecord.lifecycle === 'ready_for_review' ? 'ready' : 'in-progress',
-      statusLabel: caseRecord.lifecycle === 'ready_for_review' ? 'Ready for review' : 'In progress',
+      status: queueStatus,
+      statusLabel: queueStatusLabel,
       issues: issueRecords.length, waiting: 'Now',
     }];
     issues = issueRecords.map(function (record, index) {
       return issuePresentation(record, findings.find(function (finding) { return finding.rule_id === record.code; }), index);
     });
     decisions = issueRecords.map(function (record) { return record.review_state === 'pending' ? 'pending' : record.review_state === 'ignored' ? 'dismissed' : 'confirmed'; });
+    issueRecords.forEach(function (record, index) {
+      if (!record.requested_change) return;
+      reviewNotes[index] = record.requested_change.text;
+      includedRequests[index] = record.requested_change.included;
+    });
     current = 0;
     document.querySelectorAll('.case-id').forEach(function (element) { element.textContent = caseRecord.case_id; });
     document.querySelectorAll('.case-identity strong').forEach(function (element) { element.textContent = caseRecord.applicant_display_name; });
@@ -642,6 +744,7 @@ async function loadCaseFromApi() {
     renderApiReport(report);
     renderCases();
     if (issues.length) render();
+    if (caseRecord.final_review_action) applyFinalOutcome(caseRecord.final_review_action);
   } catch (error) {
     toast(error instanceof Error ? error.message : 'Case data could not be loaded');
   }

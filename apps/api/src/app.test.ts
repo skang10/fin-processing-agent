@@ -175,6 +175,36 @@ describe("case intake", () => {
     await app.close();
   });
 
+  it("persists issue review, requested-change draft, and final request-changes command", async () => {
+    const reviewCommands = {
+      resolveIssue: vi.fn(async () => ({ issueVersion: 2, reviewState: "confirmed" as const })),
+      saveRequestedChange: vi.fn(async () => ({ draftRevisionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383994", revision: 1 })),
+      submitFinalReview: vi.fn(async () => ({
+        finalReviewId: "4c816f67-5f2f-4e21-8c17-7eb1e5383993", caseVersion: 3, action: "request_changes" as const,
+      })),
+    };
+    const app = buildApp({ accept: vi.fn() }, caseQueries, undefined, reviewCommands);
+    const base = "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd";
+    const issueId = "4c816f67-5f2f-4e21-8c17-7eb1e53838be";
+    const resultRevisionId = "4c816f67-5f2f-4e21-8c17-7eb1e5383995";
+    const confirmed = await app.inject({ method: "POST", url: `${base}/issues/${issueId}/confirm`, payload: {
+      result_revision_id: resultRevisionId, command_id: "confirm_1", expected_issue_version: 1,
+    } });
+    expect(confirmed.statusCode).toBe(200);
+    const draft = await app.inject({ method: "PUT", url: `${base}/issues/${issueId}/requested-change`, payload: {
+      result_revision_id: resultRevisionId, command_id: "draft_1", text: "Please provide a current document.", included: true,
+    } });
+    expect(draft.statusCode).toBe(200);
+    const final = await app.inject({ method: "POST", url: `${base}/final-review`, payload: {
+      result_revision_id: resultRevisionId, command_id: "final_1", expected_case_version: 2,
+      action: "request_changes", selected_draft_revision_ids: [draft.json().draft_revision_id],
+    } });
+    expect(final.statusCode).toBe(200);
+    expect(final.json()).toMatchObject({ action: "request_changes", case_version: 3 });
+    expect(reviewCommands.submitFinalReview).toHaveBeenCalledWith(expect.objectContaining({ action: "request_changes" }));
+    await app.close();
+  });
+
   it("streams multipart documents through source intake before accepting the case", async () => {
     const accept = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", replayed: false }));
     let uploaded = Buffer.alloc(0);

@@ -11,10 +11,16 @@ import {
   ApplicationDataProjectionSchema,
   DocumentPageProjectionSchema,
   DocumentsProjectionSchema,
+  FinalReviewCommandSchema,
+  FinalReviewResultSchema,
   ProblemDetailsSchema,
+  RequestedChangeCommandSchema,
+  RequestedChangeResultSchema,
+  ResolveIssueCommandSchema,
+  ResolveIssueResultSchema,
   ReviewIssuesSchema,
 } from "@findoc/contracts";
-import { CaseNotFoundError, IdempotencyConflictError, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService, type IntakeDocument, type SourceArtifactIntake } from "@findoc/core";
+import { CaseNotFoundError, IdempotencyConflictError, ReviewConflictError, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService, type IntakeDocument, type ReviewCommandService, type SourceArtifactIntake } from "@findoc/core";
 import { DocumentSizeLimitError, EmptyDocumentError, UnsupportedDocumentMediaError } from "@findoc/storage";
 
 class IntakeRequestError extends Error {}
@@ -23,6 +29,7 @@ export function buildApp(
   caseCommands: CaseCommandService,
   caseQueries: CaseQueryService & CaseReviewQueryService,
   sourceIntake?: SourceArtifactIntake,
+  reviewCommands?: ReviewCommandService,
 ) {
   const app = Fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
   void app.register(multipart, { limits: { files: 10, fields: 10 } });
@@ -50,6 +57,14 @@ export function buildApp(
         status: 404,
         code: "not_found",
         request_id: request.id,
+      });
+    }
+    if (error instanceof ReviewConflictError) {
+      const status = error.code === "invalid_review_action" ? 400 : 409;
+      return reply.code(status).type("application/problem+json").send({
+        type: `https://example.invalid/problems/${error.code}`,
+        title: error.code === "review_incomplete" ? "Review is incomplete" : error.code === "stale_review" ? "Review state changed" : "Invalid review action",
+        status, code: error.code, request_id: request.id, detail: error.message,
       });
     }
     if (error instanceof UnsupportedDocumentMediaError || error instanceof EmptyDocumentError) {
@@ -121,6 +136,7 @@ export function buildApp(
       progress: record.progress,
       result_availability: record.resultAvailability,
       version: record.version,
+      ...(record.finalReviewAction ? { final_review_action: record.finalReviewAction } : {}),
       links: {
         agent_report: `${base}/agent-report`,
         application_data: `${base}/application-data`,
@@ -239,7 +255,60 @@ export function buildApp(
       issue_id: issue.issueId, origin: issue.origin, code: issue.code,
       description: issue.description, recommended_action: issue.recommendedAction,
       review_state: issue.reviewState, version: issue.version,
+      ...(issue.requestedChange ? { requested_change: {
+        draft_revision_id: issue.requestedChange.draftRevisionId, revision: issue.requestedChange.revision,
+        text: issue.requestedChange.text, included: issue.requestedChange.included,
+      } } : {}),
     })) };
+  });
+
+  for (const action of ["confirm", "ignore"] as const) {
+    app.post(`/api/v1/cases/:case_id/issues/:issue_id/${action}`, {
+      schema: { body: ResolveIssueCommandSchema, response: { 200: ResolveIssueResultSchema, 400: ProblemDetailsSchema, 404: ProblemDetailsSchema, 409: ProblemDetailsSchema } },
+    }, async (request) => {
+      if (!reviewCommands) throw new Error("Review commands are not configured");
+      const { case_id: caseId, issue_id: issueId } = request.params as { case_id: string; issue_id: string };
+      const body = request.body as { result_revision_id: string; command_id: string; expected_issue_version: number; reason?: string };
+      const result = await reviewCommands.resolveIssue({
+        caseId, issueId, resultRevisionId: body.result_revision_id, commandId: body.command_id,
+        expectedIssueVersion: body.expected_issue_version,
+        action: action === "confirm" ? "accept_signal" : "dismiss_signal",
+        ...(body.reason ? { reason: body.reason } : {}),
+      });
+      return { issue_id: issueId, review_state: result.reviewState, version: result.issueVersion };
+    });
+  }
+
+  app.put("/api/v1/cases/:case_id/issues/:issue_id/requested-change", {
+    schema: { body: RequestedChangeCommandSchema, response: { 200: RequestedChangeResultSchema, 400: ProblemDetailsSchema, 404: ProblemDetailsSchema, 409: ProblemDetailsSchema } },
+  }, async (request) => {
+    if (!reviewCommands) throw new Error("Review commands are not configured");
+    const { case_id: caseId, issue_id: issueId } = request.params as { case_id: string; issue_id: string };
+    const body = request.body as { result_revision_id: string; command_id: string; text: string; included: boolean };
+    const result = await reviewCommands.saveRequestedChange({
+      caseId, issueId, resultRevisionId: body.result_revision_id, commandId: body.command_id,
+      text: body.text, included: body.included,
+    });
+    return { draft_revision_id: result.draftRevisionId, revision: result.revision };
+  });
+
+  app.post("/api/v1/cases/:case_id/final-review", {
+    schema: { body: FinalReviewCommandSchema, response: { 200: FinalReviewResultSchema, 400: ProblemDetailsSchema, 404: ProblemDetailsSchema, 409: ProblemDetailsSchema } },
+  }, async (request) => {
+    if (!reviewCommands) throw new Error("Review commands are not configured");
+    const { case_id: caseId } = request.params as { case_id: string };
+    const body = request.body as {
+      result_revision_id: string; command_id: string; expected_case_version: number;
+      action: "request_changes" | "escalate_review" | "clear_for_downstream";
+      selected_draft_revision_ids: string[]; internal_note?: string;
+    };
+    const result = await reviewCommands.submitFinalReview({
+      caseId, resultRevisionId: body.result_revision_id, commandId: body.command_id,
+      expectedCaseVersion: body.expected_case_version, action: body.action,
+      selectedDraftRevisionIds: body.selected_draft_revision_ids,
+      ...(body.internal_note ? { internalNote: body.internal_note } : {}),
+    });
+    return { final_review_id: result.finalReviewId, action: result.action, case_version: result.caseVersion };
   });
 
   app.post(

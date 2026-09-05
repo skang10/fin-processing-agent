@@ -1,19 +1,24 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, IdempotencyConflictError, type AcceptedCase, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type EvidenceView, type FindingView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type ReviewIssueView } from "@findoc/core";
-import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, resultRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
+import { CaseNotFoundError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type EvidenceView, type FindingView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type ReviewCommandService, type ReviewIssueView } from "@findoc/core";
+import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
+
+function asFinalAction(value: string): "request_changes" | "escalate_review" | "clear_for_downstream" {
+  if (value === "request_changes" || value === "escalate_review" || value === "clear_for_downstream") return value;
+  throw new Error("Persisted final-review action is invalid");
+}
 
 export function createDatabase(databaseUrl: string) {
   const client = postgres(databaseUrl, { max: 10 });
   return { client, db: drizzle(client) };
 }
 
-export class PostgresCaseCommandService implements CaseCommandService {
+export class PostgresCaseCommandService implements CaseCommandService, ReviewCommandService {
   constructor(
     private readonly db: ReturnType<typeof drizzle>,
     private readonly actorId: string,
@@ -116,6 +121,119 @@ export class PostgresCaseCommandService implements CaseCommandService {
       return accepted;
     });
   }
+
+  async resolveIssue(command: Parameters<ReviewCommandService["resolveIssue"]>[0]): ReturnType<ReviewCommandService["resolveIssue"]> {
+    if (command.action === "dismiss_signal" && !command.reason?.trim()) {
+      throw new ReviewConflictError("invalid_review_action", "Ignoring an issue requires a reviewer reason");
+    }
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${command.issueId}, 0))`);
+      const [replayed] = await tx.select().from(reviewIssueActions).where(and(
+        eq(reviewIssueActions.actorId, this.actorId), eq(reviewIssueActions.commandId, command.commandId),
+      )).limit(1);
+      if (replayed) return {
+        issueVersion: replayed.resultingVersion,
+        reviewState: replayed.action === "accept_signal" ? "confirmed" as const : "ignored" as const,
+      };
+      const [issue] = await tx.select().from(reviewIssues).where(and(
+        eq(reviewIssues.id, command.issueId), eq(reviewIssues.caseId, command.caseId),
+      )).limit(1);
+      if (!issue) throw new CaseNotFoundError();
+      const [revision] = await tx.select({ id: resultRevisions.id }).from(resultRevisions).where(and(
+        eq(resultRevisions.id, command.resultRevisionId), eq(resultRevisions.caseId, command.caseId), eq(resultRevisions.runId, issue.runId),
+      )).limit(1);
+      if (!revision || issue.version !== command.expectedIssueVersion || issue.reviewState !== "pending") {
+        throw new ReviewConflictError("stale_review", "The issue changed after it was loaded");
+      }
+      const reviewState = command.action === "accept_signal" ? "confirmed" as const : "ignored" as const;
+      const nextVersion = issue.version + 1;
+      const updated = await tx.update(reviewIssues).set({ reviewState, version: nextVersion }).where(and(
+        eq(reviewIssues.id, issue.id), eq(reviewIssues.version, issue.version),
+      )).returning({ id: reviewIssues.id });
+      if (updated.length !== 1) throw new ReviewConflictError("stale_review", "The issue changed after it was loaded");
+      await tx.insert(reviewIssueActions).values({
+        id: randomUUID(), issueId: issue.id, resultRevisionId: revision.id, action: command.action,
+        reason: command.reason?.trim(), actorId: this.actorId, commandId: command.commandId, resultingVersion: nextVersion,
+      });
+      return { issueVersion: nextVersion, reviewState };
+    });
+  }
+
+  async saveRequestedChange(command: Parameters<ReviewCommandService["saveRequestedChange"]>[0]): ReturnType<ReviewCommandService["saveRequestedChange"]> {
+    const text = command.text.trim();
+    if (!text || /\b(approve|reject|decline)\b.{0,24}\b(loan|application)\b/i.test(text)) {
+      throw new ReviewConflictError("invalid_review_action", "Requested-change text is empty or contains a prohibited decision");
+    }
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${command.issueId}, 0))`);
+      const [replayed] = await tx.select().from(requestedChangeRevisions).where(and(
+        eq(requestedChangeRevisions.actorId, this.actorId), eq(requestedChangeRevisions.commandId, command.commandId),
+      )).limit(1);
+      if (replayed) return { draftRevisionId: replayed.id, revision: replayed.revision };
+      const [issue] = await tx.select().from(reviewIssues).where(and(
+        eq(reviewIssues.id, command.issueId), eq(reviewIssues.caseId, command.caseId),
+      )).limit(1);
+      if (!issue || issue.reviewState !== "confirmed") throw new ReviewConflictError("stale_review", "The issue is not confirmed");
+      const [resultRevision] = await tx.select({ id: resultRevisions.id }).from(resultRevisions).where(and(
+        eq(resultRevisions.id, command.resultRevisionId), eq(resultRevisions.caseId, command.caseId), eq(resultRevisions.runId, issue.runId),
+      )).limit(1);
+      if (!resultRevision) throw new ReviewConflictError("stale_review", "The reviewed result revision is stale");
+      const [latest] = await tx.select({ revision: requestedChangeRevisions.revision }).from(requestedChangeRevisions)
+        .where(eq(requestedChangeRevisions.issueId, issue.id)).orderBy(sql`${requestedChangeRevisions.revision} desc`).limit(1);
+      const revision = (latest?.revision ?? 0) + 1;
+      const id = randomUUID();
+      await tx.insert(requestedChangeRevisions).values({
+        id, issueId: issue.id, resultRevisionId: resultRevision.id, revision,
+        agentProposedText: issue.recommendedAction || null, currentText: text, included: command.included,
+        actorId: this.actorId, commandId: command.commandId,
+      });
+      return { draftRevisionId: id, revision };
+    });
+  }
+
+  async submitFinalReview(command: Parameters<ReviewCommandService["submitFinalReview"]>[0]): ReturnType<ReviewCommandService["submitFinalReview"]> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${command.caseId}, 0))`);
+      const [replayed] = await tx.select().from(finalReviews).where(and(
+        eq(finalReviews.actorId, this.actorId), eq(finalReviews.commandId, command.commandId),
+      )).limit(1);
+      if (replayed) return { finalReviewId: replayed.id, caseVersion: replayed.resultingCaseVersion, action: asFinalAction(replayed.action) };
+      const [caseRecord] = await tx.select().from(cases).where(eq(cases.id, command.caseId)).limit(1);
+      if (!caseRecord) throw new CaseNotFoundError();
+      if (caseRecord.version !== command.expectedCaseVersion || caseRecord.lifecycle !== "ready_for_review") {
+        throw new ReviewConflictError("stale_review", "The case changed after it was loaded");
+      }
+      const [revision] = await tx.select({ id: resultRevisions.id, runId: resultRevisions.runId }).from(resultRevisions).where(and(
+        eq(resultRevisions.id, command.resultRevisionId), eq(resultRevisions.caseId, command.caseId),
+      )).limit(1);
+      if (!revision || revision.runId !== caseRecord.currentRunId) throw new ReviewConflictError("stale_review", "The reviewed result revision is stale");
+      const unresolved = await tx.select({ id: reviewIssues.id }).from(reviewIssues).where(and(
+        eq(reviewIssues.caseId, command.caseId), eq(reviewIssues.reviewState, "pending"),
+      )).limit(1);
+      if (unresolved.length > 0) throw new ReviewConflictError("review_incomplete", "Every issue must be reviewed before final submission");
+      const selected = command.selectedDraftRevisionIds.length === 0 ? [] : await tx.select().from(requestedChangeRevisions)
+        .where(inArray(requestedChangeRevisions.id, command.selectedDraftRevisionIds));
+      const validSelected = selected.length === command.selectedDraftRevisionIds.length && selected.every((draft) =>
+        draft.resultRevisionId === revision.id && draft.included && draft.currentText.trim().length > 0,
+      );
+      if (!validSelected || (command.action === "request_changes" && selected.length === 0) || (command.action === "clear_for_downstream" && selected.length > 0)) {
+        throw new ReviewConflictError("invalid_review_action", "The selected requested-change drafts do not satisfy the final action");
+      }
+      const nextVersion = caseRecord.version + 1;
+      const id = randomUUID();
+      await tx.insert(finalReviews).values({
+        id, caseId: command.caseId, resultRevisionId: revision.id, action: command.action,
+        selectedDraftRevisionIds: command.selectedDraftRevisionIds, internalNote: command.internalNote?.trim() || null,
+        actorId: this.actorId, commandId: command.commandId, resultingCaseVersion: nextVersion,
+      });
+      await tx.update(cases).set({ lifecycle: "review_complete", version: nextVersion }).where(eq(cases.id, command.caseId));
+      await tx.insert(caseStateTransitions).values({
+        id: randomUUID(), caseId: command.caseId, runId: caseRecord.currentRunId,
+        priorState: "ready_for_review", newState: "review_complete", reason: command.action, actor: this.actorId,
+      });
+      return { finalReviewId: id, caseVersion: nextVersion, action: command.action };
+    });
+  }
 }
 
 export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQueryService {
@@ -131,11 +249,14 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     if (!record) throw new CaseNotFoundError();
 
     const lifecycle = asCaseLifecycle(record.lifecycle);
+    const [finalReview] = await this.db.select({ action: finalReviews.action }).from(finalReviews)
+      .where(eq(finalReviews.caseId, caseId)).limit(1);
     return {
       ...record,
       lifecycle,
       progress: lifecycle === "processing" ? "submitted" : lifecycle === "ready_for_review" ? "human_review" : "outcome",
       resultAvailability: lifecycle === "processing" ? "pending" : lifecycle === "processing_exception" ? "unavailable" : "ready",
+      ...(finalReview ? { finalReviewAction: asFinalAction(finalReview.action) } : {}),
     };
   }
 
@@ -167,6 +288,13 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     await this.assertCaseExists(caseId);
     const records = await this.db.select().from(reviewIssues).where(eq(reviewIssues.caseId, caseId))
       .orderBy(asc(reviewIssues.createdAt));
+    const drafts = await this.db.select({
+      issueId: requestedChangeRevisions.issueId, id: requestedChangeRevisions.id,
+      revision: requestedChangeRevisions.revision, text: requestedChangeRevisions.currentText,
+      included: requestedChangeRevisions.included,
+    }).from(requestedChangeRevisions).innerJoin(reviewIssues, eq(requestedChangeRevisions.issueId, reviewIssues.id))
+      .where(eq(reviewIssues.caseId, caseId)).orderBy(asc(requestedChangeRevisions.revision));
+    const latestDraft = new Map(drafts.map((draft) => [draft.issueId, draft]));
     return records.map((record) => ({
       issueId: record.id,
       origin: record.origin === "human" ? "human" : "agent",
@@ -175,6 +303,10 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       recommendedAction: record.recommendedAction,
       reviewState: record.reviewState === "confirmed" ? "confirmed" : record.reviewState === "ignored" ? "ignored" : "pending",
       version: record.version,
+      ...(latestDraft.get(record.id) ? { requestedChange: {
+        draftRevisionId: latestDraft.get(record.id)!.id, revision: latestDraft.get(record.id)!.revision,
+        text: latestDraft.get(record.id)!.text, included: latestDraft.get(record.id)!.included,
+      } } : {}),
     }));
   }
 

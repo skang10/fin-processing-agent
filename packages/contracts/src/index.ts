@@ -33,6 +33,9 @@ export const CaseProjectionSchema = Type.Object({
     Type.Literal("unavailable"),
   ]),
   version: Type.Integer({ minimum: 1 }),
+  final_review_action: Type.Optional(Type.Union([
+    Type.Literal("request_changes"), Type.Literal("escalate_review"), Type.Literal("clear_for_downstream"),
+  ])),
   links: Type.Object({
     agent_report: Type.String(),
     application_data: Type.String(),
@@ -166,9 +169,57 @@ export const ReviewIssueSchema = Type.Object({
   recommended_action: Type.String(),
   review_state: Type.Union([Type.Literal("pending"), Type.Literal("confirmed"), Type.Literal("ignored")]),
   version: Type.Integer({ minimum: 1 }),
+  requested_change: Type.Optional(Type.Object({
+    draft_revision_id: Type.String({ format: "uuid" }),
+    revision: Type.Integer({ minimum: 1 }),
+    text: Type.String(),
+    included: Type.Boolean(),
+  }, { additionalProperties: false })),
 });
 
 export const ReviewIssuesSchema = Type.Object({ issues: Type.Array(ReviewIssueSchema) });
+
+const ReviewCommandBase = {
+  result_revision_id: Type.String({ format: "uuid" }),
+  command_id: Type.String({ minLength: 1, maxLength: 100 }),
+};
+
+export const ResolveIssueCommandSchema = Type.Object({
+  ...ReviewCommandBase,
+  expected_issue_version: Type.Integer({ minimum: 1 }),
+  reason: Type.Optional(Type.String({ minLength: 1, maxLength: 1000 })),
+}, { additionalProperties: false });
+
+export const ResolveIssueResultSchema = Type.Object({
+  issue_id: Type.String({ format: "uuid" }),
+  review_state: Type.Union([Type.Literal("confirmed"), Type.Literal("ignored")]),
+  version: Type.Integer({ minimum: 2 }),
+}, { additionalProperties: false });
+
+export const RequestedChangeCommandSchema = Type.Object({
+  ...ReviewCommandBase,
+  text: Type.String({ minLength: 1, maxLength: 2000 }),
+  included: Type.Boolean(),
+}, { additionalProperties: false });
+
+export const RequestedChangeResultSchema = Type.Object({
+  draft_revision_id: Type.String({ format: "uuid" }),
+  revision: Type.Integer({ minimum: 1 }),
+}, { additionalProperties: false });
+
+export const FinalReviewCommandSchema = Type.Object({
+  ...ReviewCommandBase,
+  expected_case_version: Type.Integer({ minimum: 1 }),
+  action: Type.Union([Type.Literal("request_changes"), Type.Literal("escalate_review"), Type.Literal("clear_for_downstream")]),
+  selected_draft_revision_ids: Type.Array(Type.String({ format: "uuid" })),
+  internal_note: Type.Optional(Type.String({ maxLength: 4000 })),
+}, { additionalProperties: false });
+
+export const FinalReviewResultSchema = Type.Object({
+  final_review_id: Type.String({ format: "uuid" }),
+  action: Type.Union([Type.Literal("request_changes"), Type.Literal("escalate_review"), Type.Literal("clear_for_downstream")]),
+  case_version: Type.Integer({ minimum: 2 }),
+}, { additionalProperties: false });
 
 export const ReviewSignalSchema = Type.Union([
   Type.Literal("document_missing"), Type.Literal("document_type_uncertain"),

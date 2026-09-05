@@ -26,3 +26,26 @@ export async function loadCaseBundle(caseId, fetcher = fetch) {
     evidenceByReference,
   };
 }
+
+async function sendJson(path, method, body, fetcher = fetch) {
+  const response = await fetcher(path, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.detail || payload.title || 'Review command failed');
+  return payload;
+}
+
+export function resolveIssue(caseId, issueId, action, body, fetcher = fetch) {
+  return sendJson('/api/v1/cases/' + encodeURIComponent(caseId) + '/issues/' + encodeURIComponent(issueId) + '/' + action, 'POST', body, fetcher);
+}
+
+export function saveRequestedChange(caseId, issueId, body, fetcher = fetch) {
+  return sendJson('/api/v1/cases/' + encodeURIComponent(caseId) + '/issues/' + encodeURIComponent(issueId) + '/requested-change', 'PUT', body, fetcher);
+}
+
+export function submitFinalReview(caseId, body, fetcher = fetch) {
+  return sendJson('/api/v1/cases/' + encodeURIComponent(caseId) + '/final-review', 'POST', body, fetcher);
+}

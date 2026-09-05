@@ -15,12 +15,14 @@ const objectStore = createMinioObjectStore({
   bucket: process.env["MINIO_BUCKET"] ?? "findoc-artifacts",
 });
 await objectStore.ensureBucket();
+const commandService = new PostgresCaseCommandService(db, "local_demo_reviewer");
 const app = buildApp(
-  new PostgresCaseCommandService(db, "local_demo_submitter"),
+  commandService,
   new PostgresCaseQueryService(db),
   { store: (source) => storeSourceArtifact(source, objectStore, {
     maximumBytes: Number(process.env["MAX_SOURCE_BYTES"] ?? 10_000_000),
   }), discard: (artifact) => objectStore.remove(artifact.objectKey) },
+  commandService,
 );
 app.addHook("onClose", async () => client.end());
 
