@@ -5,6 +5,7 @@ import type { ObjectStore, StoredSourceArtifact, SupportedMediaType } from "@fin
 
 export class UnsupportedDocumentMediaError extends Error {}
 export class DocumentSizeLimitError extends Error {}
+export class StoredObjectSizeLimitError extends Error {}
 export class EmptyDocumentError extends Error {}
 
 export interface SourceIntakeOptions {
@@ -117,4 +118,19 @@ export class MinioObjectStore implements ObjectStore {
   async remove(objectKey: string): Promise<void> {
     await this.options.client.removeObject(this.options.bucket, objectKey);
   }
+
+  async get(objectKey: string): Promise<AsyncIterable<Uint8Array>> {
+    return this.options.client.getObject(this.options.bucket, objectKey);
+  }
+}
+
+export async function readObjectBytes(store: ObjectStore, objectKey: string, maximumBytes: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let byteSize = 0;
+  for await (const chunk of await store.get(objectKey)) {
+    byteSize += chunk.byteLength;
+    if (byteSize > maximumBytes) throw new StoredObjectSizeLimitError("Stored object exceeds processing limit");
+    chunks.push(Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
 }

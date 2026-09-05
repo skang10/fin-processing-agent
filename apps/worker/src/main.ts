@@ -1,15 +1,28 @@
 import pino from "pino";
 import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
+import { PdfInspectorAdapter } from "@findoc/document-processing";
 import { runOfflineFixture } from "@findoc/offline";
 import { PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
+import { createMinioObjectStore, readObjectBytes } from "@findoc/storage";
 import { CASE_PROCESSING_QUEUE, OutboxRelay } from "./outbox.js";
 
 const logger = pino({ name: "worker" });
 const databaseUrl = process.env["DATABASE_URL"];
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
+const minioEndpoint = process.env["MINIO_ENDPOINT"];
+const minioAccessKey = process.env["MINIO_ACCESS_KEY"];
+const minioSecretKey = process.env["MINIO_SECRET_KEY"];
+if (!minioEndpoint || !minioAccessKey || !minioSecretKey) throw new Error("MinIO configuration is required");
+const maximumSourceBytes = Number(process.env["MAX_SOURCE_BYTES"] ?? 10_000_000);
 
 const { client, db } = createDatabase(databaseUrl);
+const objectStore = createMinioObjectStore({
+  endpoint: minioEndpoint, accessKey: minioAccessKey, secretKey: minioSecretKey,
+  bucket: process.env["MINIO_BUCKET"] ?? "findoc-artifacts",
+});
+await objectStore.ensureBucket();
+const pdfInspector = new PdfInspectorAdapter();
 const boss = new PgBoss(databaseUrl);
 boss.on("error", (error) => logger.error({ error }, "pg-boss error"));
 await boss.start();
@@ -23,6 +36,26 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   if (!job) return;
   if (!isCaseProcessingJob(job.data)) throw new Error("Invalid case-processing job payload");
   logger.info({ case_id: job.data.case_id, run_id: job.data.run_id }, "case processing claimed");
+  const documents = await coordinator.loadUninspectedDocuments(job.data.case_id, job.data.run_id);
+  for (const document of documents) {
+    if (document.mediaType === "application/pdf") {
+      const source = await readObjectBytes(objectStore, document.objectKey, maximumSourceBytes);
+      const inspection = await pdfInspector.inspect(source);
+      await coordinator.persistInspection(job.data.run_id, document, {
+        ...inspection,
+        pages: inspection.pages.map((page) => ({
+          ...page,
+          nativeCharacterCount: page.nativeMarkdown.length,
+        })),
+      });
+    } else {
+      await coordinator.persistInspection(job.data.run_id, document, {
+        processor: "image-intake-router", processorVersion: "1.0.0",
+        pdfType: "image", routingSignal: 1, isComplex: false,
+        pages: [{ pageNumber: 1, needsOcr: true, ocrReason: "image_input", hasTable: false, hasColumns: false, nativeCharacterCount: 0 }],
+      });
+    }
+  }
   const applicant = await coordinator.loadApplicant(job.data.case_id, job.data.run_id);
   await coordinator.completeOffline(job.data.case_id, job.data.run_id, runOfflineFixture(applicant));
   logger.info({ case_id: job.data.case_id, run_id: job.data.run_id }, "offline case processing completed");

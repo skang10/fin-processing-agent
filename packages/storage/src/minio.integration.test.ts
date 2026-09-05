@@ -1,7 +1,7 @@
 import { MinioContainer, type StartedMinioContainer } from "@testcontainers/minio";
 import { Client } from "minio";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MinioObjectStore, storeSourceArtifact } from "./index.js";
+import { MinioObjectStore, readObjectBytes, storeSourceArtifact } from "./index.js";
 
 describe("MinioObjectStore", () => {
   let container: StartedMinioContainer;
@@ -33,6 +33,7 @@ describe("MinioObjectStore", () => {
     expect(stat.size).toBe(bytes.byteLength);
     expect(stat.metaData["content-type"]).toBe("application/pdf");
     expect(artifact.objectKey).toMatch(/^case-test\/source\/[0-9a-f-]+$/);
+    await expect(readObjectBytes(store, artifact.objectKey, 1_024)).resolves.toEqual(bytes);
     await store.remove(artifact.objectKey);
     await expect(client.statObject("findoc-artifacts", artifact.objectKey)).rejects.toBeDefined();
   });

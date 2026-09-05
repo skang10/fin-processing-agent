@@ -5,6 +5,7 @@ export type SupportedMediaType = "application/pdf" | "image/jpeg" | "image/png";
 
 export interface ObjectStore {
   put(objectKey: string, content: AsyncIterable<Uint8Array>, mediaType: SupportedMediaType): Promise<void>;
+  get(objectKey: string): Promise<AsyncIterable<Uint8Array>>;
   remove(objectKey: string): Promise<void>;
 }
 

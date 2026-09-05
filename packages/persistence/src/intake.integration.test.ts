@@ -14,9 +14,11 @@ import {
   createDatabase,
   idempotencyRecords,
   documentVersions,
+  documentInspections,
   outboxEvents,
   processingRuns,
   physicalDocuments,
+  pages,
   reviewIssues,
   stageExecutions,
 } from "./index.js";
@@ -73,6 +75,26 @@ describe("PostgresCaseCommandService", () => {
     expect([artifactCount?.value, documentCount?.value, versionCount?.value]).toEqual([1, 1, 1]);
 
     const coordinator = new PostgresWorkflowCoordinator(connection.db);
+    const [document] = await coordinator.loadUninspectedDocuments(accepted.caseId, accepted.runId);
+    expect(document).toMatchObject({ mediaType: "application/pdf" });
+    if (!document) throw new Error("Expected document fixture");
+    await coordinator.persistInspection(accepted.runId, document, {
+      processor: "firecrawl/pdf-inspector", processorVersion: "1.17.0",
+      pdfType: "text_based", routingSignal: 0.99, isComplex: false,
+      pages: [{ pageNumber: 1, needsOcr: false, hasTable: false, hasColumns: false, nativeCharacterCount: 42 }],
+    });
+    await coordinator.persistInspection(accepted.runId, document, {
+      processor: "firecrawl/pdf-inspector", processorVersion: "1.17.0",
+      pdfType: "text_based", routingSignal: 0.99, isComplex: false,
+      pages: [{ pageNumber: 1, needsOcr: false, hasTable: false, hasColumns: false, nativeCharacterCount: 42 }],
+    });
+    expect(await coordinator.loadUninspectedDocuments(accepted.caseId, accepted.runId)).toEqual([]);
+    const [[inspectionCount], [pageCount]] = await Promise.all([
+      connection.db.select({ value: count() }).from(documentInspections),
+      connection.db.select({ value: count() }).from(pages),
+    ]);
+    expect([inspectionCount?.value, pageCount?.value]).toEqual([1, 1]);
+
     const result = {
       summary: "Synthetic case requires review.", modelLabel: "fake-pi-agent-v1", estimatedCost: "0.0000",
       issues: [{ code: "VAL_EMPLOYER_CONSISTENCY_001", description: "Employer differs.", recommendedAction: "Confirm the current employer." }],

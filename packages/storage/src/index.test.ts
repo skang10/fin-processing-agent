@@ -12,6 +12,7 @@ describe("source artifact intake", () => {
         for await (const chunk of content) stored = Buffer.concat([stored, Buffer.from(chunk)]);
       },
       async remove() {},
+      async get() { return chunks(); },
     };
     const input = Buffer.from("%PDF-1.7\nsynthetic");
     const result = await storeSourceArtifact(chunks(input.subarray(0, 3), input.subarray(3)), store, { maximumBytes: 100 });
@@ -23,7 +24,7 @@ describe("source artifact intake", () => {
 
   it("rejects unsupported magic bytes before object storage", async () => {
     const put = async () => { throw new Error("must not upload"); };
-    await expect(storeSourceArtifact(chunks(Buffer.from("not a document")), { put, remove: async () => {} }, { maximumBytes: 100 }))
+    await expect(storeSourceArtifact(chunks(Buffer.from("not a document")), { put, remove: async () => {}, get: async () => chunks() }, { maximumBytes: 100 }))
       .rejects.toBeInstanceOf(UnsupportedDocumentMediaError);
   });
 
@@ -31,6 +32,7 @@ describe("source artifact intake", () => {
     const store: ObjectStore = {
       async put(_key, content) { for await (const _ of content) void _; },
       async remove() {},
+      async get() { return chunks(); },
     };
     await expect(storeSourceArtifact(chunks(Buffer.from("%PDF-123456")), store, { maximumBytes: 6 }))
       .rejects.toBeInstanceOf(DocumentSizeLimitError);

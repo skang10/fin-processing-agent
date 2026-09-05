@@ -66,12 +66,18 @@ importers:
       '@findoc/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@findoc/document-processing':
+        specifier: workspace:*
+        version: link:../../packages/document-processing
       '@findoc/offline':
         specifier: workspace:*
         version: link:../../packages/offline
       '@findoc/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence
+      '@findoc/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       pg-boss:
         specifier: 12.30.0
         version: 12.30.0

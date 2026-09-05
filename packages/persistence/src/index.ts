@@ -3,7 +3,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { CaseNotFoundError, IdempotencyConflictError, type AcceptedCase, type AgentReportView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type OfflineCaseResult, type ReviewIssueView } from "@findoc/core";
-import { agentReports, artifacts, cases, documentVersions, idempotencyRecords, outboxEvents, physicalDocuments, processingRuns, reviewIssues, stageExecutions } from "./schema.js";
+import { agentReports, artifacts, cases, documentInspections, documentVersions, idempotencyRecords, outboxEvents, pages, physicalDocuments, processingRuns, reviewIssues, stageExecutions } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
@@ -206,6 +206,46 @@ export class PostgresWorkflowCoordinator {
     return record.applicantDisplayName;
   }
 
+  async loadUninspectedDocuments(caseId: string, runId: string): Promise<StoredDocumentReference[]> {
+    const records = await this.db.select({
+      documentVersionId: documentVersions.id,
+      objectKey: artifacts.objectKey,
+      mediaType: documentVersions.detectedMediaType,
+    }).from(documentVersions)
+      .innerJoin(physicalDocuments, eq(documentVersions.physicalDocumentId, physicalDocuments.id))
+      .innerJoin(artifacts, eq(documentVersions.sourceArtifactId, artifacts.id))
+      .leftJoin(documentInspections, and(
+        eq(documentInspections.documentVersionId, documentVersions.id),
+        eq(documentInspections.runId, runId),
+      ))
+      .where(and(eq(physicalDocuments.caseId, caseId), isNull(documentInspections.id)));
+    return records;
+  }
+
+  async persistInspection(runId: string, document: StoredDocumentReference, inspection: InspectionRecord): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const inspectionId = randomUUID();
+      await tx.insert(documentInspections).values({
+        id: inspectionId, runId, documentVersionId: document.documentVersionId,
+        processor: inspection.processor, processorVersion: inspection.processorVersion,
+        pdfType: inspection.pdfType, routingSignal: String(inspection.routingSignal),
+        isComplex: inspection.isComplex,
+      }).onConflictDoNothing();
+      const [persisted] = await tx.select({ id: documentInspections.id }).from(documentInspections)
+        .where(and(eq(documentInspections.runId, runId), eq(documentInspections.documentVersionId, document.documentVersionId))).limit(1);
+      if (!persisted || persisted.id !== inspectionId) return;
+      await tx.insert(pages).values(inspection.pages.map((page) => ({
+        id: randomUUID(), documentInspectionId: inspectionId,
+        documentVersionId: document.documentVersionId, pageNumber: page.pageNumber,
+        needsOcr: page.needsOcr, ocrReason: page.ocrReason,
+        hasTable: page.hasTable, hasColumns: page.hasColumns,
+        nativeCharacterCount: page.nativeCharacterCount,
+      })));
+      await tx.update(documentVersions).set({ readabilityState: "inspected" })
+        .where(eq(documentVersions.id, document.documentVersionId));
+    });
+  }
+
   async completeOffline(caseId: string, runId: string, result: OfflineCaseResult): Promise<void> {
     await this.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${runId}, 0))`);
@@ -237,6 +277,28 @@ export class PostgresWorkflowCoordinator {
         .where(eq(cases.id, caseId));
     });
   }
+}
+
+export interface StoredDocumentReference {
+  readonly documentVersionId: string;
+  readonly objectKey: string;
+  readonly mediaType: string;
+}
+
+export interface InspectionRecord {
+  readonly processor: string;
+  readonly processorVersion: string;
+  readonly pdfType: string;
+  readonly routingSignal: number;
+  readonly isComplex: boolean;
+  readonly pages: readonly {
+    pageNumber: number;
+    needsOcr: boolean;
+    ocrReason?: string;
+    hasTable: boolean;
+    hasColumns: boolean;
+    nativeCharacterCount: number;
+  }[];
 }
 
 export * from "./schema.js";

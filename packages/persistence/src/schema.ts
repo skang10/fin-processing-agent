@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const cases = pgTable("cases", {
   id: uuid("id").primaryKey(),
@@ -37,6 +37,30 @@ export const documentVersions = pgTable("document_versions", {
   malwareScanState: text("malware_scan_state").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("document_version_number_uq").on(table.physicalDocumentId, table.version)]);
+
+export const documentInspections = pgTable("document_inspections", {
+  id: uuid("id").primaryKey(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id),
+  documentVersionId: uuid("document_version_id").notNull().references(() => documentVersions.id),
+  processor: text("processor").notNull(),
+  processorVersion: text("processor_version").notNull(),
+  pdfType: text("pdf_type").notNull(),
+  routingSignal: text("routing_signal").notNull(),
+  isComplex: boolean("is_complex").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("inspection_run_document_uq").on(table.runId, table.documentVersionId)]);
+
+export const pages = pgTable("pages", {
+  id: uuid("id").primaryKey(),
+  documentInspectionId: uuid("document_inspection_id").notNull().references(() => documentInspections.id),
+  documentVersionId: uuid("document_version_id").notNull().references(() => documentVersions.id),
+  pageNumber: integer("page_number").notNull(),
+  needsOcr: boolean("needs_ocr").notNull(),
+  ocrReason: text("ocr_reason"),
+  hasTable: boolean("has_table").notNull(),
+  hasColumns: boolean("has_columns").notNull(),
+  nativeCharacterCount: integer("native_character_count").notNull(),
+}, (table) => [uniqueIndex("page_inspection_number_uq").on(table.documentInspectionId, table.pageNumber)]);
 
 export const processingRuns = pgTable("processing_runs", {
   id: uuid("id").primaryKey(),
