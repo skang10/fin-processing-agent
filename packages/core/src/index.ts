@@ -1,6 +1,19 @@
 export type CaseId = string;
 export type RunId = string;
 
+export type SupportedMediaType = "application/pdf" | "image/jpeg" | "image/png";
+
+export interface ObjectStore {
+  put(objectKey: string, content: AsyncIterable<Uint8Array>, mediaType: SupportedMediaType): Promise<void>;
+}
+
+export interface StoredSourceArtifact {
+  readonly objectKey: string;
+  readonly sha256: string;
+  readonly byteSize: number;
+  readonly detectedMediaType: SupportedMediaType;
+}
+
 export interface OfflineIssueResult {
   readonly code: string;
   readonly description: string;

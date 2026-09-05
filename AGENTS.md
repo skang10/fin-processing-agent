@@ -50,7 +50,7 @@ Use the authority order defined by [`specs/INDEX.md`](specs/INDEX.md). In summar
 
 ## Current Development State
 
-The project is in Stage Two implementation. The pnpm monorepo contains separate API, Worker, and Review Web entry points plus shared contract, core, offline-fixture, and persistence packages. PostgreSQL case intake, a transactional outbox, pg-boss relay, deterministic offline coordinator, case polling, Agent Report, and issue projections are implemented. MinIO, document intake, evidence, PDF Inspector, OCR, the real Pi harness, and live-model adapters are not wired yet, so this is not a complete document-processing vertical slice.
+The project is in Stage Two implementation. The pnpm monorepo contains separate API, Worker, and Review Web entry points plus shared contract, core, offline-fixture, persistence, and storage packages. PostgreSQL case intake, a transactional outbox, pg-boss relay, deterministic offline coordinator, case polling, Agent Report, issue projections, a MinIO adapter, and a streaming source-file intake guard are implemented. Multipart document persistence, evidence, PDF Inspector, OCR, the real Pi harness, and live-model adapters are not wired yet, so this is not a complete document-processing vertical slice.
 
 Add commands, configuration, generated artifacts, and deployment instructions only when their implementation exists and this guide is updated in the same change.
 

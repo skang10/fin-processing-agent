@@ -5,6 +5,7 @@
     { "path": "packages/core" },
     { "path": "packages/offline" },
     { "path": "packages/persistence" },
+    { "path": "packages/storage" },
     { "path": "apps/api" },
     { "path": "apps/worker" },
     { "path": "apps/web" }

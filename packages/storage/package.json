@@ -1,0 +1,15 @@
+{
+  "name": "@findoc/storage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@findoc/core": "workspace:*",
+    "minio": "8.0.7"
+  },
+  "devDependencies": {
+    "@testcontainers/minio": "12.1.0"
+  }
+}
