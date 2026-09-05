@@ -6,7 +6,7 @@ This backlog tracks accepted decisions that still require a dedicated specificat
 
 ### BL-001 — Finite Cross-Document Validation Rule Sets
 
-**Status:** Accepted and specified with ADR; awaiting evaluation evidence and implementation
+**Status:** Deterministic five-rule baseline implemented; awaiting golden-dataset evaluation evidence
 
 Cross-document validation must execute only rules from a finite, explicitly registered, versioned rule set. V1 uses compiled TypeScript rule plugins and a versioned YAML or JSON manifest. Models cannot create, modify, activate, or change validation-rule semantics at runtime.
 
@@ -39,7 +39,7 @@ Validation findings, risk or review signals, and recommended-disposition mapping
 
 ### BL-002 — Bounded Pi Case Review Agent
 
-**Status:** Accepted and specified with ADR; awaiting implementation spike
+**Status:** Fake report harness and verifier implemented; real bounded Pi SDK spike pending
 
 Embed the `pi-coding-agent` software development kit as a bounded pre-screening Agent for every processable case. It produces a verified Case Review Brief and may enter Adaptive Extraction mode only for eligible gaps. Disable built-in coding tools, Shell access, arbitrary file and network access, dynamic extensions, runtime package installation, and automatic resource discovery.
 
@@ -61,7 +61,7 @@ The implementation spike must prove:
 
 ### BL-003 — PDF Inspector Integration Baseline
 
-**Status:** Accepted and specified with ADR; awaiting dataset evidence and implementation spike
+**Status:** PDF Inspector adapter and native inspection path implemented; dataset evidence and remaining rendering/OCR spike pending
 
 Use `firecrawl/pdf-inspector` as the initial PDF classification, native text and coordinate extraction, layout, table, rendering integration, and selective OCR-routing foundation. Keep PDF rendering and the independent PP-OCRv6-targeted `OcrEngine` behind project interfaces.
 
@@ -101,7 +101,7 @@ Replace unsupported numerical targets with measured results tied to dataset, mod
 
 ### BL-007 — V1 Review UX Contracts
 
-**Status:** API, security, and case-level Agent-log contracts approved; aggregate monitoring deferred
+**Status:** Read projections and API-hydrated workbench implemented; review commands and case Agent-log projection pending; aggregate monitoring deferred
 
 Define implementation contracts for the approved V1 HTML UX baseline:
 
