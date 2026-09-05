@@ -117,6 +117,35 @@ export const resultRevisions = pgTable("result_revisions", {
   sealedAt: timestamp("sealed_at", { withTimezone: true }).notNull(),
 }, (table) => [uniqueIndex("result_revision_run_number_uq").on(table.runId, table.revision)]);
 
+export const evidenceRecords = pgTable("evidence_records", {
+  id: uuid("id").primaryKey(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id),
+  evidenceType: text("evidence_type").notNull(),
+  applicationSnapshotId: uuid("application_snapshot_id").references(() => applicationSnapshots.id),
+  jsonPointer: text("json_pointer"),
+  documentVersionId: uuid("document_version_id").references(() => documentVersions.id),
+  pageNumber: integer("page_number"),
+  extractionMethod: text("extraction_method").notNull(),
+  processorVersion: text("processor_version").notNull(),
+}, (table) => [index("evidence_run_idx").on(table.runId)]);
+
+export const claimRecords = pgTable("claim_records", {
+  id: uuid("id").primaryKey(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id),
+  fieldSchemaId: text("field_schema_id").notNull(),
+  valueType: text("value_type").notNull(),
+  rawValue: text("raw_value").notNull(),
+  normalizedValue: jsonb("normalized_value").notNull(),
+  normalizationVersion: text("normalization_version").notNull(),
+}, (table) => [index("claim_run_idx").on(table.runId)]);
+
+export const claimEvidenceLinks = pgTable("claim_evidence_links", {
+  id: uuid("id").primaryKey(),
+  claimId: uuid("claim_id").notNull().references(() => claimRecords.id),
+  evidenceId: uuid("evidence_id").notNull().references(() => evidenceRecords.id),
+  relationship: text("relationship").notNull(),
+}, (table) => [uniqueIndex("claim_evidence_uq").on(table.claimId, table.evidenceId)]);
+
 export const validationFindings = pgTable("validation_findings", {
   id: uuid("id").primaryKey(),
   resultRevisionId: uuid("result_revision_id").notNull().references(() => resultRevisions.id),

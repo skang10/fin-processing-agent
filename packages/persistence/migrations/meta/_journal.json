@@ -50,6 +50,13 @@
       "when": 1788581266802,
       "tag": "0006_cheerful_revanche",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788581477614,
+      "tag": "0007_happy_spitfire",
+      "breakpoints": true
     }
   ]
 }

@@ -13,12 +13,15 @@ import {
   artifacts,
   cases,
   caseStateTransitions,
+  claimEvidenceLinks,
+  claimRecords,
   createDatabase,
   idempotencyRecords,
   inputDocumentSelections,
   inputRevisions,
   documentVersions,
   documentInspections,
+  evidenceRecords,
   outboxEvents,
   processingRuns,
   physicalDocuments,
@@ -109,7 +112,11 @@ describe("PostgresCaseCommandService", () => {
     expect([inspectionCount?.value, pageCount?.value]).toEqual([1, 1]);
 
     const inputRevisionId = await coordinator.loadInputRevisionId(accepted.caseId, accepted.runId);
+    const sourceContext = await coordinator.loadOfflineSourceContext(accepted.caseId, accepted.runId);
+    expect(sourceContext.pages).toHaveLength(1);
     const resultRevisionId = "4c816f67-5f2f-4e21-8c17-7eb1e5383999";
+    const evidenceId = "4c816f67-5f2f-4e21-8c17-7eb1e5383998";
+    const claimId = "4c816f67-5f2f-4e21-8c17-7eb1e5383997";
     const ruleIds = [
       "VAL_DOC_COMPLETENESS_001", "VAL_NAME_CONSISTENCY_001", "VAL_EMPLOYER_CONSISTENCY_001",
       "VAL_INCOME_CONSISTENCY_001", "VAL_ID_EXPIRY_001",
@@ -122,26 +129,40 @@ describe("PostgresCaseCommandService", () => {
         ruleId, ruleVersion: "1.0.0", ruleSetId: "demo-de-personal-loan-v1", ruleSetVersion: "1.0.0",
         inputSnapshotId: inputRevisionId, resultRevisionId, status: ruleId === "VAL_EMPLOYER_CONSISTENCY_001" ? "failed" : "passed",
         reasonCode: ruleId === "VAL_EMPLOYER_CONSISTENCY_001" ? "employer_conflict" : "fixture_passed",
-        materialInputRefs: ["fixture:reference"],
+        materialInputRefs: [claimId],
       })),
       recommendedDisposition: "human_review_required" as const,
+      evidence: [{
+        evidenceId, evidenceType: "page_level" as const,
+        documentVersionId: document.documentVersionId, pageNumber: 1,
+        extractionMethod: "offline_fixture" as const, processorVersion: "fixture-v1",
+      }],
+      claims: [{
+        claimId, fieldSchemaId: "fixture.field", valueType: "string" as const,
+        rawValue: "fixture", normalizedValue: "fixture", normalizationVersion: "fixture-v1",
+        evidenceIds: [evidenceId],
+      }],
       issues: [{ code: "VAL_EMPLOYER_CONSISTENCY_001", description: "Employer differs.", recommendedAction: "Confirm the current employer." }],
     };
     await coordinator.completeOffline(accepted.caseId, accepted.runId, result);
     await coordinator.completeOffline(accepted.caseId, accepted.runId, result);
 
     const status = await new PostgresCaseQueryService(connection.db).get(accepted.caseId);
-    const [[stageCount], [issueCount], [reportCount], [resultCount], [findingCount], [dispositionCount]] = await Promise.all([
+    const [[stageCount], [issueCount], [reportCount], [resultCount], [findingCount], [dispositionCount], [evidenceCount], [claimCount], [claimEvidenceCount]] = await Promise.all([
       connection.db.select({ value: count() }).from(stageExecutions),
       connection.db.select({ value: count() }).from(reviewIssues),
       connection.db.select({ value: count() }).from(agentReports),
       connection.db.select({ value: count() }).from(resultRevisions),
       connection.db.select({ value: count() }).from(validationFindings),
       connection.db.select({ value: count() }).from(recommendedDispositions),
+      connection.db.select({ value: count() }).from(evidenceRecords),
+      connection.db.select({ value: count() }).from(claimRecords),
+      connection.db.select({ value: count() }).from(claimEvidenceLinks),
     ]);
     expect(status).toMatchObject({ lifecycle: "ready_for_review", progress: "human_review", version: 2 });
     expect([stageCount?.value, issueCount?.value, reportCount?.value]).toEqual([4, 1, 1]);
     expect([resultCount?.value, findingCount?.value, dispositionCount?.value]).toEqual([1, 5, 1]);
+    expect([evidenceCount?.value, claimCount?.value, claimEvidenceCount?.value]).toEqual([1, 1, 1]);
     const [transitionCount] = await connection.db.select({ value: count() }).from(caseStateTransitions);
     expect(transitionCount?.value).toBe(2);
   });

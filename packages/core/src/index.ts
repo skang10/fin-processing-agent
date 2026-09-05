@@ -45,8 +45,31 @@ export interface OfflineCaseResult {
     materialInputRefs: readonly string[];
   }[];
   readonly recommendedDisposition: "ready_for_downstream_processing" | "additional_documents_needed" | "human_review_required";
+  readonly evidence: readonly OfflineEvidenceResult[];
+  readonly claims: readonly OfflineClaimResult[];
   readonly modelLabel: string;
   readonly estimatedCost: string;
+}
+
+export interface OfflineEvidenceResult {
+  readonly evidenceId: string;
+  readonly evidenceType: "structured_input" | "page_level";
+  readonly applicationSnapshotId?: string;
+  readonly jsonPointer?: string;
+  readonly documentVersionId?: string;
+  readonly pageNumber?: number;
+  readonly extractionMethod: "structured_input" | "offline_fixture";
+  readonly processorVersion: string;
+}
+
+export interface OfflineClaimResult {
+  readonly claimId: string;
+  readonly fieldSchemaId: string;
+  readonly valueType: "string" | "money" | "date";
+  readonly rawValue: string;
+  readonly normalizedValue: unknown;
+  readonly normalizationVersion: string;
+  readonly evidenceIds: readonly string[];
 }
 
 export interface CaseIntakeCommand {

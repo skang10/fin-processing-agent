@@ -2,7 +2,16 @@ import { describe, expect, it } from "vitest";
 import { ANNA_EXAMPLE_FIXTURE_ID, OfflineFixtureUnavailableError, runOfflineFixture } from "./index.js";
 
 describe("offline fixture", () => {
-  const context = { inputSnapshotId: "input-1", resultRevisionId: "result-1", referenceDate: "2026-09-05" };
+  const context = {
+    inputSnapshotId: "input-1", resultRevisionId: "result-1", referenceDate: "2026-09-05",
+    applicationSnapshotId: "application-1",
+    applicationData: {
+      applicant_display_name: "Anna Beispiel",
+      employment: { employer: "Beispieltechnik GmbH" },
+      income: { monthly_net: "3480.00" },
+    },
+    pages: [1, 2, 3, 4].map((pageNumber) => ({ documentVersionId: "document-1", pageNumber })),
+  };
 
   it("reproduces the Anna Beispiel review result", async () => {
     const result = await runOfflineFixture(ANNA_EXAMPLE_FIXTURE_ID, context);
@@ -14,6 +23,8 @@ describe("offline fixture", () => {
       "VAL_INCOME_CONSISTENCY_001",
     ]);
     expect(result.findings).toHaveLength(5);
+    expect(result.evidence).toHaveLength(7);
+    expect(result.claims).toHaveLength(9);
     expect(result.recommendedDisposition).toBe("human_review_required");
   });
 

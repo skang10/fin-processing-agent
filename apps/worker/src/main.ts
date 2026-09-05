@@ -64,11 +64,14 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   }
   const applicationData = await coordinator.loadApplicationData(job.data.case_id, job.data.run_id);
   try {
-    const inputRevisionId = await coordinator.loadInputRevisionId(job.data.case_id, job.data.run_id);
+    const sourceContext = await coordinator.loadOfflineSourceContext(job.data.case_id, job.data.run_id);
     await coordinator.completeOffline(job.data.case_id, job.data.run_id, await runOfflineFixture(applicationData["demo_fixture_id"], {
-      inputSnapshotId: inputRevisionId,
+      inputSnapshotId: sourceContext.inputRevisionId,
       resultRevisionId: randomUUID(),
       referenceDate: "2026-09-05",
+      applicationSnapshotId: sourceContext.applicationSnapshotId,
+      applicationData,
+      pages: sourceContext.pages,
     }));
   } catch (error) {
     if (!(error instanceof OfflineFixtureUnavailableError)) throw error;

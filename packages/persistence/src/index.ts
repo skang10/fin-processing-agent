@@ -3,7 +3,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { CaseNotFoundError, IdempotencyConflictError, type AcceptedCase, type AgentReportView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type OfflineCaseResult, type ReviewIssueView } from "@findoc/core";
-import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, documentInspections, documentVersions, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, recommendedDispositions, resultRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
+import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, recommendedDispositions, resultRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
@@ -260,6 +260,23 @@ export class PostgresWorkflowCoordinator {
     return record.inputRevisionId;
   }
 
+  async loadOfflineSourceContext(caseId: string, runId: string): Promise<{
+    inputRevisionId: string;
+    applicationSnapshotId: string;
+    pages: readonly { documentVersionId: string; pageNumber: number }[];
+  }> {
+    const [run] = await this.db.select({
+      inputRevisionId: processingRuns.inputRevisionId,
+      applicationSnapshotId: inputRevisions.applicationSnapshotId,
+    }).from(processingRuns).innerJoin(inputRevisions, eq(processingRuns.inputRevisionId, inputRevisions.id))
+      .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
+    if (!run) throw new CaseNotFoundError();
+    const pageRecords = await this.db.select({ documentVersionId: pages.documentVersionId, pageNumber: pages.pageNumber })
+      .from(pages).innerJoin(documentInspections, eq(pages.documentInspectionId, documentInspections.id))
+      .where(eq(documentInspections.runId, runId)).orderBy(asc(documentInspections.createdAt), asc(pages.pageNumber));
+    return { ...run, pages: pageRecords };
+  }
+
   async hasInputDocuments(caseId: string, runId: string): Promise<boolean> {
     const [record] = await this.db.select({ id: inputDocumentSelections.id })
       .from(processingRuns)
@@ -313,7 +330,13 @@ export class PostgresWorkflowCoordinator {
   async completeOffline(caseId: string, runId: string, result: OfflineCaseResult): Promise<void> {
     await this.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${runId}, 0))`);
-      const [run] = await tx.select({ status: processingRuns.status, inputRevisionId: processingRuns.inputRevisionId }).from(processingRuns)
+      const [run] = await tx.select({
+        status: processingRuns.status,
+        inputRevisionId: processingRuns.inputRevisionId,
+        applicationSnapshotId: inputRevisions.applicationSnapshotId,
+        applicationContent: applicationSnapshots.content,
+      }).from(processingRuns).innerJoin(inputRevisions, eq(processingRuns.inputRevisionId, inputRevisions.id))
+        .innerJoin(applicationSnapshots, eq(inputRevisions.applicationSnapshotId, applicationSnapshots.id))
         .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
       if (!run) throw new CaseNotFoundError();
       if (run.status === "completed") return;
@@ -321,6 +344,10 @@ export class PostgresWorkflowCoordinator {
       if (result.findings.length !== 5 || result.findings.some((item) => item.inputSnapshotId !== run.inputRevisionId || item.resultRevisionId !== result.resultRevisionId)) {
         throw new Error("Offline result is not bound to this run input");
       }
+      const allowedPages = await tx.select({ documentVersionId: pages.documentVersionId, pageNumber: pages.pageNumber })
+        .from(pages).innerJoin(documentInspections, eq(pages.documentInspectionId, documentInspections.id))
+        .where(eq(documentInspections.runId, runId));
+      validateOfflineProvenance(result, run.applicationSnapshotId, run.applicationContent, new Set(allowedPages.map((page) => `${page.documentVersionId}:${page.pageNumber}`)));
 
       const completedAt = new Date();
       const stages = ["inspect_and_classify", "extract", "validate", "agent_report"];
@@ -339,6 +366,20 @@ export class PostgresWorkflowCoordinator {
         id: result.resultRevisionId, caseId, runId, inputRevisionId: run.inputRevisionId,
         revision: 1, revisionType: "machine_baseline", sealedAt: completedAt,
       });
+      await tx.insert(evidenceRecords).values(result.evidence.map((item) => ({
+        id: item.evidenceId, runId, evidenceType: item.evidenceType,
+        applicationSnapshotId: item.applicationSnapshotId, jsonPointer: item.jsonPointer,
+        documentVersionId: item.documentVersionId, pageNumber: item.pageNumber,
+        extractionMethod: item.extractionMethod, processorVersion: item.processorVersion,
+      })));
+      await tx.insert(claimRecords).values(result.claims.map((item) => ({
+        id: item.claimId, runId, fieldSchemaId: item.fieldSchemaId, valueType: item.valueType,
+        rawValue: item.rawValue, normalizedValue: item.normalizedValue,
+        normalizationVersion: item.normalizationVersion,
+      })));
+      await tx.insert(claimEvidenceLinks).values(result.claims.flatMap((claim) => claim.evidenceIds.map((evidenceId) => ({
+        id: randomUUID(), claimId: claim.claimId, evidenceId, relationship: "direct_support",
+      }))));
       await tx.insert(validationFindings).values(result.findings.map((item) => ({
         id: randomUUID(), resultRevisionId: result.resultRevisionId,
         ruleId: item.ruleId, ruleVersion: item.ruleVersion, ruleSetId: item.ruleSetId,
@@ -387,6 +428,36 @@ export class PostgresWorkflowCoordinator {
       });
     });
   }
+}
+
+function validateOfflineProvenance(result: OfflineCaseResult, applicationSnapshotId: string, applicationContent: unknown, allowedPages: ReadonlySet<string>): void {
+  const evidenceIds = new Set(result.evidence.map((item) => item.evidenceId));
+  const claimIds = new Set(result.claims.map((item) => item.claimId));
+  if (evidenceIds.size !== result.evidence.length || claimIds.size !== result.claims.length) throw new Error("Duplicate offline provenance identity");
+  for (const evidence of result.evidence) {
+    const structured = evidence.evidenceType === "structured_input" && evidence.applicationSnapshotId && evidence.jsonPointer && !evidence.documentVersionId && evidence.pageNumber === undefined;
+    const page = evidence.evidenceType === "page_level" && evidence.documentVersionId && evidence.pageNumber !== undefined && !evidence.applicationSnapshotId && !evidence.jsonPointer;
+    if (!structured && !page) throw new Error("Offline evidence subtype is invalid");
+    if (structured && evidence.applicationSnapshotId !== applicationSnapshotId) throw new Error("Offline structured evidence is outside the run input");
+    if (structured && !jsonPointerExists(applicationContent, evidence.jsonPointer!)) throw new Error("Offline structured evidence pointer is invalid");
+    if (page && !allowedPages.has(`${evidence.documentVersionId}:${evidence.pageNumber}`)) throw new Error("Offline page evidence is outside the run input");
+  }
+  if (result.claims.some((claim) => claim.evidenceIds.length === 0 || claim.evidenceIds.some((id) => !evidenceIds.has(id)))) throw new Error("Offline claim evidence is invalid");
+  if (result.findings.some((item) => item.materialInputRefs.length === 0 || item.materialInputRefs.some((id) => !evidenceIds.has(id) && !claimIds.has(id)))) {
+    throw new Error("Offline finding reference is invalid");
+  }
+}
+
+function jsonPointerExists(value: unknown, pointer: string): boolean {
+  if (pointer === "") return true;
+  if (!pointer.startsWith("/")) return false;
+  let current = value;
+  for (const encoded of pointer.slice(1).split("/")) {
+    const key = encoded.replaceAll("~1", "/").replaceAll("~0", "~");
+    if (typeof current !== "object" || current === null || Array.isArray(current) || !Object.prototype.hasOwnProperty.call(current, key)) return false;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return true;
 }
 
 export interface StoredDocumentReference {
