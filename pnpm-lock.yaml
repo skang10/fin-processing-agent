@@ -111,6 +111,9 @@ importers:
       '@findoc/core':
         specifier: workspace:*
         version: link:../core
+      '@findoc/validation':
+        specifier: workspace:*
+        version: link:../validation
 
   packages/persistence:
     dependencies:
@@ -143,6 +146,8 @@ importers:
       '@testcontainers/minio':
         specifier: 12.1.0
         version: 12.1.0
+
+  packages/validation: {}
 
 packages:
 

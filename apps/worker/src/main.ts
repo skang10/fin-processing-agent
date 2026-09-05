@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import pino from "pino";
 import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
@@ -63,7 +64,12 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   }
   const applicationData = await coordinator.loadApplicationData(job.data.case_id, job.data.run_id);
   try {
-    await coordinator.completeOffline(job.data.case_id, job.data.run_id, runOfflineFixture(applicationData["demo_fixture_id"]));
+    const inputRevisionId = await coordinator.loadInputRevisionId(job.data.case_id, job.data.run_id);
+    await coordinator.completeOffline(job.data.case_id, job.data.run_id, runOfflineFixture(applicationData["demo_fixture_id"], {
+      inputSnapshotId: inputRevisionId,
+      resultRevisionId: randomUUID(),
+      referenceDate: "2026-09-05",
+    }));
   } catch (error) {
     if (!(error instanceof OfflineFixtureUnavailableError)) throw error;
     await coordinator.failRun(job.data.case_id, job.data.run_id, "offline_fixture_unavailable");

@@ -3,7 +3,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { CaseNotFoundError, IdempotencyConflictError, type AcceptedCase, type AgentReportView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type OfflineCaseResult, type ReviewIssueView } from "@findoc/core";
-import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, documentInspections, documentVersions, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, reviewIssues, stageExecutions } from "./schema.js";
+import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, documentInspections, documentVersions, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, recommendedDispositions, resultRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
@@ -253,6 +253,13 @@ export class PostgresWorkflowCoordinator {
     return record.content as Record<string, unknown>;
   }
 
+  async loadInputRevisionId(caseId: string, runId: string): Promise<string> {
+    const [record] = await this.db.select({ inputRevisionId: processingRuns.inputRevisionId })
+      .from(processingRuns).where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
+    if (!record) throw new CaseNotFoundError();
+    return record.inputRevisionId;
+  }
+
   async hasInputDocuments(caseId: string, runId: string): Promise<boolean> {
     const [record] = await this.db.select({ id: inputDocumentSelections.id })
       .from(processingRuns)
@@ -306,10 +313,14 @@ export class PostgresWorkflowCoordinator {
   async completeOffline(caseId: string, runId: string, result: OfflineCaseResult): Promise<void> {
     await this.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${runId}, 0))`);
-      const [run] = await tx.select({ status: processingRuns.status }).from(processingRuns)
+      const [run] = await tx.select({ status: processingRuns.status, inputRevisionId: processingRuns.inputRevisionId }).from(processingRuns)
         .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
       if (!run) throw new CaseNotFoundError();
       if (run.status === "completed") return;
+      if (run.status === "failed") return;
+      if (result.findings.length !== 5 || result.findings.some((item) => item.inputSnapshotId !== run.inputRevisionId || item.resultRevisionId !== result.resultRevisionId)) {
+        throw new Error("Offline result is not bound to this run input");
+      }
 
       const completedAt = new Date();
       const stages = ["inspect_and_classify", "extract", "validate", "agent_report"];
@@ -323,6 +334,23 @@ export class PostgresWorkflowCoordinator {
         reviewState: "pending",
       }));
       if (issues.length > 0) await tx.insert(reviewIssues).values(issues);
+
+      await tx.insert(resultRevisions).values({
+        id: result.resultRevisionId, caseId, runId, inputRevisionId: run.inputRevisionId,
+        revision: 1, revisionType: "machine_baseline", sealedAt: completedAt,
+      });
+      await tx.insert(validationFindings).values(result.findings.map((item) => ({
+        id: randomUUID(), resultRevisionId: result.resultRevisionId,
+        ruleId: item.ruleId, ruleVersion: item.ruleVersion, ruleSetId: item.ruleSetId,
+        ruleSetVersion: item.ruleSetVersion, status: item.status, reasonCode: item.reasonCode,
+        materialInputRefs: item.materialInputRefs,
+      })));
+      await tx.insert(recommendedDispositions).values({
+        id: randomUUID(), resultRevisionId: result.resultRevisionId,
+        policyId: "demo-document-processing-disposition", policyVersion: "1.0.0",
+        disposition: result.recommendedDisposition,
+        reasonCodes: result.findings.filter((item) => item.status !== "passed" && item.status !== "not_applicable").map((item) => item.reasonCode),
+      });
 
       await tx.insert(agentReports).values({
         id: randomUUID(), caseId, runId, availability: "ready", summary: result.summary,

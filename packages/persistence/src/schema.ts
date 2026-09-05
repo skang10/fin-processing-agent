@@ -107,6 +107,37 @@ export const processingRuns = pgTable("processing_runs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index("processing_runs_case_idx").on(table.caseId)]);
 
+export const resultRevisions = pgTable("result_revisions", {
+  id: uuid("id").primaryKey(),
+  caseId: uuid("case_id").notNull().references(() => cases.id),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id),
+  inputRevisionId: uuid("input_revision_id").notNull().references(() => inputRevisions.id),
+  revision: integer("revision").notNull(),
+  revisionType: text("revision_type").notNull(),
+  sealedAt: timestamp("sealed_at", { withTimezone: true }).notNull(),
+}, (table) => [uniqueIndex("result_revision_run_number_uq").on(table.runId, table.revision)]);
+
+export const validationFindings = pgTable("validation_findings", {
+  id: uuid("id").primaryKey(),
+  resultRevisionId: uuid("result_revision_id").notNull().references(() => resultRevisions.id),
+  ruleId: text("rule_id").notNull(),
+  ruleVersion: text("rule_version").notNull(),
+  ruleSetId: text("rule_set_id").notNull(),
+  ruleSetVersion: text("rule_set_version").notNull(),
+  status: text("status").notNull(),
+  reasonCode: text("reason_code").notNull(),
+  materialInputRefs: jsonb("material_input_refs").notNull(),
+}, (table) => [uniqueIndex("finding_result_rule_uq").on(table.resultRevisionId, table.ruleId)]);
+
+export const recommendedDispositions = pgTable("recommended_dispositions", {
+  id: uuid("id").primaryKey(),
+  resultRevisionId: uuid("result_revision_id").notNull().references(() => resultRevisions.id),
+  policyId: text("policy_id").notNull(),
+  policyVersion: text("policy_version").notNull(),
+  disposition: text("disposition").notNull(),
+  reasonCodes: jsonb("reason_codes").notNull(),
+}, (table) => [uniqueIndex("disposition_result_uq").on(table.resultRevisionId)]);
+
 export const stageExecutions = pgTable("stage_executions", {
   id: uuid("id").primaryKey(),
   runId: uuid("run_id").notNull().references(() => processingRuns.id),

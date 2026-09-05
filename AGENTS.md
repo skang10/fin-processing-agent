@@ -50,7 +50,7 @@ Use the authority order defined by [`specs/INDEX.md`](specs/INDEX.md). In summar
 
 ## Current Development State
 
-The project is in Stage Two implementation. The pnpm monorepo contains separate API, Worker, and Review Web entry points plus shared contract, core, offline-fixture, persistence, storage, and document-processing packages. PostgreSQL case intake, multipart PDF/JPEG/PNG upload, immutable artifact and document-version metadata, unreferenced-upload compensation, a transactional outbox, pg-boss relay, deterministic offline coordinator, case polling, Agent Report, issue projections, a MinIO adapter, streaming source-file intake guard, a pinned PDF Inspector adapter, and Worker persistence of page and OCR-routing metadata are implemented. Application snapshots, derived native-text artifacts, evidence, OCR execution, restricted sandbox isolation, the real Pi harness, and live-model adapters are not wired yet, so this is not a complete document-processing vertical slice.
+The project is in Stage Two implementation. The pnpm monorepo contains separate API, Worker, and Review Web entry points plus shared contract, core, offline-fixture, persistence, storage, document-processing, and deterministic-validation packages. PostgreSQL case intake, immutable application and input revisions, multipart PDF/JPEG/PNG upload, immutable artifact and document-version metadata, unreferenced-upload compensation, a transactional outbox, pg-boss relay, deterministic offline coordination, the five-rule compiled registry, result revisions, findings, recommended dispositions, case polling, Agent Report and issue projections, a MinIO adapter, streaming source-file intake guards, a pinned PDF Inspector adapter, and Worker persistence of page and OCR-routing metadata are implemented. Derived native-text artifacts, persisted claims and evidence, OCR execution, restricted sandbox isolation, the real Pi harness, Report Verifier, and live-model adapters are not wired yet, so this is not a complete document-processing vertical slice.
 
 Add commands, configuration, generated artifacts, and deployment instructions only when their implementation exists and this guide is updated in the same change.
 
@@ -156,4 +156,4 @@ The currently authoritative commands are:
 10. `pnpm db:generate` — generate a version-controlled Drizzle migration from the schema; requires `DATABASE_URL` configuration for validated command startup.
 11. `pnpm db:migrate` — apply version-controlled Drizzle migrations; requires `DATABASE_URL`.
 
-Formatting, linting, integration/browser testing, dataset, evaluation, Docker Compose, demo loading, and reset commands are not implemented yet. Inspect the repository rather than guessing them.
+Formatting, linting, browser testing, dataset, evaluation, Docker Compose, demo loading, and reset commands are not implemented yet. Inspect the repository rather than guessing them.

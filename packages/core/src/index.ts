@@ -28,8 +28,21 @@ export interface OfflineIssueResult {
 }
 
 export interface OfflineCaseResult {
+  readonly resultRevisionId: string;
   readonly summary: string;
   readonly issues: readonly OfflineIssueResult[];
+  readonly findings: readonly {
+    ruleId: string;
+    ruleVersion: string;
+    ruleSetId: string;
+    ruleSetVersion: string;
+    inputSnapshotId: string;
+    resultRevisionId: string;
+    status: string;
+    reasonCode: string;
+    materialInputRefs: readonly string[];
+  }[];
+  readonly recommendedDisposition: "ready_for_downstream_processing" | "additional_documents_needed" | "human_review_required";
   readonly modelLabel: string;
   readonly estimatedCost: string;
 }

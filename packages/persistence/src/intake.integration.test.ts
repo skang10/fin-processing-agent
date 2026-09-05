@@ -23,8 +23,11 @@ import {
   processingRuns,
   physicalDocuments,
   pages,
+  recommendedDispositions,
+  resultRevisions,
   reviewIssues,
   stageExecutions,
+  validationFindings,
 } from "./index.js";
 
 describe("PostgresCaseCommandService", () => {
@@ -105,21 +108,39 @@ describe("PostgresCaseCommandService", () => {
     ]);
     expect([inspectionCount?.value, pageCount?.value]).toEqual([1, 1]);
 
+    const inputRevisionId = await coordinator.loadInputRevisionId(accepted.caseId, accepted.runId);
+    const resultRevisionId = "4c816f67-5f2f-4e21-8c17-7eb1e5383999";
+    const ruleIds = [
+      "VAL_DOC_COMPLETENESS_001", "VAL_NAME_CONSISTENCY_001", "VAL_EMPLOYER_CONSISTENCY_001",
+      "VAL_INCOME_CONSISTENCY_001", "VAL_ID_EXPIRY_001",
+    ];
     const result = {
+      resultRevisionId,
       summary: "Synthetic case requires review.", modelLabel: "fake-pi-harness-v1", estimatedCost: "0.0000",
+      findings: ruleIds.map((ruleId) => ({
+        ruleId, ruleVersion: "1.0.0", ruleSetId: "demo-de-personal-loan-v1", ruleSetVersion: "1.0.0",
+        inputSnapshotId: inputRevisionId, resultRevisionId, status: ruleId === "VAL_EMPLOYER_CONSISTENCY_001" ? "failed" : "passed",
+        reasonCode: ruleId === "VAL_EMPLOYER_CONSISTENCY_001" ? "employer_conflict" : "fixture_passed",
+        materialInputRefs: ["fixture:reference"],
+      })),
+      recommendedDisposition: "human_review_required" as const,
       issues: [{ code: "VAL_EMPLOYER_CONSISTENCY_001", description: "Employer differs.", recommendedAction: "Confirm the current employer." }],
     };
     await coordinator.completeOffline(accepted.caseId, accepted.runId, result);
     await coordinator.completeOffline(accepted.caseId, accepted.runId, result);
 
     const status = await new PostgresCaseQueryService(connection.db).get(accepted.caseId);
-    const [[stageCount], [issueCount], [reportCount]] = await Promise.all([
+    const [[stageCount], [issueCount], [reportCount], [resultCount], [findingCount], [dispositionCount]] = await Promise.all([
       connection.db.select({ value: count() }).from(stageExecutions),
       connection.db.select({ value: count() }).from(reviewIssues),
       connection.db.select({ value: count() }).from(agentReports),
+      connection.db.select({ value: count() }).from(resultRevisions),
+      connection.db.select({ value: count() }).from(validationFindings),
+      connection.db.select({ value: count() }).from(recommendedDispositions),
     ]);
     expect(status).toMatchObject({ lifecycle: "ready_for_review", progress: "human_review", version: 2 });
     expect([stageCount?.value, issueCount?.value, reportCount?.value]).toEqual([4, 1, 1]);
+    expect([resultCount?.value, findingCount?.value, dispositionCount?.value]).toEqual([1, 5, 1]);
     const [transitionCount] = await connection.db.select({ value: count() }).from(caseStateTransitions);
     expect(transitionCount?.value).toBe(2);
   });
