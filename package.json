@@ -15,6 +15,11 @@
     "dev:worker": "pnpm --filter @findoc/worker dev",
     "db:generate": "pnpm --filter @findoc/persistence db:generate",
     "db:migrate": "pnpm --filter @findoc/persistence db:migrate",
+    "demo:up": "node scripts/demo-compose.mjs up",
+    "demo:load": "node scripts/demo-compose.mjs load",
+    "demo:down": "node scripts/demo-compose.mjs down",
+    "demo:reset": "node scripts/demo-compose.mjs reset",
+    "demo:acceptance": "node scripts/demo-compose.mjs acceptance",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc -b --pretty false"

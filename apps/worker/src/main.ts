@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import pino from "pino";
 import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
@@ -31,6 +32,18 @@ await boss.createQueue(CASE_PROCESSING_QUEUE);
 const relay = new OutboxRelay(new PostgresOutboxStore(db), boss);
 const coordinator = new PostgresWorkflowCoordinator(db);
 await relay.publishBatch();
+const healthServer = createServer((request, response) => {
+  if (request.url !== "/health") {
+    response.writeHead(404).end();
+    return;
+  }
+  response.writeHead(200, { "content-type": "application/json" }).end('{"status":"ok"}');
+});
+await new Promise<void>((resolve) => healthServer.listen(
+  Number(process.env["WORKER_HEALTH_PORT"] ?? 3001),
+  process.env["WORKER_HEALTH_HOST"] ?? "127.0.0.1",
+  resolve,
+));
 
 await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   if (!job) return;
@@ -92,6 +105,7 @@ const relayTimer = setInterval(() => {
 
 async function shutdown() {
   clearInterval(relayTimer);
+  await new Promise<void>((resolve, reject) => healthServer.close((error) => error ? reject(error) : resolve()));
   await boss.stop({ graceful: true });
   await client.end();
 }

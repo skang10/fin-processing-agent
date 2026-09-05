@@ -1,0 +1,12 @@
+.git
+.data
+.cache
+node_modules
+**/dist
+**/dist-config
+*.tsbuildinfo
+**/*.tsbuildinfo
+tmp
+test-results
+playwright-report
+*.log

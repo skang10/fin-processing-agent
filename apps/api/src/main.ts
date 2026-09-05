@@ -24,4 +24,4 @@ const app = buildApp(
 );
 app.addHook("onClose", async () => client.end());
 
-await app.listen({ host: "127.0.0.1", port: 3000 });
+await app.listen({ host: process.env["API_HOST"] ?? "127.0.0.1", port: Number(process.env["API_PORT"] ?? 3000) });
