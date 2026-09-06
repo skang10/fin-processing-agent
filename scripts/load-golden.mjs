@@ -36,7 +36,15 @@ export async function loadGoldenCase(caseId, options = {}) {
   return { case_id: accepted.case_id, golden_case_id: caseId, lifecycle: status.lifecycle, report_availability: projections.report?.availability ?? "unavailable", issue_codes: projections.issues?.issues?.map((issue) => issue.code) ?? [], finding_count: projections.findings?.findings?.length ?? 0, review_url: `${reviewWebUrl}/?case_id=${accepted.case_id}`, runtime: projections };
 }
 
-async function jsonResponse(response, label) { if (!response.ok) throw new Error(`${label} failed with ${response.status}`); return response.json(); }
+async function jsonResponse(response, label) {
+  if (response.ok) return response.json();
+  let detail = "";
+  try {
+    const problem = await response.json();
+    detail = typeof problem.detail === "string" ? `: ${problem.detail}` : typeof problem.title === "string" ? `: ${problem.title}` : "";
+  } catch { /* The public status remains sufficient when no JSON problem is available. */ }
+  throw new Error(`${label} failed with ${response.status}${detail}`);
+}
 
 async function main() {
   const caseId = process.argv.slice(2).find((value) => value !== "--");

@@ -22,4 +22,9 @@ describe("golden case loader", () => {
     const fetcher = async (_url, init) => init?.method === "POST" ? Response.json({ case_id: "case-2", status_url: "/case-2" }, { status: 202 }) : Response.json({ lifecycle: "processing_exception", links: {} });
     await expect(loadGoldenCase("golden-004-missing-bank-evidence", { fetcher, apiBaseUrl: "http://api", wait: async () => {} })).resolves.toMatchObject({ lifecycle: "processing_exception", report_availability: "unavailable" });
   });
+
+  it("includes the safe public problem detail on intake failure", async () => {
+    const fetcher = async () => Response.json({ title: "Internal Server Error", detail: "Object storage unavailable" }, { status: 500 });
+    await expect(loadGoldenCase("golden-001-native-clear", { fetcher })).rejects.toThrow("Object storage unavailable");
+  });
 });
