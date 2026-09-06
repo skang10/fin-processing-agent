@@ -2,11 +2,11 @@
 
 Document ID: `ARC`
 
-Version: 2.2.0
+Version: 3.0.0
 
 Status: Approved
 
-Last updated: 2026-09-04
+Last updated: 2026-09-06
 
 ## 1. Purpose
 
@@ -151,7 +151,7 @@ The initial release is a modular monolith deployed as a small set of processes. 
 |---|---|---|---|
 | Review Web | Static browser application | Review Queue, Agent Report, document and structured-data inspection, issue review, requested-change draft recording, final review actions, and bounded case Agent log | Database access, durable state, document processing, customer-message delivery, model credentials, dataset authoring, golden-truth mutation, or aggregate Agent monitoring |
 | API Service | Long-running Node.js process | HTTP edge, authentication context, contract validation, commands, polling queries, uploads, and review operations | Long-running PDF, OCR, VLM, Agent, and validation execution |
-| Worker Service | Long-running Node.js process; horizontally repeatable | Job consumption, workflow-stage execution, document task control, extraction, Agent recovery, validation, disposition, and Agent report verification | Public browser API, core banking actions, authoritative state outside persistence |
+| Worker Service | Long-running Node.js process; horizontally repeatable | Job consumption, workflow-stage execution, bounded Pi session control, Agent-tool dispatch, document task control, reconciliation, validation, disposition, and Agent report verification | Public browser API, core banking actions, model-defined workflow authority, authoritative state outside persistence |
 | Document Sandbox | Restricted subprocess or isolated task container | PDF parsing, PDFium rendering, image processing, and OCR for one bounded task | Direct database access, business credentials, model-provider credentials, unrestricted network access |
 | Dataset CLI | Offline command process | Synthetic generation, truth validation, dataset build and load, evaluation, and reporting | Online case orchestration and mutation of released golden truth |
 
@@ -299,9 +299,9 @@ The Intake Guard performs the prototype's basic file and structured-input contro
 
 `ARC-REQ-036` The Intake Guard must preserve the distinction between `accepted`, `rejected`, and `not_scanned`; it must not report malware safety when no malware scanner ran.
 
-### 7.5 Document Processing Component
+### 7.5 Document Processing and PDF Inspector Tool Component
 
-The Document Processing Component owns inspection, page rendering, native extraction, page technical classification, business-page classification, logical-document grouping, selective OCR, and local table candidates.
+The Document Processing Component wraps PDF Inspector and related native runtimes behind project-owned, schema-validated operations. After intake has established file safety, identity, and immutable storage, these operations are offered to the bounded Pi Case Review Agent as case-scoped tools for inspection, native-text access, rendering, classification, boundary analysis, selective OCR, and local table candidates. The component, not the model, owns execution, provenance, caching, prerequisite enforcement, and resource limits.
 
 `ARC-REQ-037` Document processing must preserve physical-file, page, render, coordinate, and processor lineage.
 
@@ -312,6 +312,12 @@ The Document Processing Component owns inspection, page rendering, native extrac
 `ARC-REQ-040` Business-page classification and boundary prediction must precede deterministic contiguous-page grouping.
 
 `ARC-REQ-041` The initial architecture must not contain an automatic cross-file merge or non-contiguous page-reordering component.
+
+`ARC-REQ-167` PDF Inspector capabilities exposed to the Agent must be registered project-owned tools rather than provider SDK objects, Shell commands, arbitrary file access, or unrestricted parser options.
+
+`ARC-REQ-168` The tool control plane must enforce native-text inspection before OCR for the same usable page and must permit VLM extraction only after approved local paths leave an explicit unresolved need.
+
+`ARC-REQ-169` A document tool invocation must be idempotent or resolve to an immutable cached artifact for the same run, source, operation version, and bounded arguments.
 
 ### 7.6 Extraction and Reconciliation Component
 
@@ -339,11 +345,11 @@ The Model Gateway presents provider-neutral, task-specific operations for page c
 
 ### 7.8 Pi Case Review Agent
 
-The Pi Case Review Agent uses an embedded bounded harness in two modes: optional recovery over eligible extraction gaps and mandatory-attempt pre-screening over one processable result revision. Report mode produces a non-authoritative Case Review Brief for a human reviewer.
+The Pi Case Review Agent is the mandatory-attempt pre-screening orchestrator for every processable case. After deterministic intake and minimal file preflight, one bounded case-review session selects from registered document-inspection, extraction, evidence, reconciliation-request, validation-request, and report-submission tools. The Agent may adapt its review plan to the case, but it does not own durable workflow transitions, execute native libraries directly, or determine authoritative claims, findings, or dispositions. The previously separate adaptive-recovery behavior becomes a bounded part of this case-review session when approved local extraction leaves an eligible explicit gap.
 
 `ARC-REQ-050` The Agent must be created with no default coding, Shell, arbitrary file, package-management, or unrestricted network tools.
 
-`ARC-REQ-051` The Agent must receive only the mode, bound gap or result revision, bounded relevant context, approved tool schemas, and execution budgets required for its task.
+`ARC-REQ-051` The Agent must receive only the case and run identity, bounded input inventory, committed tool results relevant to the active review, approved tool schemas, and execution budgets required for its task.
 
 `ARC-REQ-052` Each Agent tool must enforce case, run, document, page or region, input-schema, and authorization boundaries outside the model.
 
@@ -353,11 +359,19 @@ The Pi Case Review Agent uses an embedded bounded harness in two modes: optional
 
 `ARC-REQ-055` Agent-session state must not be the authoritative record of durable workflow progress.
 
-`ARC-REQ-164` Report mode must expose read-only case-review context plus one schema-constrained brief-submission tool; it must not expose candidate-submission or recovery tools.
+`ARC-REQ-164` Report submission must occur only after the control plane makes committed reconciliation, findings, and recommended disposition available; report generation must not expose a tool that can mutate those authoritative outputs.
 
 `ARC-REQ-165` A deterministic Report Verifier must validate report schema, references, registered vocabularies, value consistency, and prohibited-decision language before publication.
 
 `ARC-REQ-166` Report generation or verification failure must not prevent routing the deterministic result to Human-in-the-Loop review.
+
+`ARC-REQ-170` The Agent may choose among registered tools and bounded targets, but deterministic control-plane policy must enforce prerequisites, case and run scope, tool compatibility, evidence requirements, model-routing policy, and cumulative budgets before execution.
+
+`ARC-REQ-171` The Agent must not declare a claim accepted, a validation rule complete, or a disposition available merely by emitting prose; it must request the corresponding deterministic component operation and consume its committed result.
+
+`ARC-REQ-172` The workflow must persist enough session and tool state to resume or safely restart case review without treating model conversation memory as durable truth.
+
+`ARC-REQ-173` Failure of the Agent before report submission must preserve committed tool artifacts and deterministic outputs and must route the case to human review with an explicit Agent-unavailable status when a reviewable deterministic result exists.
 
 ### 7.9 Entity Resolution Component
 
@@ -427,24 +441,25 @@ Dataset and evaluation tooling operates outside the online case-processing path.
 
 ### 8.1 Stage graph
 
-The architecture uses a versioned directed acyclic stage graph for normal processing. Retry attempts do not create new stage types.
+The architecture uses a versioned durable control graph around one bounded Agent-led review session. Tool calls may be selected dynamically by the Agent, but the set of tools, their prerequisites, authorization, output contracts, persistence effects, and terminal conditions are versioned deterministic policy. Retry attempts do not create new stage types.
 
 ```text
 intake
-  -> inspect
-  -> render/classify pages
-  -> group logical documents
-  -> local extract and selective OCR
-  -> fixed model fallback when eligible
-  -> identify extraction gaps
-      -> adaptive Agent recovery when eligible
-  -> reconcile and normalize claims
-  -> resolve entities
-  -> validate
-  -> derive recommended disposition
-  -> Pi Case Review Brief generation and deterministic verification
+  -> file preflight and immutable source registration
+  -> bounded Pi case-review session
+      -> inspect package and selected pages with PDF Inspector tools
+      -> use native text before selective OCR
+      -> use bounded VLM extraction only for eligible unresolved needs
+      -> submit evidence-linked extraction candidates
+      -> request deterministic reconciliation and entity resolution
+      -> request the registered validation rule set and disposition mapping
+      -> inspect committed findings and evidence
+      -> submit a Case Review Brief
+  -> deterministic report verification
   -> review_required
 ```
+
+The diagram describes authority and dependency order, not a requirement that every case invoke every tool. A native-text case may complete without OCR or VLM. Tool output and deterministic component output remain immutable run artifacts even when the Agent session later fails.
 
 `ARC-REQ-076` The workflow definition must identify stage dependencies, input contract versions, output contract versions, retry policy references, and completion conditions.
 
@@ -476,6 +491,10 @@ intake
 
 `ARC-REQ-088` A retry, fallback, review, or terminal-failure path must be selected from persisted error classification and workflow policy rather than free-form exception text.
 
+`ARC-REQ-174` The Workflow Coordinator may schedule the bounded case-review stage but must not prescribe one fixed document-processing path inside that stage when multiple registered, policy-eligible tools can satisfy the case.
+
+`ARC-REQ-175` Agent-selected tool order must remain reconstructable from persisted step records and must be reproducible under the deterministic fake-model acceptance adapter.
+
 ## 9. Primary Processing Sequence
 
 ```text
@@ -490,14 +509,15 @@ Submitter      API        Object Store    PostgreSQL    Worker      Model/Agent
     |<----------|              |              |           |             |
     |           |              |              | job       |             |
     |           |              |              |---------->|             |
-    |           |              | read object  |           |             |
-    |           |              |<-------------|-----------|             |
-    |           |              |              | inspect/extract         |
+    |           |              |              | start bounded Agent     |
     |           |              |              |           |------------>|
-    |           |              |              |           |<------------|
-    |           |              |              | persist candidates      |
+    |           |              | read selected source/tool request      |
+    |           |              |<-------------|-----------|<------------|
+    |           |              |              | execute + persist tool  |
     |           |              |              |<----------|             |
-    |           |              |              | validate + disposition  |
+    |           |              |              | candidate/reconcile/rule|
+    |           |              |              |<----------|------------>|
+    |           |              |              | verify submitted report |
     |           |              |              |<----------|             |
     | poll      |              |              |           |             |
     |---------->| query state  |              |           |             |
@@ -660,11 +680,11 @@ Architecture conformance must be demonstrated through automated tests, static de
 
 ## 18. Unresolved Architecture Questions
 
-No unresolved architecture decision blocks review of this document.
+Version 3.0.0 is approved. Component specifications must subsequently define the exact tool registry, mandatory prerequisites, durable session re-entry protocol, and failure behavior when the Agent becomes unavailable before a reviewable deterministic result exists.
 
 The following evidence-dependent decisions remain in [`BACKLOG.md`](../BACKLOG.md):
 
-1. The validated Pi SDK integration and hardening configuration.
+1. Evaluation evidence for the Agent-led document-tool policy and its deterministic fake-model path.
 2. The measured PDF Inspector and PP-OCRv6 baseline.
 3. The default and fallback VLM selection.
 4. The measured quality, latency, and cost baseline.
@@ -675,6 +695,7 @@ These decisions may refine adapters, versions, thresholds, and budgets. They mus
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.0.0 | 2026-09-06 | Approved | Made bounded Pi the case-review orchestrator after deterministic file preflight, exposed PDF Inspector through registered case-scoped tools, folded adaptive recovery into the main session, and retained deterministic persistence, reconciliation, validation, disposition, and report verification authority. |
 | 2.2.0 | 2026-09-04 | Approved | Reduced V1 browser integration to polling and a bounded case Agent log; deferred SSE and aggregate Agent monitoring. |
 | 2.1.0 | 2026-09-04 | Approved | Aligned Review Web with the V1 HTML baseline, separated Agent monitoring from case review, and limited requested changes to recorded drafts without customer delivery. |
 | 2.0.0 | 2026-09-04 | Approved | Added per-case Pi pre-screening, verified Case Review Brief generation, and fail-open routing to human review while retaining bounded gap recovery. |

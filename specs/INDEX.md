@@ -2,11 +2,11 @@
 
 Document ID: `IDX`
 
-Version: 3.0.0
+Version: 3.0.2
 
 Status: Approved
 
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 
 ## 1. Purpose
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-All owning specifications in the catalog are approved, including `operations/DEPLOYMENT.md`. `ADR_001_PI_AGENT_HARNESS.md`, `ADR_002_PDF_INSPECTOR.md`, and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
+All owning specifications in the catalog are approved, including `SYSTEM_ARCHITECTURE.md` version 3.0.0 and `operations/DEPLOYMENT.md`. `ADR_001_PI_AGENT_HARNESS.md`, `ADR_002_PDF_INSPECTOR.md`, and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
 
 ## 3. Product Baseline
 
@@ -367,6 +367,8 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.0.2 | 2026-09-06 | Approved | Approved System Architecture 3.0.0 as the bounded Agent-led document-tool architecture. |
+| 3.0.1 | 2026-09-06 | Approved | Registered System Architecture 3.0.0 as In Review for the proposed bounded Agent-led document-tool architecture. |
 | 3.0.0 | 2026-09-05 | Approved | Completed and approved the owning specification set, accepted the Pi, PDF Inspector, and rule-architecture ADRs, retained VLM selection as evidence-gated, and superseded the migration source. |
 | 2.9.0 | 2026-09-05 | Approved | Approved Security and Observability and registered the minimal local Deployment specification for review. |
 | 2.8.0 | 2026-09-05 | Approved | Registered the minimal first-slice Observability and Failures specification for review. |
