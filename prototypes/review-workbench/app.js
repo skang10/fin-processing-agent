@@ -1147,8 +1147,10 @@ function renderAgentLog() {
   const formatEvents = function (events) {
     return events.map(function (event) {
       const date = new Date(event.timestamp);
-      const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
-        '.' + String(date.getMilliseconds()).padStart(3, '0');
+      const time = new Intl.DateTimeFormat('de-DE', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+      }).format(date);
       const activity = activityLabels[event.activity] || event.activity;
       const actor = actorLabels[event.actor] || '';
       const detail = [actor, event.tool_label ? 'Tool: ' + (toolLabels[event.tool_label] || event.tool_label) : '']

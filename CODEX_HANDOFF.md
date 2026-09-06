@@ -21,6 +21,7 @@ This section is the operational starting point for the next implementation agent
 13. The Agent Log separates system preprocessing from Agent document tools: the API returns an `actor` of `system`, `agent_document_tool`, or `agent` per event, the log opens with a system-preprocessing event, and a VLM step names its gateway so `fixture-vlm-gateway` is never read as a real model result.
 14. Docker Compose still warns when shell-level `POSTGRES_PASSWORD` and `MINIO_SECRET_KEY` are absent even though the running demo uses its generated local configuration. Treat removal of this warning as cleanup, not as evidence that a service is unhealthy.
 15. `render_page_region` 2.0.0 now delivers the authorized uploaded-document page image to Pi as transient multimodal tool content. The durable invocation stores only the safe artifact reference and integrity metadata; image bytes are absent from Agent steps, logs, traces, and resumed progress. The fake policy exercises a full-page visual read for every authorized page. Rendering and OCR are still eagerly produced before the session; BL-009 tracks moving those operations behind demand-driven Agent calls.
+16. The Review Workbench formats visible Agent-log timestamps as German local `DD.MM.YYYY, HH:mm:ss` values without milliseconds; authoritative ISO timestamps remain unchanged and continue to determine event order.
 
 ### What is still fixture-backed
 

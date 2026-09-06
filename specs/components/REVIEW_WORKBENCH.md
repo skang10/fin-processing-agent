@@ -2,7 +2,7 @@
 
 Document ID: `UI`
 
-Version: 3.2.0
+Version: 3.3.0
 
 Status: Approved
 
@@ -278,6 +278,8 @@ The workbench presents `clear_for_downstream` as **Complete document review** so
 
 `UI-REQ-155` Each case may provide a progressive-disclosure Agent log showing only the model, estimated cost or explicit unavailability, timestamps, and short reviewer-readable activity events, including bounded tool calls when relevant. Session identifiers, complete prompts, document content, chain-of-thought, credentials, raw provider payloads, and unrestricted tool arguments must not appear.
 
+`UI-REQ-171` Visible Agent-log timestamps must use the German local date-time format `DD.MM.YYYY, HH:mm:ss`, for example `07.09.2026, 01:29:05`, without milliseconds or a 12-hour meridiem marker. The client must continue to order events by their complete authoritative timestamps.
+
 `UI-REQ-156` The structured Application data view must group reviewer-relevant applicant, masked contact, submission-history, employment, and income fields. It must distinguish initial submission, latest applicant submission, and latest application-data update times, and must not expose a customer-contact action.
 
 `UI-REQ-157` Opening a review case must present its current verified Case Review Brief as the default view beside the document workspace; its issues, compact progress, and bounded Agent activity must remain reachable without a nested case dashboard.
@@ -456,6 +458,7 @@ No unresolved Review Workbench boundary decision blocks review of this document.
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.3.0 | 2026-09-07 | Approved | Standardized visible Agent-log timestamps as German local `DD.MM.YYYY, HH:mm:ss` values without milliseconds while retaining full authoritative timestamps for event ordering. |
 | 3.2.0 | 2026-09-06 | Approved | Selected confirmed requested-change drafts for the message by default while retaining reviewer opt-out. |
 | 3.1.1 | 2026-09-05 | Approved | Added individual deprecated and removed requirement tombstones so all published UI identifiers remain machine-verifiable. |
 | 3.1.0 | 2026-09-04 | Approved | Reduced V1 to polling and a bounded case Agent log; deferred SSE and the separate aggregate Agent-monitoring surface. |
