@@ -6,8 +6,8 @@ This section is the operational starting point for the next implementation agent
 
 ### Repository and runtime state
 
-1. The repository is on `main`. Golden evidence, reviewer presentation, and missing-document capture fixes are committed through `bc71948 chore: ignore generated evaluation reports`.
-2. `pnpm check` (122 unit and contract tests), `pnpm dataset:validate`, the Review Web production build, and `git diff --check` pass. Earlier Docker-backed integration and acceptance runs remain recorded below.
+1. The repository is on `main`. The latest completed change is `0b6fe74 fix: clarify live agent cost and review activity`.
+2. `pnpm check` (124 unit and contract tests), `pnpm dataset:validate`, the Review Web production build, and `git diff --check` pass. Earlier Docker-backed integration and acceptance runs remain recorded below.
 3. PostgreSQL now owns Agent execution state. One authoritative `case_review` session exists per processing run, guarded by a run-scoped advisory lock and a `(run_id, mode)` unique index. Linked attempts, incrementally committed steps, immutable tool invocation results keyed by a canonical idempotency key, step reuse lineage, and cumulative budget counters live in `agent_sessions`, `agent_session_attempts`, `agent_tool_invocations`, and `agent_steps` (migration `0023`, additive: it adds tables and columns and only relaxes the terminal columns so an in-flight session can exist). Attempt fencing rejects step or terminal writes from a Worker after a newer linked attempt takes ownership.
 4. The bounded Pi session persists its identity and attempt before the first model call and commits each completed step, its invocation result or reuse lineage, and the consumed budget before the result reaches the model. The reviewer-facing trace is rebuilt from those durable records rather than from an end-of-session blob.
 5. A redelivered case-processing job resumes the same session as a linked attempt. Committed tool results are reused by idempotency key only after the persisted tool identity, implementation version, outcome, output schema and hash, authorized input versions, produced references, and terminal behavior match. A result carrying document text keeps only an integrity hash and is re-read from its committed artifact, while a paid or side-effecting result keeps a bounded payload that restores session state without repeating the operation. An already terminal session replays its committed outcome without opening a new attempt, an incompatible configuration or an exhausted attempt budget fails safely, and the Worker routes a session with no reviewable result through durable workflow failure policy.
@@ -44,11 +44,50 @@ Runtime case identifiers are intentionally not recorded here because each captur
 
 ### Immediate next task
 
-The six-case golden release and deterministic offline regression baseline are complete. `openai/gpt-5.6-terra` is selected as the first live-acceptance candidate because it supports the required tool calling and structured output at a moderate price; this does not make it the final ADR-003 default model. One clean golden case completed successfully through the live route under the existing `USD 0.25` per-case hard limit; the observation is recorded in `EVALUATION_RESULTS.md`. Persisted live cost is now presented as USD, and capture configuration can preflight a whole-run USD cap against per-case reservations.
+Implement only the Agent-led extraction live path. Do not start the full live evaluation, real OCR acceptance, VLM benchmark, dataset expansion, UI redesign, or unrelated cleanup in this task.
 
-Before a full live evaluation, finish the Agent-led extraction path. The current Worker still calls `buildOfflineExtraction(fixtureId, ...)` before Pi and therefore supplies fixture-backed structured values. PDF Inspector performs real pre-Agent native-text inspection and rendering, while the registered Agent tools can inspect pages and request OCR/VLM only when a fixture-defined gap exists. Replace the live path's fixture-backed values with document inventory and evidence-linked candidates obtained through the bounded Agent tool flow; retain deterministic reconciliation, validation, report verification, and the rule engine outside model authority. Then reconcile provider token usage and capture the full compatible evaluation run within the user's EUR 2 total ceiling.
+#### Current defect
 
-A Review Workbench defect found during that review was fixed separately: a case with no Agent-raised issue never called `render()`, so its document panel kept the prototype's bundled five-page sample instead of the case's own PDF. `golden-001-native-clear` now shows `golden-001-native-clear.pdf`, page 1 of 3, with three thumbnails and an explicit empty-issue panel, and a case with issues is unchanged.
+`apps/worker/src/case-review.ts` calls `buildOfflineExtraction(fixtureId, fixtureContext)` before Pi. Consequently, even when `AGENT_MODEL=openai/gpt-5.6-terra`, structured candidates, claims, gaps, and much of the eventual five-rule result are seeded from the synthetic fixture rather than derived through the Agent's bounded document tools. PDF Inspector performs genuine pre-Agent native-text inspection and rendering, and Pi has registered inspection/extraction tools, but a clean fixture presents no extraction gap, so the live Agent can proceed directly to reconciliation, validation, and report submission without inspecting document contents. The successful single-case live observation therefore proves the model route and report loop only; it does not prove general PDF-to-structured-data extraction.
+
+#### Required outcome
+
+For a live-model case, Pi must lead the document review from a bounded case manifest and application data. It must obtain document content only through registered, scoped tools; use PDF Inspector native text, page metadata, renders, selective OCR, or bounded VLM extraction as tool-backed evidence sources; submit evidence-linked extraction candidates; and then request deterministic reconciliation and the five registered validation rules. Deterministic code must continue to own accepted claims, findings, recommended document-processing disposition, report verification, and workflow state. Human review remains mandatory.
+
+PDF Inspector is an Agent tool foundation, not the Agent's only input and not a source of precomputed fixture truth. Pi may receive structured application data, document inventory, page metadata, current accepted claims/candidates, extraction requirements, and prior durable tool results. It must not receive an unrestricted complete case package, unrestricted filesystem or network access, Shell, or authority to create rules or make lending, credit, AML, KYC, customer-contact, or final workflow decisions.
+
+#### Implementation constraints
+
+1. Preserve the deterministic offline/fake-model path used by default CI. Do not make tests depend on OpenAI or network access.
+2. Remove `buildOfflineExtraction(...)` as the source of live-path structured truth. Keeping it behind an explicit offline fixture adapter is acceptable.
+3. Do not invent extraction gaps from golden truth for the live path. Derive work from declared field requirements, application data, persisted document/page metadata, and tool results.
+4. Require evidence references for every submitted document-derived candidate. A candidate may become a claim only through the existing deterministic reconciliation path.
+5. Keep VLM input bounded to selected pages, windows, or regions. VLM extraction receives no tools.
+6. Keep the five-rule registry unchanged. A model cannot add, remove, activate, or reinterpret a rule.
+7. Preserve one durable `case_review` session, incremental step persistence, idempotent tool-result reuse, attempt fencing, cumulative budgets, and terminal replay.
+8. Retain the current `USD 0.25` per-case hard limit. Do not run paid acceptance cases while implementing; use fake adapters until automated checks pass and the user explicitly approves another live run.
+9. Do not rewrite historical Agent steps. Reviewer-facing projection may clarify old wording without mutating audit records.
+10. Keep limitations explicit: current OCR remains fixture output and this task must not claim OCR-recognition quality.
+
+#### Minimum acceptance evidence
+
+1. A clean synthetic case no longer reaches validation solely from fixture-seeded document values. Its fake Agent trace shows bounded document inventory/inspection, native-text access where available, evidence-linked candidate submission, reconciliation, validation, current-result review, and report submission.
+2. A scanned or unresolved field case selects only its authorized page or region and respects OCR/VLM page, call, token, time, and cost budgets.
+3. Cross-case, unauthorized-page, unknown-tool, missing-evidence, invalid-schema, and prompt-injection attempts remain rejected outside the model.
+4. Deterministic rule outputs and report verification remain authoritative; the Agent cannot directly persist claims, findings, disposition, or final review actions.
+5. Durable re-entry tests still prove that committed inspection, OCR/VLM, candidate, reconciliation, validation, and report steps are not charged or applied twice.
+6. Agent Log makes the handoff clear: preprocessing/PDF inspection performed by the system is distinguished from document tools actively called by Pi. Do not imply that fixture extraction is real extraction.
+7. `pnpm check`, `pnpm test:integration`, `pnpm dataset:validate`, `pnpm build`, and relevant Docker-backed Worker recovery tests pass. If a test cannot run, record the exact reason rather than weakening it.
+
+#### Stop condition and handback
+
+Stop after this task is implemented, tested, documented, and committed. Do not proceed to a paid full-dataset run. Hand back:
+
+1. Commit hashes and files changed.
+2. A concise before/after data-flow description.
+3. Automated verification results.
+4. The exact synthetic cases and UI/API observations the user should manually inspect.
+5. Remaining known limitations, especially fake OCR, any still-fixture-backed component, and whether the live route is ready for a separately approved acceptance run.
 
 ### Global next steps
 
