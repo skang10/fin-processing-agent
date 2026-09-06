@@ -161,4 +161,9 @@ The currently authoritative commands are:
 15. `pnpm demo:reset` — permanently remove demo services, named volumes, and generated local credentials.
 16. `pnpm demo:acceptance` — build, start, migrate, health-check, process the synthetic case, and remove the isolated test environment.
 
-Formatting, linting, browser testing, dataset, and evaluation commands are not implemented yet. Inspect the repository rather than guessing them.
+17. `pnpm dataset:generate` — deterministically materialize golden candidates from the versioned blueprint.
+18. `pnpm dataset:validate` — validate candidate metadata, truth completeness, synthetic markers, references, and checksums.
+19. `pnpm dataset:inspect` — print a compact human-review inventory without freezing truth.
+20. `pnpm dataset:build -- VERSION` — build an immutable manifest only after every candidate records human confirmation.
+
+Formatting, linting, browser testing, and evaluation commands are not implemented yet. Inspect the repository rather than guessing them.

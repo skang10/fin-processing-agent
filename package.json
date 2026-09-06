@@ -20,6 +20,10 @@
     "demo:down": "node scripts/demo-compose.mjs down",
     "demo:reset": "node scripts/demo-compose.mjs reset",
     "demo:acceptance": "node scripts/demo-compose.mjs acceptance",
+    "dataset:generate": "node scripts/dataset.mjs generate",
+    "dataset:validate": "node scripts/dataset.mjs validate",
+    "dataset:inspect": "node scripts/dataset.mjs inspect",
+    "dataset:build": "node scripts/dataset.mjs build",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc -b --pretty false"

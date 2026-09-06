@@ -90,7 +90,7 @@ The resulting choice belongs in `specs/decisions/ADR_003_VLM_SELECTION.md`. Prod
 
 ### BL-005 — Versioned Golden Dataset
 
-**Status:** Approved specification; awaiting dataset tooling and artifacts
+**Status:** Candidate generation, validation, inspection, human-confirmation gating, immutable release manifest, and checksum tooling implemented; initial six candidate artifacts and human verification remain pending
 
 Build incrementally:
 
