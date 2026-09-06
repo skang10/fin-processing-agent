@@ -174,6 +174,8 @@ function validateTruthReferences(candidate, file) {
         if (!jsonPointerExists(candidate.application_data, reference.slice("application:".length))) throw new Error(`${file}: application evidence does not exist: ${reference}`);
       } else if (reference.startsWith("document:")) {
         if (!candidate.documents.some((document) => basename(document.path) === reference.slice(9))) throw new Error(`${file}: document evidence does not exist: ${reference}`);
+      } else if (reference.startsWith("finding:")) {
+        if (!registeredRuleCodes.has(reference.slice(8))) throw new Error(`${file}: finding evidence uses an unregistered rule: ${reference}`);
       } else throw new Error(`${file}: unsupported evidence reference ${reference}`);
     }
   }

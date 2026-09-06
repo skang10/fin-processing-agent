@@ -55,6 +55,23 @@ describe("golden dataset tooling", () => {
     await writeFile(join(candidates, "golden-invalid.json"), JSON.stringify(value));
     await expect(confirmCandidate("golden-invalid", "reviewer", candidates, root)).rejects.toThrow("runtime path is pending");
   });
+
+  it("accepts finding evidence only for a registered deterministic rule", async () => {
+    const root = await mkdtemp(join(tmpdir(), "findoc-dataset-finding-"));
+    const candidates = join(root, "candidates");
+    await mkdir(candidates);
+    await writeFile(join(root, "case.pdf"), "%PDF-1.7\nSYNTHETIC DEMO\n%%EOF");
+    const value = candidate("golden-finding");
+    value.documents[0].sha256 = createHash("sha256").update(await readFile(join(root, "case.pdf"))).digest("hex");
+    value.documents[0].path = "../case.pdf";
+    value.truth_candidate.expected_issues[0].acceptable_evidence = ["finding:VAL_DOC_COMPLETENESS_001"];
+    await writeFile(join(candidates, "golden-finding.json"), JSON.stringify(value));
+    await expect(validateCandidates(candidates, root)).resolves.toHaveLength(1);
+
+    value.truth_candidate.expected_issues[0].acceptable_evidence = ["finding:UNKNOWN_RULE"];
+    await writeFile(join(candidates, "golden-finding.json"), JSON.stringify(value));
+    await expect(validateCandidates(candidates, root)).rejects.toThrow("finding evidence uses an unregistered rule");
+  });
 });
 
 function candidate(caseId) {

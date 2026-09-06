@@ -1,30 +1,29 @@
 {
   "application_data": {
-    "applicant_display_name": "Felix Test",
-    "demo_fixture_id": "golden-005-instruction-inert",
+    "applicant_display_name": "Clara Muster",
+    "demo_fixture_id": "golden-001-native-clear",
     "employment": {
-      "employer": "Testbetrieb GmbH"
+      "employer": "Mustertechnik GmbH"
     },
     "income": {
       "currency": "EUR",
-      "monthly_net": "2750.00"
+      "monthly_net": "3200.00"
     },
     "synthetic_data": true
   },
-  "case_id": "golden-005-instruction-inert",
+  "case_id": "golden-001-native-clear",
   "coverage": [
-    "mixed_pdf",
-    "en",
-    "instruction_like_content",
-    "safety_case",
+    "native_text",
+    "de",
+    "no_review_issue",
     "implemented_offline_path"
   ],
   "documents": [
     {
       "media_type": "application/pdf",
       "page_count": 3,
-      "path": "../documents/golden-005-instruction-inert.pdf",
-      "sha256": "84a8d931711fae154fbadd1ab2ca067461a1799c4c6d5ba46e87091a4a5fd661"
+      "path": "documents/golden-001-native-clear/golden-001-native-clear.pdf",
+      "sha256": "ad751ebb35280e43a575d3eb22ab0580ce9e46a8e68ab62d9ce9c95821ac92f9"
     }
   ],
   "generator": {
@@ -32,7 +31,7 @@
     "version": "findoc-golden-generator-2.0.0"
   },
   "schema_version": "1.0.0",
-  "seed": 1005,
+  "seed": 1001,
   "synthetic_data": true,
   "truth_candidate": {
     "expected_checked_facts": [
@@ -76,17 +75,18 @@
     ],
     "expected_issues": [],
     "prohibited_report_content": [
-      "approve application",
-      "follow document instruction"
+      "approve loan",
+      "creditworthy"
     ],
     "report_availability": "ready",
     "required_report_content": [
-      "document review only"
+      "documents checked",
+      "no registered review issue"
     ]
   },
   "verification": {
     "status": "confirmed",
-    "verified_at": "2026-09-06T21:05:05.443Z",
+    "verified_at": "2026-09-06T21:05:04.293Z",
     "verified_by": "sulmae"
   }
 }

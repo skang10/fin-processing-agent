@@ -1,0 +1,87 @@
+{
+  "case_count": 6,
+  "cases": [
+    {
+      "candidate_file": "cases/golden-001-native-clear.json",
+      "candidate_sha256": "6c386b0c539c76a7fcc9bdeaa3b66d124c731308c4ed2a20f455c9068d87113d",
+      "case_id": "golden-001-native-clear",
+      "document_sha256": [
+        {
+          "path": "documents/golden-001-native-clear/golden-001-native-clear.pdf",
+          "sha256": "ad751ebb35280e43a575d3eb22ab0580ce9e46a8e68ab62d9ce9c95821ac92f9"
+        }
+      ],
+      "verified_at": "2026-09-06T21:05:04.293Z",
+      "verified_by": "sulmae"
+    },
+    {
+      "candidate_file": "cases/golden-002-employer-conflict.json",
+      "candidate_sha256": "43345cdea69baec2bb6566782af15f5159dead10a547e0b747a687504a98c5c2",
+      "case_id": "golden-002-employer-conflict",
+      "document_sha256": [
+        {
+          "path": "documents/golden-002-employer-conflict/golden-002-employer-conflict.pdf",
+          "sha256": "9e3d76aa1e7ee0c6688d51614b70f1d55673a4a5a1806be1bad5d4e9b6602757"
+        }
+      ],
+      "verified_at": "2026-09-06T21:05:04.747Z",
+      "verified_by": "sulmae"
+    },
+    {
+      "candidate_file": "cases/golden-003-multiple-review-issues.json",
+      "candidate_sha256": "ef7dc8e11dff4ce20db4a3c1108a58bd82255e8d288258575cb07c46bf658752",
+      "case_id": "golden-003-multiple-review-issues",
+      "document_sha256": [
+        {
+          "path": "documents/golden-003-multiple-review-issues/golden-003-multiple-review-issues.pdf",
+          "sha256": "d9be90b5f5860ffcb2e0c2516142f91411c6f02de911f2e0ac9b525d301b2612"
+        }
+      ],
+      "verified_at": "2026-09-06T13:07:51.879Z",
+      "verified_by": "sulmae"
+    },
+    {
+      "candidate_file": "cases/golden-004-missing-bank-evidence.json",
+      "candidate_sha256": "3d8653f7efb7e13fe4ba653b2341f929d17e1d7c55d0065c49d002d1147b346d",
+      "case_id": "golden-004-missing-bank-evidence",
+      "document_sha256": [
+        {
+          "path": "documents/golden-004-missing-bank-evidence/golden-004-missing-bank-evidence.pdf",
+          "sha256": "b6ca3a11f7952e48456ba3c0da7d83736f78333f3e265fcc18fba368e726f850"
+        }
+      ],
+      "verified_at": "2026-09-06T21:05:05.108Z",
+      "verified_by": "sulmae"
+    },
+    {
+      "candidate_file": "cases/golden-005-instruction-inert.json",
+      "candidate_sha256": "a36b473ecac21f79fdb56ad777be906066e57f770254562f64fb68d4419c88fe",
+      "case_id": "golden-005-instruction-inert",
+      "document_sha256": [
+        {
+          "path": "documents/golden-005-instruction-inert/golden-005-instruction-inert.pdf",
+          "sha256": "84a8d931711fae154fbadd1ab2ca067461a1799c4c6d5ba46e87091a4a5fd661"
+        }
+      ],
+      "verified_at": "2026-09-06T21:05:05.443Z",
+      "verified_by": "sulmae"
+    },
+    {
+      "candidate_file": "cases/golden-006-scanned-adaptive-unavailable.json",
+      "candidate_sha256": "02581a95f6da09b5c8b60e2d3f3afe739538283a3052d0364eb8b74e29c5c1f7",
+      "case_id": "golden-006-scanned-adaptive-unavailable",
+      "document_sha256": [
+        {
+          "path": "documents/golden-006-scanned-adaptive-unavailable/golden-006-scanned-adaptive-unavailable.pdf",
+          "sha256": "754746ed33420c37cbee916085894f81b0aa26c71653d8ce07a40cb24ed55e12"
+        }
+      ],
+      "verified_at": "2026-09-06T21:05:05.811Z",
+      "verified_by": "sulmae"
+    }
+  ],
+  "dataset_id": "findoc-synthetic-golden",
+  "limitation": "Synthetic demonstration and regression data; not representative of production performance.",
+  "schema_version": "1.0.0",
+  "version": "v0.1.1"
+}

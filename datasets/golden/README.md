@@ -22,3 +22,5 @@ pnpm evaluate:capture -- datasets/releases/v0.1.0 evaluation-config.json actual-
 `evaluate:offline` accepts only a frozen, checksum-verified release and an explicit actual-run manifest. It writes one immutable report under `output/evaluations/` and keeps issue detection, evidence grounding, and report validity separate.
 
 `evaluate:capture` loads every case from a frozen release through the running API and Worker, resolves persisted evidence into stable golden references, and writes a new actual-run manifest. The command requires an explicit version manifest and never overwrites output.
+
+Golden evidence tokens use `page:<number>` for page evidence, `application:<json-pointer>` for structured input, `document:<filename>` for a submitted artifact, and `finding:<rule-code>` when an issue is supported by a deterministic finding such as the absence of a required document. Every checked fact presented by the report must have a corresponding truth entry. A verifier-rejected report contributes no verified Agent issues, while its deterministic findings and system-detected review issues remain available to human reviewers.

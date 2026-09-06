@@ -37,7 +37,30 @@
     "expected_checked_facts": [
       {
         "acceptable_evidence": [
+          "page:1",
+          "page:2",
+          "page:3"
+        ],
+        "code": "VAL_DOC_COMPLETENESS_001"
+      },
+      {
+        "acceptable_evidence": [
           "page:1"
+        ],
+        "code": "VAL_ID_EXPIRY_001"
+      },
+      {
+        "acceptable_evidence": [
+          "application:/income/monthly_net",
+          "page:2"
+        ],
+        "code": "VAL_INCOME_CONSISTENCY_001"
+      },
+      {
+        "acceptable_evidence": [
+          "page:1",
+          "page:2",
+          "page:3"
         ],
         "code": "VAL_NAME_CONSISTENCY_001"
       }
@@ -63,7 +86,7 @@
   },
   "verification": {
     "status": "confirmed",
-    "verified_at": "2026-09-06T13:07:51.507Z",
+    "verified_at": "2026-09-06T21:05:04.747Z",
     "verified_by": "sulmae"
   }
 }

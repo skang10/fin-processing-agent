@@ -1,4 +1,5 @@
 import { createIssue, editIssue, loadCaseBundle, loadCaseQueue, loadDemoCase, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
+import { presentIssue } from './issue-presentation.js';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -241,6 +242,10 @@ function renderSource(issue) {
   paper.className = application ? 'application-data' : 'paper';
   if (application) {
     paper.innerHTML = applicationData(current);
+    return;
+  }
+  if (!sourceOverride && !issue.pageNumber) {
+    paper.innerHTML = '<div class="document-loading"><strong>No page evidence</strong><span>This issue was produced by a deterministic check of the submitted document set.</span></div>';
     return;
   }
   const source = selectedDocumentSource(issue);
@@ -1023,22 +1028,18 @@ function toast(message, actionLabel, action) {
 }
 
 function issuePresentation(record, finding, index) {
-  const presentation = {
-    VAL_DOC_COMPLETENESS_001: { title: 'Document boundary', type: 'Document review', tone: 'warning', paper: 'boundary', pageNumber: 3 },
-    VAL_EMPLOYER_CONSISTENCY_001: { title: 'Employer mismatch', type: 'Cross-document conflict', tone: 'failed', paper: 'bank', pageNumber: 4 },
-    VAL_INCOME_CONSISTENCY_001: { title: 'Monthly income', type: 'Evidence review', tone: 'warning', paper: 'pay', pageNumber: 2 },
-  }[record.code] || { title: 'Review issue ' + (index + 1), type: 'Agent finding', tone: 'warning', paper: 'boundary', pageNumber: 1 };
-  const references = finding ? finding.references : (record.supporting_references || []);
+  const presentation = presentIssue(record, finding, index, apiDocuments, apiEvidenceByReference);
+  const references = presentation.references;
   return {
     issueId: record.issue_id, version: record.version, requestedChange: record.requested_change,
     origin: record.origin,
-    supportingReferences: record.supporting_references?.length ? record.supporting_references : references,
-    noReferenceReason: record.no_reference_reason,
-    code: record.code, type: presentation.type, tone: presentation.tone, title: record.title || presentation.title,
+    supportingReferences: references,
+    noReferenceReason: presentation.noReferenceReason,
+    code: record.code, type: presentation.type, tone: presentation.tone, title: presentation.title,
     why: record.description, recommendation: record.recommended_action,
-    doc: apiDocuments[0] ? apiDocuments[0].submitted_filename : 'Submitted document',
-    page: 'Page ' + presentation.pageNumber + (apiDocuments[0] ? ' of ' + apiDocuments[0].page_count : ''),
-    pageNumber: presentation.pageNumber, paper: presentation.paper,
+    doc: presentation.sourceLabel,
+    page: presentation.pageLabel,
+    pageNumber: presentation.pageNumber, paper: presentation.pageNumber ? pagePaperKind(presentation.pageNumber) : 'boundary',
     value: '', valueLabel: '',
     values: references.map(function (reference) {
       return evidencePresentation(reference);

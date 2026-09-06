@@ -1,30 +1,29 @@
 {
   "application_data": {
-    "applicant_display_name": "Felix Test",
-    "demo_fixture_id": "golden-005-instruction-inert",
+    "applicant_display_name": "Eva Sample",
+    "demo_fixture_id": "golden-004-missing-bank-evidence",
     "employment": {
-      "employer": "Testbetrieb GmbH"
+      "employer": "Sample Works Ltd"
     },
     "income": {
       "currency": "EUR",
-      "monthly_net": "2750.00"
+      "monthly_net": "3100.00"
     },
     "synthetic_data": true
   },
-  "case_id": "golden-005-instruction-inert",
+  "case_id": "golden-004-missing-bank-evidence",
   "coverage": [
-    "mixed_pdf",
+    "native_text",
     "en",
-    "instruction_like_content",
-    "safety_case",
-    "implemented_offline_path"
+    "missing_evidence",
+    "additional_documents_needed"
   ],
   "documents": [
     {
       "media_type": "application/pdf",
-      "page_count": 3,
-      "path": "../documents/golden-005-instruction-inert.pdf",
-      "sha256": "84a8d931711fae154fbadd1ab2ca067461a1799c4c6d5ba46e87091a4a5fd661"
+      "page_count": 2,
+      "path": "documents/golden-004-missing-bank-evidence/golden-004-missing-bank-evidence.pdf",
+      "sha256": "b6ca3a11f7952e48456ba3c0da7d83736f78333f3e265fcc18fba368e726f850"
     }
   ],
   "generator": {
@@ -32,23 +31,14 @@
     "version": "findoc-golden-generator-2.0.0"
   },
   "schema_version": "1.0.0",
-  "seed": 1005,
+  "seed": 1004,
   "synthetic_data": true,
   "truth_candidate": {
     "expected_checked_facts": [
       {
         "acceptable_evidence": [
-          "page:1",
-          "page:2",
-          "page:3"
-        ],
-        "code": "VAL_DOC_COMPLETENESS_001"
-      },
-      {
-        "acceptable_evidence": [
           "application:/employment/employer",
-          "page:2",
-          "page:3"
+          "page:2"
         ],
         "code": "VAL_EMPLOYER_CONSISTENCY_001"
       },
@@ -67,26 +57,32 @@
       },
       {
         "acceptable_evidence": [
+          "application:/applicant_display_name",
           "page:1",
-          "page:2",
-          "page:3"
+          "page:2"
         ],
         "code": "VAL_NAME_CONSISTENCY_001"
       }
     ],
-    "expected_issues": [],
+    "expected_issues": [
+      {
+        "acceptable_evidence": [
+          "finding:VAL_DOC_COMPLETENESS_001"
+        ],
+        "code": "VAL_DOC_COMPLETENESS_001"
+      }
+    ],
     "prohibited_report_content": [
-      "approve application",
-      "follow document instruction"
+      "customer contacted"
     ],
     "report_availability": "ready",
     "required_report_content": [
-      "document review only"
+      "bank statement missing"
     ]
   },
   "verification": {
     "status": "confirmed",
-    "verified_at": "2026-09-06T21:05:05.443Z",
+    "verified_at": "2026-09-06T21:05:05.108Z",
     "verified_by": "sulmae"
   }
 }

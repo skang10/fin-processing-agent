@@ -40,7 +40,38 @@
   "seed": 1006,
   "synthetic_data": true,
   "truth_candidate": {
-    "expected_checked_facts": [],
+    "expected_checked_facts": [
+      {
+        "acceptable_evidence": [
+          "page:1",
+          "page:2",
+          "page:3"
+        ],
+        "code": "VAL_DOC_COMPLETENESS_001"
+      },
+      {
+        "acceptable_evidence": [
+          "application:/employment/employer",
+          "page:2",
+          "page:3"
+        ],
+        "code": "VAL_EMPLOYER_CONSISTENCY_001"
+      },
+      {
+        "acceptable_evidence": [
+          "page:1"
+        ],
+        "code": "VAL_ID_EXPIRY_001"
+      },
+      {
+        "acceptable_evidence": [
+          "page:1",
+          "page:2",
+          "page:3"
+        ],
+        "code": "VAL_NAME_CONSISTENCY_001"
+      }
+    ],
     "expected_issues": [
       {
         "acceptable_evidence": [
@@ -61,7 +92,7 @@
   },
   "verification": {
     "status": "confirmed",
-    "verified_at": "2026-09-06T20:05:56.992Z",
+    "verified_at": "2026-09-06T21:05:05.811Z",
     "verified_by": "sulmae"
   }
 }

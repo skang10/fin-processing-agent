@@ -28,7 +28,10 @@ export async function captureEvaluationRun(releaseDirectory, runConfiguration, o
       case_id: candidate.case_id, processable: true,
       issues: runtime.issues.issues.filter((item) => item.origin === "agent").map((item) => ({
         code: item.code,
-        evidence: item.supporting_references.length ? issueEvidence(item.supporting_references) : (findingEvidenceByRule.get(item.code) ?? []),
+        evidence: [...new Set([
+          ...(item.supporting_references.length ? issueEvidence(item.supporting_references) : (findingEvidenceByRule.get(item.code) ?? [])),
+          ...(findingEvidenceByRule.has(item.code) ? [`finding:${item.code}`] : []),
+        ])].sort(),
       })),
       checked_facts: report.checked_facts.map((item) => ({ code: item.rule_id, evidence: references(item.references) })),
       report: { availability: report.availability, verified: report.availability === "ready", ...(failure ? { failure_reason: failure } : {}), verifier: verifierState(failure) },
