@@ -210,10 +210,12 @@ export function buildApp(
     const report = await caseQueries.getAgentReport(caseId);
     return {
       availability: report.availability,
+      ...(report.failureReason ? { failure_reason: report.failureReason } : {}),
       ...(report.resultRevision ? { result_revision: report.resultRevision } : {}),
       ...(report.summary ? { summary: report.summary } : {}),
       issue_links: [...report.issueLinks],
       checked_facts: report.checkedFacts.map((fact) => ({
+        rule_id: fact.ruleId,
         statement: fact.statement,
         source_type: fact.sourceType,
         status: fact.status,

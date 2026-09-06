@@ -257,10 +257,11 @@ export interface QueueCaseView {
 
 export interface AgentReportView {
   readonly availability: "ready" | "pending" | "unavailable";
+  readonly failureReason?: string;
   readonly resultRevision?: { readonly id: string; readonly revision: number };
   readonly summary?: string;
   readonly issueLinks: readonly string[];
-  readonly checkedFacts: readonly { statement: string; sourceType: "deterministic_check"; status: "passed"; references: readonly string[] }[];
+  readonly checkedFacts: readonly { ruleId: string; statement: string; sourceType: "deterministic_check"; status: "passed"; references: readonly string[] }[];
 }
 
 export interface AgentLogView {

@@ -12,6 +12,7 @@ pnpm dataset:load -- golden-001-native-clear
 pnpm dataset:confirm -- CASE_ID REVIEWER
 pnpm dataset:build -- v0.1.0
 pnpm evaluate:offline -- datasets/releases/v0.1.0 actual-run.json
+pnpm evaluate:capture -- datasets/releases/v0.1.0 evaluation-config.json actual-run.json
 ```
 
 `dataset:build` refuses to freeze a release while any case remains `pending_human_review`, and it never rewrites a prior release.
@@ -19,3 +20,5 @@ pnpm evaluate:offline -- datasets/releases/v0.1.0 actual-run.json
 `dataset:load` submits one candidate to a running local demo, waits for processing, and prints the case lifecycle, report outcome, issue codes, and Review Workbench URL. It does not confirm or mutate golden truth.
 
 `evaluate:offline` accepts only a frozen, checksum-verified release and an explicit actual-run manifest. It writes one immutable report under `output/evaluations/` and keeps issue detection, evidence grounding, and report validity separate.
+
+`evaluate:capture` loads every case from a frozen release through the running API and Worker, resolves persisted evidence into stable golden references, and writes a new actual-run manifest. The command requires an explicit version manifest and never overwrites output.

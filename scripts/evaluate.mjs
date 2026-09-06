@@ -72,7 +72,8 @@ function countFailures(cases) { const counts = {}; for (const item of cases) if 
 function summarizeOperations(cases) {
   const values = (key) => cases.map((item) => item.operations?.[key]).filter((value) => typeof value === "number");
   const sum = (items) => items.reduce((total, value) => total + value, 0);
-  return { cases: cases.length, latency_ms: sum(values("latency_ms")), model_calls: sum(values("model_calls")), tokens: values("tokens").length === cases.length ? sum(values("tokens")) : "unavailable", estimated_cost: values("estimated_cost").length === cases.length ? sum(values("estimated_cost")) : "unavailable" };
+  const total = (key) => values(key).length === cases.length ? sum(values(key)) : "unavailable";
+  return { cases: cases.length, latency_ms: total("latency_ms"), model_calls: total("model_calls"), tokens: total("tokens"), estimated_cost: total("estimated_cost") };
 }
 function digest(value) { return digestBytes(Buffer.from(JSON.stringify(value))); }
 function digestBytes(value) { return createHash("sha256").update(value).digest("hex"); }

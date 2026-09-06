@@ -131,12 +131,14 @@ export function isCaseProcessingJob(value: unknown): value is CaseProcessingJob 
 
 export const AgentReportSchema = Type.Object({
   availability: Type.Union([Type.Literal("ready"), Type.Literal("pending"), Type.Literal("unavailable")]),
+  failure_reason: Type.Optional(Type.String()),
   result_revision: Type.Optional(Type.Object({
     id: Type.String({ format: "uuid" }), revision: Type.Integer({ minimum: 1 }),
   }, { additionalProperties: false })),
   summary: Type.Optional(Type.String()),
   issue_links: Type.Array(Type.String()),
   checked_facts: Type.Array(Type.Object({
+    rule_id: Type.String(),
     statement: Type.String(),
     source_type: Type.Literal("deterministic_check"),
     status: Type.Literal("passed"),

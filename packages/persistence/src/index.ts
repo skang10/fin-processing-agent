@@ -445,6 +445,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     await this.assertCaseExists(caseId);
     const [report] = await this.db.select({
       availability: agentReports.availability,
+      failureReason: agentReports.verificationFailureReason,
       resultRevisionId: resultRevisions.id,
       resultRevisionNumber: resultRevisions.revision,
       summary: agentReports.summary,
@@ -456,6 +457,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     if (!report) return { availability: "pending", issueLinks: [], checkedFacts: [] };
     return {
       availability: report.availability === "ready" ? "ready" : "unavailable",
+      ...(report.failureReason ? { failureReason: report.failureReason } : {}),
       ...(report.resultRevisionId && report.resultRevisionNumber !== null
         ? { resultRevision: { id: report.resultRevisionId, revision: report.resultRevisionNumber } }
         : {}),
@@ -1261,6 +1263,7 @@ async function buildCheckedFactsFromDatabase(
     const statement = statements[finding.ruleId];
     if (!statement) throw new Error(`No checked-fact display registered for ${finding.ruleId}`);
     return {
+      ruleId: finding.ruleId,
       statement, sourceType: "deterministic_check" as const, status: "passed" as const,
       references: [...referencedEvidence].sort().map((evidenceId) => `/api/v1/cases/${caseId}/evidence/${evidenceId}`),
     };

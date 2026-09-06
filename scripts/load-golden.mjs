@@ -9,13 +9,13 @@ export async function loadGoldenCase(caseId, options = {}) {
   const apiBaseUrl = options.apiBaseUrl ?? process.env.API_BASE_URL ?? "http://127.0.0.1:3000";
   const reviewWebUrl = options.reviewWebUrl ?? process.env.REVIEW_WEB_URL ?? "http://localhost:5173";
   const fetcher = options.fetcher ?? fetch;
-  const candidatePath = resolve(repositoryRoot, "datasets/golden/candidates", `${caseId}.json`);
+  const candidatePath = options.candidatePath ?? resolve(repositoryRoot, "datasets/golden/candidates", `${caseId}.json`);
   const candidate = JSON.parse(await readFile(candidatePath, "utf8"));
   if (candidate.case_id !== caseId || candidate.synthetic_data !== true) throw new Error("Golden candidate identity is invalid");
   const form = new FormData();
   form.set("application_data", JSON.stringify(candidate.application_data));
   for (const document of candidate.documents) {
-    const path = resolve(dirname(candidatePath), document.path);
+    const path = resolve(options.documentRoot ?? dirname(candidatePath), document.path);
     form.append("documents", new Blob([await readFile(path)], { type: document.media_type }), basename(path));
   }
   const created = await fetcher(`${apiBaseUrl}/api/v1/cases`, { method: "POST", headers: { "Idempotency-Key": `golden-${caseId}-${Date.now()}` }, body: form });
@@ -33,14 +33,15 @@ export async function loadGoldenCase(caseId, options = {}) {
       projections[name] = await jsonResponse(await fetcher(`${apiBaseUrl}${link}`), `Golden ${name}`);
     }
   }
-  return { case_id: accepted.case_id, golden_case_id: caseId, lifecycle: status.lifecycle, report_availability: projections.report?.availability ?? "unavailable", issue_codes: projections.issues?.issues?.map((issue) => issue.code) ?? [], finding_count: projections.findings?.findings?.length ?? 0, review_url: `${reviewWebUrl}/?case_id=${accepted.case_id}` };
+  return { case_id: accepted.case_id, golden_case_id: caseId, lifecycle: status.lifecycle, report_availability: projections.report?.availability ?? "unavailable", issue_codes: projections.issues?.issues?.map((issue) => issue.code) ?? [], finding_count: projections.findings?.findings?.length ?? 0, review_url: `${reviewWebUrl}/?case_id=${accepted.case_id}`, runtime: projections };
 }
 
 async function jsonResponse(response, label) { if (!response.ok) throw new Error(`${label} failed with ${response.status}`); return response.json(); }
 
 async function main() {
   const caseId = process.argv.slice(2).find((value) => value !== "--");
-  console.log(JSON.stringify(await loadGoldenCase(caseId), null, 2));
+  const { runtime: _runtime, ...summary } = await loadGoldenCase(caseId);
+  console.log(JSON.stringify(summary, null, 2));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

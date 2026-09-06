@@ -34,6 +34,7 @@ describe("case intake", () => {
       summary: "Three items require review.",
       issueLinks: ["issue_1"],
       checkedFacts: [{
+        ruleId: "VAL_NAME_CONSISTENCY_001",
         statement: "The applicant name is consistent.", sourceType: "deterministic_check" as const,
         status: "passed" as const,
         references: ["/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/evidence/4c816f67-5f2f-4e21-8c17-7eb1e5383999"],
