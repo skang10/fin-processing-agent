@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0.0",
+  "policy": "External datasets are opt-in component diagnostics. They are not V1 end-to-end golden truth and their files are not committed to this repository.",
+  "datasets": [
+    {
+      "id": "doclaynet",
+      "name": "DocLayNet",
+      "source_url": "https://github.com/DS4SD/DocLayNet",
+      "source_revision": "pin-before-download",
+      "license": "CDLA-Permissive-1.0",
+      "license_url": "https://github.com/DS4SD/DocLayNet/blob/main/LICENSE",
+      "use": ["layout_segmentation", "page_region_diagnostics"],
+      "subset_policy": "fixed-small-subset",
+      "adoption_status": "license_review_required",
+      "eligible_for_golden": false
+    },
+    {
+      "id": "pubtables-1m",
+      "name": "PubTables-1M",
+      "source_url": "https://github.com/microsoft/table-transformer",
+      "source_revision": "2021-10-21-release",
+      "license": "verify-dataset-terms-before-use",
+      "license_url": "https://github.com/microsoft/table-transformer/blob/main/LICENSE",
+      "use": ["table_detection", "table_structure_diagnostics"],
+      "subset_policy": "fixed-small-subset",
+      "adoption_status": "license_review_required",
+      "eligible_for_golden": false
+    },
+    {
+      "id": "xfund-de",
+      "name": "XFUND German subset",
+      "source_url": "https://github.com/doc-analysis/XFUND/releases/tag/v1.0",
+      "source_revision": "v1.0",
+      "license": "CC-BY-NC-SA-4.0",
+      "license_url": "https://github.com/doc-analysis/XFUND/blob/main/LICENSE",
+      "use": ["german_form_key_value_diagnostics"],
+      "subset_policy": "fixed-german-subset",
+      "adoption_status": "noncommercial_license_review_required",
+      "eligible_for_golden": false
+    },
+    {
+      "id": "synthdog",
+      "name": "SynthDoG",
+      "source_url": "https://github.com/clovaai/donut/tree/master/synthdog",
+      "source_revision": "pin-before-adoption",
+      "license": "MIT-code-dataset-terms-verify-separately",
+      "license_url": "https://github.com/clovaai/donut/blob/master/LICENSE",
+      "use": ["synthetic_ocr_variations", "layout_stress_generation"],
+      "subset_policy": "generated-project-owned-cases-only",
+      "adoption_status": "generator_spike_pending",
+      "eligible_for_golden": false
+    }
+  ]
+}

@@ -3,9 +3,13 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { buildRelease, confirmCandidate, generateCandidates, inspectCandidates, validateCandidates } from "./dataset.mjs";
+import { buildRelease, confirmCandidate, generateCandidates, inspectCandidates, inspectExternalDatasets, validateCandidates } from "./dataset.mjs";
 
 describe("golden dataset tooling", () => {
+  it("keeps registered external datasets outside golden truth", async () => {
+    const datasets = await inspectExternalDatasets();
+    expect(datasets.map((dataset) => dataset.id)).toEqual(["doclaynet", "pubtables-1m", "xfund-de", "synthdog"]);
+  });
   it("generates, validates, inspects, and freezes only confirmed truth", async () => {
     const root = await mkdtemp(join(tmpdir(), "findoc-dataset-"));
     const candidates = join(root, "candidates");

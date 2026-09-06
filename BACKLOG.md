@@ -92,6 +92,8 @@ The resulting choice belongs in `specs/decisions/ADR_003_VLM_SELECTION.md`. Prod
 
 **Status:** Tooling and six visibly synthetic candidate cases are implemented and checksum-valid; all six truth candidates await human verification, and the mixed/scanned Adaptive Agent cases remain explicitly blocked on their real runtime paths before confirmation
 
+Public datasets are tracked separately as opt-in component diagnostics. Their exact revisions, licenses, privacy fitness, deterministic subsets, and checksums must be approved before download or use; they do not replace project-owned end-to-end golden truth.
+
 Build incrementally:
 
 1. Six curated, manually verified end-to-end golden cases for the first vertical slice, expanding to twenty for completed V1.

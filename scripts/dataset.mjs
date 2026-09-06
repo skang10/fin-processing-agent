@@ -7,6 +7,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const defaultCandidateDirectory = join(repositoryRoot, "datasets/golden/candidates");
 const defaultReleaseDirectory = join(repositoryRoot, "datasets/golden/releases");
 const defaultBlueprintPath = join(repositoryRoot, "datasets/golden/blueprints.json");
+const defaultExternalRegistryPath = join(repositoryRoot, "datasets/external/registry.json");
 const registeredRuleCodes = new Set(["VAL_DOC_COMPLETENESS_001", "VAL_NAME_CONSISTENCY_001", "VAL_EMPLOYER_CONSISTENCY_001", "VAL_INCOME_CONSISTENCY_001", "VAL_ID_EXPIRY_001"]);
 
 export async function generateCandidates(blueprintPath = defaultBlueprintPath, directory = defaultCandidateDirectory) {
@@ -75,6 +76,19 @@ export async function inspectCandidates(directory = defaultCandidateDirectory, a
     expected_issues: candidate.truth_candidate.expected_issues.map((item) => item.code),
     coverage: candidate.coverage,
   }));
+}
+
+export async function inspectExternalDatasets(path = defaultExternalRegistryPath) {
+  const registry = JSON.parse(await readFile(path, "utf8"));
+  if (registry.schema_version !== "1.0.0" || !Array.isArray(registry.datasets) || registry.datasets.length === 0) throw new Error("Invalid external dataset registry");
+  const ids = new Set();
+  for (const dataset of registry.datasets) {
+    if (!dataset.id || ids.has(dataset.id) || !dataset.source_url?.startsWith("https://") || !dataset.source_revision || !dataset.license || !dataset.license_url?.startsWith("https://")) throw new Error("External dataset provenance is incomplete");
+    if (!Array.isArray(dataset.use) || dataset.use.length === 0 || !dataset.subset_policy || !dataset.adoption_status) throw new Error(`${dataset.id}: diagnostic scope is incomplete`);
+    if (dataset.eligible_for_golden !== false) throw new Error(`${dataset.id}: external data cannot be end-to-end golden truth`);
+    ids.add(dataset.id);
+  }
+  return registry.datasets.map(({ id, name, use, license, adoption_status }) => ({ id, name, use, license, adoption_status }));
 }
 
 export async function confirmCandidate(caseId, reviewer, directory = defaultCandidateDirectory, allowedRoot = repositoryRoot) {
@@ -221,9 +235,10 @@ async function main() {
   if (command === "generate") console.log(JSON.stringify({ generated: (await generateCandidates()).length }, null, 2));
   else if (command === "validate") console.log(JSON.stringify({ valid: true, cases: (await validateCandidates()).length }, null, 2));
   else if (command === "inspect") console.log(JSON.stringify(await inspectCandidates(), null, 2));
+  else if (command === "external") console.log(JSON.stringify(await inspectExternalDatasets(), null, 2));
   else if (command === "confirm" && argument && secondArgument) console.log(JSON.stringify(await confirmCandidate(argument, secondArgument), null, 2));
   else if (command === "build" && argument) console.log(JSON.stringify(await buildRelease(argument), null, 2));
-  else throw new Error("Usage: dataset <generate|validate|inspect|confirm CASE_ID REVIEWER|build VERSION>");
+  else throw new Error("Usage: dataset <generate|validate|inspect|external|confirm CASE_ID REVIEWER|build VERSION>");
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) main().catch((error) => { console.error(error.message); process.exitCode = 1; });
