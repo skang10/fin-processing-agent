@@ -14,9 +14,12 @@ export default defineConfig({
       { find: /^pdfjs-dist\/build\/pdf\.worker\.min\.mjs$/, replacement: require.resolve("pdfjs-dist/build/pdf.worker.min.mjs") },
     ],
   },
+  optimizeDeps: {
+    exclude: ["pdfjs-dist/build/pdf.worker.min.mjs?url"],
+  },
   server: {
     port: 5173,
-    proxy: { "/api": apiProxyTarget },
+    proxy: { "/api/": apiProxyTarget },
   },
-  preview: { host: "0.0.0.0", port: 5173, proxy: { "/api": apiProxyTarget } },
+  preview: { host: "0.0.0.0", port: 5173, proxy: { "/api/": apiProxyTarget } },
 });
