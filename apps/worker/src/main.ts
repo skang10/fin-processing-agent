@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import pino from "pino";
 import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
-import { PdfInspectorAdapter, PdfiumPageRenderer } from "@findoc/document-processing";
+import { DocumentSandboxClient } from "@findoc/document-processing";
 import { buildOfflineFixture, OfflineFixtureUnavailableError, runOfflineReport } from "@findoc/offline";
 import { PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
 import { createMinioObjectStore, readObjectBytes, storeNativeTextArtifact, storePageRenderArtifact } from "@findoc/storage";
@@ -23,8 +23,7 @@ const objectStore = createMinioObjectStore({
   bucket: process.env["MINIO_BUCKET"] ?? "findoc-artifacts",
 });
 await objectStore.ensureBucket();
-const pdfInspector = new PdfInspectorAdapter();
-const pageRenderer = new PdfiumPageRenderer();
+const documentSandbox = new DocumentSandboxClient();
 const boss = new PgBoss(databaseUrl);
 boss.on("error", (error) => logger.error({ error }, "pg-boss error"));
 await boss.start();
@@ -60,13 +59,14 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   for (const document of documents) {
     if (document.mediaType === "application/pdf") {
       const source = await readObjectBytes(objectStore, document.objectKey, maximumSourceBytes);
-      const inspection = await pdfInspector.inspect(source);
+      const sandboxResult = await documentSandbox.inspectAndRender(source, document.sha256, {
+        timeoutMs: 60_000, maximumPages: 50, maximumPixelsPerPage: 8_000_000, targetDpi: 110,
+      });
+      const inspection = sandboxResult.inspection;
       const pages = [];
       for (const page of inspection.pages) {
-        const rendered = await pageRenderer.render(source, {
-          sourceSha256: document.sha256, pageNumber: page.pageNumber, targetDpi: 110,
-          colorMode: "color", outputFormat: "png", maximumPixels: 8_000_000,
-        });
+        const rendered = sandboxResult.renders.find((candidate) => candidate.pageNumber === page.pageNumber);
+        if (!rendered) throw new Error("Document sandbox omitted a page render");
         pages.push({
           ...page,
           nativeCharacterCount: page.nativeMarkdown.length,

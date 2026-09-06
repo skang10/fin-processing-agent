@@ -157,3 +157,5 @@ function normalizePdfType(value: PdfClassification["pdfType"]): PdfInspection["p
     default: throw new Error(`Unsupported PDF Inspector type: ${String(value)}`);
   }
 }
+
+export { DocumentSandboxClient, DocumentSandboxError, type DocumentSandboxLimits, type DocumentSandboxResult } from "./sandbox.js";

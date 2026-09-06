@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { fileURLToPath } from "node:url";
 import { PdfType } from "@firecrawl/pdf-inspector";
-import { PdfInspectorAdapter, PdfiumPageRenderer, type PdfInspectorEngine } from "./index.js";
+import { DocumentSandboxClient, PdfInspectorAdapter, PdfiumPageRenderer, type PdfInspectorEngine } from "./index.js";
 
 describe("PdfInspectorAdapter", () => {
   it("translates zero-based native pages into project-owned one-based pages", async () => {
@@ -40,5 +41,21 @@ describe("PdfiumPageRenderer", () => {
       sourceSha256: "invalid", pageNumber: 0, targetDpi: 600,
       colorMode: "color", outputFormat: "png", maximumPixels: 0,
     })).rejects.toThrow("checksum");
+  });
+});
+
+describe("DocumentSandboxClient", () => {
+  it("runs with a credential-free environment and returns bounded artifacts", async () => {
+    process.env.FINDOC_SANDBOX_SECRET_TEST = "must-not-cross-boundary";
+    try {
+      const entrypoint = fileURLToPath(new URL("../test-fixtures/sandbox-success.mjs", import.meta.url));
+      const result = await new DocumentSandboxClient(entrypoint).inspectAndRender(Buffer.from("fixture"), "a".repeat(64), {
+        timeoutMs: 5_000, maximumPages: 2, maximumPixelsPerPage: 1_000, targetDpi: 110,
+      });
+      expect(result.inspection.pageCount).toBe(1);
+      expect(result.renders[0]).toMatchObject({ pageNumber: 1, width: 10, height: 20 });
+    } finally {
+      delete process.env.FINDOC_SANDBOX_SECRET_TEST;
+    }
   });
 });
