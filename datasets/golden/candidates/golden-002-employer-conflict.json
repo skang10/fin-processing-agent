@@ -1,6 +1,7 @@
 {
   "application_data": {
     "applicant_display_name": "David Beispiel",
+    "demo_fixture_id": "golden-002-employer-conflict",
     "employment": {
       "employer": "Nordwerk Demo GmbH"
     },

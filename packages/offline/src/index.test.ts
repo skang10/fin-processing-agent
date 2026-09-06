@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANNA_EXAMPLE_FIXTURE_ID, OfflineFixtureUnavailableError, runOfflineFixture } from "./index.js";
+import { ANNA_EXAMPLE_FIXTURE_ID, GOLDEN_FIXTURE_IDS, OfflineFixtureUnavailableError, runOfflineFixture } from "./index.js";
 
 describe("offline fixture", () => {
   const context = {
@@ -48,6 +48,32 @@ describe("offline fixture", () => {
 
   it("does not infer a successful fixture from applicant identity", async () => {
     await expect(runOfflineFixture("Anna Beispiel", context)).rejects.toThrow(OfflineFixtureUnavailableError);
+  });
+
+  it("covers all six named golden fixtures with deterministic rule outcomes", async () => {
+    const cases = [
+      [GOLDEN_FIXTURE_IDS[0], "Clara Muster", "Mustertechnik GmbH", "3200.00", 3, []],
+      [GOLDEN_FIXTURE_IDS[1], "David Beispiel", "Nordwerk Demo GmbH", "2900.00", 3, ["VAL_EMPLOYER_CONSISTENCY_001"]],
+      [GOLDEN_FIXTURE_IDS[2], "Anna Beispiel", "Beispieltechnik GmbH", "3480.00", 4, ["VAL_DOC_COMPLETENESS_001", "VAL_EMPLOYER_CONSISTENCY_001", "VAL_INCOME_CONSISTENCY_001"]],
+      [GOLDEN_FIXTURE_IDS[3], "Eva Sample", "Sample Works Ltd", "3100.00", 2, ["VAL_DOC_COMPLETENESS_001"]],
+      [GOLDEN_FIXTURE_IDS[4], "Felix Test", "Testbetrieb GmbH", "2750.00", 3, []],
+      [GOLDEN_FIXTURE_IDS[5], "Greta Demofall", "Demowerk GmbH", "3050.00", 3, ["VAL_INCOME_CONSISTENCY_001"]],
+    ] as const;
+    for (const [fixtureId, applicant, employer, income, pageCount, expectedIssues] of cases) {
+      const fixtureContext = {
+        ...context,
+        resultRevisionId: `result-${fixtureId}`,
+        applicationData: { applicant_display_name: applicant, employment: { employer }, income: { monthly_net: income } },
+        pages: Array.from({ length: pageCount }, (_, index) => ({ submittedFilename: `${fixtureId}.pdf`, documentVersionId: fixtureId, pageNumber: index + 1 })),
+        logicalDocuments: Array.from({ length: pageCount }, (_, index) => ({ logicalDocumentRevisionId: `${fixtureId}-${index + 1}`, documentVersionId: fixtureId, startPage: index + 1, endPage: index + 1 })),
+      };
+      const first = await runOfflineFixture(fixtureId, fixtureContext);
+      const second = await runOfflineFixture(fixtureId, fixtureContext);
+      expect(first).toEqual(second);
+      expect(first.issues.map((issue) => issue.code)).toEqual(expectedIssues);
+      expect(first.findings).toHaveLength(5);
+      expect(first.reportAvailability).toBe("ready");
+    }
   });
 
   it("keeps deterministic results available when the Agent report is rejected", async () => {

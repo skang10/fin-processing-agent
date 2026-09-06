@@ -1,6 +1,7 @@
 {
   "application_data": {
     "applicant_display_name": "Felix Test",
+    "demo_fixture_id": "golden-005-instruction-inert",
     "employment": {
       "employer": "Testbetrieb GmbH"
     },
