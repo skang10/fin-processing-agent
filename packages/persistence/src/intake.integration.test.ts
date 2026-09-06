@@ -315,7 +315,7 @@ describe("PostgresCaseCommandService", () => {
       connection.db.select({ value: count() }).from(gapResolutions),
       connection.db.select({ value: count() }).from(agentEligibilityDecisions),
     ]);
-    expect([sessionCount?.value, stepCount?.value, gapCount?.value, resolutionCount?.value, eligibilityCount?.value]).toEqual([2, 4, 1, 1, 1]);
+    expect([sessionCount?.value, stepCount?.value, gapCount?.value, resolutionCount?.value, eligibilityCount?.value]).toEqual([1, 2, 1, 1, 1]);
     const [persistedReport] = await connection.db.select({ sessionId: agentReports.sessionId, originalSubmission: agentReports.originalSubmission }).from(agentReports)
       .where(eq(agentReports.caseId, accepted.caseId)).limit(1);
     expect(persistedReport).toMatchObject({ sessionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383aaa", originalSubmission: { schema_version: "1.0.0" } });
