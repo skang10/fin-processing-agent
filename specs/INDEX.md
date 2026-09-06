@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 3.0.6
+Version: 3.1.0
 
 Status: Approved
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.0, `SYSTEM_ARCHITECTURE.md` version 3.0.0, and `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.0.0. `ADR_001_PI_AGENT_HARNESS.md`, `ADR_002_PDF_INSPECTOR.md`, and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
+All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.0, `SYSTEM_ARCHITECTURE.md` version 3.0.0, `DATA_MODEL.md` version 3.0.0, `components/DOCUMENT_PROCESSING.md` version 2.0.0, and `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.0.0. `ADR_001_PI_AGENT_HARNESS.md` is accepted as amended for the single-session lifecycle; `ADR_002_PDF_INSPECTOR.md` and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
 
 ## 3. Product Baseline
 
@@ -67,8 +67,8 @@ Normative product scope belongs to `PRODUCT_AND_SCOPE.md`. This section is an in
 | 1 | `INDEX.md` | `IDX` | Authority map, terminology, identifiers, lifecycle, and dependency order | Approved |
 | 2 | `PRODUCT_AND_SCOPE.md` | `PRD` | Users, use cases, V1 scope, exclusions, outcomes, and product acceptance | Approved |
 | 3 | `SYSTEM_ARCHITECTURE.md` | `ARC` | System boundaries, components, trust boundaries, processing flow, and cross-cutting architecture | Approved |
-| 4 | `DATA_MODEL.md` | `DAT` | Domain entities, claims, evidence, processing runs, stages, corrections, audit references, and persistence semantics | Approved |
-| 5 | `components/DOCUMENT_PROCESSING.md` | `DOC` | Intake, inspection, rendering, page classification, logical-document grouping, native extraction, OCR, and table extraction | Approved |
+| 4 | `DATA_MODEL.md` | `DAT` | Domain entities, claims, evidence, processing runs, Agent sessions and tool results, stages, corrections, audit references, and persistence semantics | Approved |
+| 5 | `components/DOCUMENT_PROCESSING.md` | `DOC` | Intake, registered PDF Inspector tool operations, rendering, page classification, logical-document grouping, native extraction, OCR, and table extraction | Approved |
 | 6 | `components/ADAPTIVE_EXTRACTION_AGENT.md` | `AGT` | Pi-led case review, registered PDF Inspector and deterministic processing tools, verified briefs, budgets, stopping, and escalation | Approved |
 | 7 | `components/VALIDATION_AND_DISPOSITION.md` | `VAL` | Entity matching, validation-rule architecture, findings, and deterministic recommended-disposition mapping | Approved |
 | 8 | `components/REVIEW_WORKBENCH.md` | `UI` | Review Queue, Agent Report, evidence viewer, issue review, requested-change drafts, final review, and bounded case Agent log | Approved |
@@ -367,6 +367,7 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.1.0 | 2026-09-06 | Approved | Aligned the data model, document-processing boundary, and Pi harness ADR with the approved single-session Agent-led case review architecture. |
 | 3.0.6 | 2026-09-06 | Approved | Approved Product and Scope 4.0.0 for the Agent-led case review product flow. |
 | 3.0.5 | 2026-09-06 | Approved | Registered Product and Scope 4.0.0 as In Review for alignment with the Agent-led case review architecture. |
 | 3.0.4 | 2026-09-06 | Approved | Approved Agent component 3.0.0 as the single-session Agent-led document review contract. |

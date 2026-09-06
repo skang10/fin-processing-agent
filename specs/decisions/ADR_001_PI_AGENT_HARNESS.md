@@ -2,11 +2,11 @@
 
 Status: Accepted
 
-Date: 2026-09-05
+Date: 2026-09-06
 
 ## Context
 
-V1 requires an Agent to pre-screen every processable case, generate an evidence-grounded Case Review Brief, and optionally recover one eligible extraction gap in the demonstration path. Durable workflow, deterministic validation, disposition, authorization, and budgets must remain outside the model.
+V1 requires an Agent to pre-screen every processable case and generate an evidence-grounded Case Review Brief. The initial implementation split this work between report and optional adaptive-recovery sessions. The approved Agent-led architecture instead requires one bounded case-review session that may select registered PDF Inspector and extraction tools before requesting deterministic reconciliation and validation. Durable workflow, authoritative results, authorization, and budgets remain outside the model.
 
 Pi's official SDK supports programmatic `AgentSession` creation, explicit tool lists, event subscriptions, model selection, and custom resource loading. Its normal coding-agent defaults also include filesystem and shell-oriented capabilities and automatic resource discovery, which are inappropriate for this domain.
 
@@ -16,13 +16,15 @@ The Worker Service will embed the official pi-coding-agent SDK through a project
 
 The adapter will:
 
-1. Create one bounded Pi session for one declared `case_review_report` or `adaptive_recovery` operation.
+1. Create one bounded Pi `case_review` session for one processable run; document inspection, extraction-gap handling, deterministic result requests, and report submission are phases or steps inside that session rather than separately scheduled Agent modes.
 2. Supply only project-owned registered domain tools explicitly selected for that session.
 3. Use a project-owned resource loader that performs no automatic discovery of skills, extensions, prompts, themes, context files, or packages.
 4. Omit Pi coding and read-only tool bundles, including Shell and general filesystem tools.
 5. Use project-owned prompt, model-gateway, schema, authorization, budget, and event adapters.
 6. Treat Pi conversation and session memory as ephemeral diagnostic execution state; PostgreSQL, pg-boss, and immutable domain records remain authoritative.
 7. Verify every report and tool result outside Pi before domain use.
+8. Expose PDF Inspector and related processing only through registered project-owned case-scoped tools; Pi receives neither SDK objects nor native execution authority.
+9. Require Pi to request deterministic reconciliation and validation and consume their committed outputs before report submission; Pi prose cannot establish claims, findings, dispositions, or workflow state.
 
 The implementation pins `@earendil-works/pi-coding-agent`, `@earendil-works/pi-agent-core`, and `@earendil-works/pi-ai` at exact version `0.85.1`, and every Agent session trace records `pi-coding-agent@<version>` as its harness version together with the prompt version and hash, tool-registry version, budget envelope, and configuration version. This ADR does not select a model provider.
 
@@ -33,6 +35,7 @@ The implementation pins `@earendil-works/pi-coding-agent`, `@earendil-works/pi-a
 3. Using default Pi tools or resource discovery: rejected because their authority exceeds the case-scoped document-review task.
 4. Building an unrestricted general-purpose Agent framework: rejected as unnecessary for the V1 demonstration.
 5. Removing Pi and generating one direct model response: rejected because bounded tool-using pre-screening is the central product demonstration.
+6. Keeping separate recovery and report sessions: rejected because it makes Pi an optional repair step plus a summarizer rather than the central reviewer, duplicates context and lifecycle handling, and obscures one case-level Agent trace.
 
 ## Consequences
 
@@ -59,17 +62,21 @@ The implementation spike must prove that:
 5. Fake-model sessions produce deterministic report and failure fixtures.
 6. Document prompt injection cannot alter tools, rules, dispositions, schemas, or customer-contact authority.
 
-### Spike evidence (2026-09-06, report mode)
+### Superseded spike evidence (2026-09-06, report mode)
 
-The `packages/agent-pi` harness constructs the Pi `AgentSession` directly with an empty base-tool override, an empty allowlist apart from the registered report tools, a resource loader that discovers nothing, in-memory session, settings, credential, and model-runtime stores, compaction and auto-retry disabled, and image input blocked. Automated tests in `packages/agent-pi/src/harness.test.ts` demonstrate items 1, 2, 3, 5, and the tool-authority half of item 6 with the real Pi loop and a scripted fake model: the session exposes exactly `list_findings`, `get_finding_references`, and `submit_case_review_brief`; `bash`, `read`, out-of-scope, and schema-invalid requests are rejected and recorded without executing; tool-call, iteration, token, cost, and wall-clock budgets and the no-progress policy each terminate the session with a stable reason; identical inputs produce identical step records; and a policy-violating brief stays out of the verified report while remaining in the immutable trace. Item 4 is covered by the PostgreSQL session and step records written in the same transaction as the report (`packages/persistence`).
+The existing `packages/agent-pi` report harness proves the narrow Pi embedding, empty base-tool override, no-discovery resource loader, external authorization, budgets, deterministic fake-model behavior, and report verification boundaries. Its separately scheduled report session and three-tool view are retained as implementation evidence but are superseded as the target lifecycle by this amended decision.
 
-### Spike evidence (2026-09-06, adaptive-recovery mode)
+### Superseded spike evidence (2026-09-06, adaptive-recovery mode)
 
-`PiAdaptiveRecoveryHarness` reuses the same session runner and control plane with the eight registered recovery tools (`get_extraction_gaps`, `inspect_page`, `get_native_text`, `run_ocr`, `render_page_region`, `classify_page`, `extract_with_vlm`, `submit_extraction_candidates`). Tests in `packages/agent-pi/src/recovery.test.ts` show that a session exposes exactly those tools; that page, field, region, and gap scope are authorized before any port is called; that a submitted value must match a value a tool returned for the same page; that VLM-call, OCR-page, wall-clock, and no-progress limits terminate the session; and that the deterministic eligibility policy refuses to start for missing fixed paths, fatal failures, absent budget, or out-of-run scope. Submitted candidates enter the ordinary reconciliation path in `packages/offline` and become claims only through it. The recovery ports used by the demo are fixture adapters: OCR lines and VLM values are synthetic data, not recognition. The live model route remains unverified against any provider.
+The existing `PiAdaptiveRecoveryHarness` proves scope authorization for eight recovery tools, candidate-evidence binding, OCR and VLM budgets, and ordinary reconciliation of submitted candidates. Its separately scheduled gap-eligibility lifecycle is superseded. The fixture OCR and VLM ports remain synthetic outputs rather than recognition, and the live model route remains unverified.
+
+### Required superseding implementation evidence
+
+The V1 implementation must additionally prove one session spanning Agent-selected PDF Inspector operations, extraction candidate submission, deterministic reconciliation and validation requests, current-result retrieval, report submission, durable re-entry, and explicit failure routing. Until that evidence exists, the prior two-session code is implemented legacy behavior, not conformance with the current decision.
 
 ## Affected Specifications
 
-This decision constrains `ARC-REQ-040` through `ARC-REQ-049` and the Agent requirements in `components/ADAPTIVE_EXTRACTION_AGENT.md`. Any replacement harness requires a superseding ADR and must preserve those boundaries.
+This decision constrains the Pi Agent requirements in `SYSTEM_ARCHITECTURE.md` and `components/ADAPTIVE_EXTRACTION_AGENT.md`. Any replacement harness requires a superseding ADR and must preserve those boundaries.
 
 ## References
 

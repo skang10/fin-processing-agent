@@ -2,7 +2,7 @@
 
 Document ID: `DAT`
 
-Version: 2.3.0
+Version: 3.0.0
 
 Status: Approved
 
@@ -109,8 +109,9 @@ erDiagram
     PROCESSING_RUN ||--o{ ENTITY : hypothesizes
 
     PROCESSING_RUN ||--o{ EXTRACTION_GAP : identifies
-    EXTRACTION_GAP ||--o{ AGENT_SESSION : triggers
+    AGENT_SESSION }o--o{ EXTRACTION_GAP : observes
     AGENT_SESSION ||--o{ AGENT_STEP : contains
+    AGENT_STEP ||--o| TOOL_INVOCATION_RESULT : produces
     AGENT_STEP ||--o{ EXTRACTION_CANDIDATE : proposes
 
     PROCESSING_RUN ||--o{ MODEL_INVOCATION : invokes
@@ -434,9 +435,9 @@ A Claim is a reconciled raw or normalized assertion linked to evidence. A Claim 
 
 `DAT-REQ-101` An extraction gap must identify the unresolved field, table, relationship, or evidence requirement; originating stage; run; and current resolution state.
 
-`DAT-REQ-102` A gap must record why it was opened and the fixed extraction paths already attempted.
+`DAT-REQ-102` A gap must record why it was opened and the committed extraction paths already attempted or established as inapplicable.
 
-`DAT-REQ-103` Adaptive Extraction actions and candidates associated with a gap must reference that gap without mutating its original description.
+`DAT-REQ-103` Agent actions and candidates associated with a gap must reference that gap without mutating its original description; opening a gap must not create a second Agent session implicitly.
 
 `DAT-REQ-104` Resolving or closing a gap must append a resolution record identifying the resolving claim, review action, terminal reason, or budget condition.
 
@@ -514,13 +515,25 @@ A Claim is a reconciled raw or normalized assertion linked to evidence. A Claim 
 
 `DAT-REQ-130` A model input selection must identify the exact pages, bounded page window, regions, or structured claims supplied.
 
-`DAT-REQ-131` An Agent session must identify its mode, bound processing run and stage attempt, configuration version, allowed tool-registry version, and budget limits; recovery sessions bind triggering gaps and report sessions bind one result revision.
+`DAT-REQ-131` An Agent session must use mode `case_review` and identify its bound processing run and stage attempt, configuration version, allowed tool-registry version, context-manifest version, and budget limits. Separately persisted recovery and report sessions are not part of the V1 current model.
 
-`DAT-REQ-132` Each Agent step must record the requested registered tool, externally validated arguments or their safe canonical hash, outcome, budget consumption, and resulting candidate or artifact references.
+`DAT-REQ-132` Each Agent step must record its phase, requested registered tool, externally validated arguments or their safe canonical hash, authorization and outcome state, budget consumption, and resulting artifact, evidence, candidate, gap, claim, result-revision, or brief-submission references as applicable.
 
 `DAT-REQ-133` Agent session state must be diagnostic provenance and must not be authoritative workflow state.
 
-`DAT-REQ-134` Agent termination must record a stable terminal reason such as gaps resolved, no progress, conflicting candidates, budget exhausted, timeout, or error; exact reason-code ownership belongs to the Agent specification.
+`DAT-REQ-134` Agent termination must record exactly one stable terminal reason such as report submitted, report not submitted, no progress, conflicting candidates, budget exhausted, timeout, or error; gap resolution is progress within the session rather than a successful session terminal reason. Exact reason-code ownership belongs to the Agent specification.
+
+`DAT-REQ-199` A processable processing run must have at most one current authoritative `case_review` Agent-session identity. Retries or durable re-entry must use linked session attempts and must not create parallel authoritative sessions for the same identity.
+
+`DAT-REQ-200` Agent step phases must use a versioned controlled vocabulary capable of distinguishing planning, document inspection, extraction, reconciliation request, validation request, report submission, and terminal handling without making phase state authoritative workflow state.
+
+`DAT-REQ-201` A tool invocation result must identify the Agent session and step, registered tool and implementation version, canonical idempotency key, authorized input versions, outcome category, output schema version, safe output hash or persisted output references, usage, and timing.
+
+`DAT-REQ-202` Reuse of a cacheable tool result must reference the original compatible invocation result and integrity check; it must not re-parent the original artifact or output to the new step or processing run.
+
+`DAT-REQ-203` Deterministic reconciliation and validation requested by the Agent must persist ordinary authoritative component records linked to the requesting Agent step; the request link must not make the Agent the creator or authority of the resulting claim, finding, disposition, or result revision.
+
+`DAT-REQ-204` The Case Review Brief revision must link to the Agent session that submitted it and the sealed result revision it describes. Report verification status remains distinct from Agent-session terminal state.
 
 `DAT-REQ-188` A Case Review Brief revision must identify its bound result revision, Agent session, schema version, immutable original submission, verification status, verified presentation when available, report-status code, review signals, suggested actions, optional signal-bound requested-change drafts, ordered attention items, and supporting record references.
 
@@ -616,6 +629,10 @@ The data model is acceptable for implementation when automated tests demonstrate
 
 `DAT-REQ-168` A purged-artifact fixture displays explicit unavailability and does not claim that its evidence is inspectable.
 
+`DAT-REQ-205` One Agent-led golden case persists a reconstructable sequence from bounded context manifest through PDF Inspector tool results, candidate submission, deterministic reconciliation and validation requests, sealed result revision, report submission, verification, and human review.
+
+`DAT-REQ-206` Durable re-entry after a committed Agent step reuses compatible completed tool results, preserves consumed budgets, and does not depend on Pi conversation memory as authoritative state.
+
 ## 25. Assumptions
 
 1. V1 processes one synthetic applicant per case.
@@ -641,6 +658,7 @@ The following details are intentionally deferred to later owning specifications:
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.0.0 | 2026-09-06 | Approved | Replaced separate recovery and report sessions with one case-review session, added phase-aware Agent steps, immutable tool invocation results and reuse lineage, deterministic request links, and durable re-entry invariants. |
 | 2.3.0 | 2026-09-06 | Approved | Defined immutable page native-text artifacts and their provenance boundary. |
 | 2.2.0 | 2026-09-06 | Approved | Defined the immutable downstream-ready projection derived from a cleared final document review. |
 | 2.1.1 | 2026-09-05 | Approved | Reserved the previously unassigned `DAT-REQ-187` identifier explicitly for machine-verifiable requirement continuity. |

@@ -2,7 +2,7 @@
 
 Document ID: `DOC`
 
-Version: 1.2.0
+Version: 2.0.0
 
 Status: Approved
 
@@ -10,7 +10,7 @@ Last updated: 2026-09-06
 
 ## 1. Purpose
 
-This specification defines intake validation, PDF and image inspection, page rendering, native content extraction, selective OCR, technical and business page classification, boundary prediction, deterministic logical-document grouping, and low-level table candidate production.
+This specification defines intake validation, PDF and image inspection, page rendering, native content extraction, selective OCR, technical and business page classification, boundary prediction, deterministic logical-document grouping, low-level table candidate production, and their project-owned Agent-tool execution boundary.
 
 It does not define business-field reconciliation, Case Review Agent behavior, cross-document validation, recommended disposition, reviewer interaction, or model-selection benchmarks.
 
@@ -44,29 +44,24 @@ Normative dependencies are:
 ```mermaid
 flowchart LR
     A[Source artifact] --> B[Intake guard]
-    B --> C[Structure inspection]
-    C --> D[Page inventory]
-    D --> E[Native extraction]
-    D --> F[Technical page analysis]
-    E --> G[OCR routing]
-    F --> G
-    G --> H[Selective OCR]
-    E --> I[Business classification]
+    B --> C[Minimum structure and page preflight]
+    C --> D[Registered document-tool boundary]
+    D --> E[Native text and technical analysis]
+    D --> F[Rendering and selective OCR]
+    D --> G[Classification and boundary candidates]
+    D --> H[Local layout and table candidates]
+    E --> I[Committed immutable outputs]
+    F --> I
+    G --> I
     H --> I
-    I --> J[Boundary prediction]
-    J --> K[Deterministic grouping]
-    E --> L[Local table candidates]
-    H --> L
-    K --> M[Logical document revisions]
-    L --> N[Downstream extraction and reconciliation]
-    M --> N
+    I --> J[Deterministic grouping or downstream reconciliation]
 ```
 
-`DOC-REQ-005` Native extraction and technical page analysis may run concurrently after a valid page inventory exists.
+`DOC-REQ-005` Native extraction and technical page analysis may run concurrently after a valid page inventory exists, whether requested by fixed preflight policy or through an authorized Agent tool.
 
-`DOC-REQ-006` Business classification must consume only committed page-analysis outputs declared by its input contract.
+`DOC-REQ-006` Business classification must consume only committed page-analysis outputs declared by its input contract; the Agent may request classification but cannot supply uncommitted narrative as classifier input.
 
-`DOC-REQ-007` Logical-document grouping must occur after business classification and boundary prediction for all pages in the affected document version.
+`DOC-REQ-007` Logical-document grouping must occur after business classification and boundary prediction for all pages in the affected document version. The Agent may request the prerequisite operations and grouping but cannot commit a logical-document revision directly.
 
 `DOC-REQ-008` Page-level partitions may execute concurrently, but persisted output ordering must be deterministic by document version and page number.
 
@@ -135,6 +130,20 @@ flowchart LR
 `DOC-REQ-035` PDF Inspector must not be represented or relied upon as a malware scanner, content-disarm system, or complete parser-security boundary.
 
 `DOC-REQ-036` Replacement of the PDF Inspector implementation must not change the project-owned downstream contract without an explicit contract-version change.
+
+### 6.1 Agent-tool execution boundary
+
+`DOC-REQ-125` The Case Review Agent may access PDF Inspector-backed capabilities only through the registered project-owned tools defined by the Agent specification. It must not receive PDF Inspector objects, raw SDK types, parser flags, source filesystem paths, or process-execution authority.
+
+`DOC-REQ-126` Each Agent-requested document operation must resolve persisted case, run, document version, page or bounded region, source checksum, tool version, operation configuration, prerequisites, resource limits, and an idempotency key before sandbox execution.
+
+`DOC-REQ-127` The document-processing component, not Pi, must authorize source access, translate a tool request into one bounded sandbox task, validate the response, persist immutable outputs, and return a bounded project-owned result reference.
+
+`DOC-REQ-128` The same document operation must preserve identical processing semantics whether requested by deterministic workflow policy or by the Agent; Agent selection must not weaken schemas, provenance, isolation, routing, or quality-state semantics.
+
+`DOC-REQ-129` Agent selection of a document tool is not permission to bypass native-before-OCR, local-before-VLM, classification-before-grouping, source-scope, or output-validation prerequisites owned by this specification and the Agent control plane.
+
+`DOC-REQ-130` A compatible committed cache result may be reused only when its source checksum, operation inputs, processor and schema versions, configuration, and integrity checks match. Reuse must retain original provenance and create an explicit invocation reference rather than duplicate or re-parent output.
 
 ## 7. Page Inventory and Technical Analysis
 
@@ -363,6 +372,12 @@ The component is acceptable for implementation when automated tests demonstrate 
 
 `DOC-REQ-124` Output lineage resolves from a logical document, table candidate, native span, OCR span, or render artifact to its document version, source checksum, attempt, and processor version.
 
+`DOC-REQ-131` Agent-tool contract tests prove that cross-case, cross-run, cross-document, cross-page, malformed, over-limit, and prerequisite-violating requests are rejected before native execution.
+
+`DOC-REQ-132` A deterministic fake Agent path can select native extraction, rendering, OCR, classification, boundary, and local-table tools and receive the same schema-valid output contracts as fixed component tests.
+
+`DOC-REQ-133` Repeated compatible Agent tool requests reuse committed outputs without repeating native work, while changed source, processor, schema, or material configuration creates a distinct result.
+
 ## 18. Assumptions and Deferred Decisions
 
 1. Initial evaluated documents are synthetic or explicitly demo-safe and use German, English, or both.
@@ -377,6 +392,7 @@ No unresolved document-processing boundary decision blocks review of this docume
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.0.0 | 2026-09-06 | Approved | Exposed PDF Inspector-backed operations through registered Agent tools while preserving component-owned authorization, sandboxing, prerequisites, schemas, provenance, and idempotent reuse. |
 | 1.2.0 | 2026-09-06 | Approved | Adopted PDF Inspector 1.17.0's local PP-OCRv6 Small execution path behind the project-owned OCR contract while retaining explicit offline runtime verification. |
 | 1.1.0 | 2026-09-05 | Approved | Clarified that PDF Inspector owns inspection and OCR routing while PP-OCRv6 is an independently verified `OcrEngine` target. |
 | 1.0 | 2026-09-03 | Approved | Approved the intake, inspection, rendering, native extraction, OCR, classification, grouping, and local-table baseline. |
