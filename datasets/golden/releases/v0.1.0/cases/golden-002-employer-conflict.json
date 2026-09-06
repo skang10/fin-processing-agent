@@ -1,0 +1,69 @@
+{
+  "application_data": {
+    "applicant_display_name": "David Beispiel",
+    "demo_fixture_id": "golden-002-employer-conflict",
+    "employment": {
+      "employer": "Nordwerk Demo GmbH"
+    },
+    "income": {
+      "currency": "EUR",
+      "monthly_net": "2900.00"
+    },
+    "synthetic_data": true
+  },
+  "case_id": "golden-002-employer-conflict",
+  "coverage": [
+    "native_text",
+    "de",
+    "one_review_issue",
+    "conflicting_evidence"
+  ],
+  "documents": [
+    {
+      "media_type": "application/pdf",
+      "page_count": 3,
+      "path": "documents/golden-002-employer-conflict/golden-002-employer-conflict.pdf",
+      "sha256": "9e3d76aa1e7ee0c6688d51614b70f1d55673a4a5a1806be1bad5d4e9b6602757"
+    }
+  ],
+  "generator": {
+    "template_version": "structured-a4-1.0.0",
+    "version": "findoc-golden-generator-2.0.0"
+  },
+  "schema_version": "1.0.0",
+  "seed": 1002,
+  "synthetic_data": true,
+  "truth_candidate": {
+    "expected_checked_facts": [
+      {
+        "acceptable_evidence": [
+          "page:1"
+        ],
+        "code": "VAL_NAME_CONSISTENCY_001"
+      }
+    ],
+    "expected_issues": [
+      {
+        "acceptable_evidence": [
+          "application:/employment/employer",
+          "page:2",
+          "page:3"
+        ],
+        "code": "VAL_EMPLOYER_CONSISTENCY_001"
+      }
+    ],
+    "prohibited_report_content": [
+      "decline application",
+      "fraud"
+    ],
+    "report_availability": "ready",
+    "required_report_content": [
+      "employer conflict"
+    ]
+  },
+  "verification": {
+    "status": "confirmed",
+    "verified_at": "2026-09-06T13:07:51.507Z",
+    "verified_by": "sulmae"
+  }
+}

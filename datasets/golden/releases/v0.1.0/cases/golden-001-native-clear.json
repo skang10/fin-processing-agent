@@ -1,0 +1,61 @@
+{
+  "application_data": {
+    "applicant_display_name": "Clara Muster",
+    "demo_fixture_id": "golden-001-native-clear",
+    "employment": {
+      "employer": "Mustertechnik GmbH"
+    },
+    "income": {
+      "currency": "EUR",
+      "monthly_net": "3200.00"
+    },
+    "synthetic_data": true
+  },
+  "case_id": "golden-001-native-clear",
+  "coverage": [
+    "native_text",
+    "de",
+    "no_review_issue",
+    "implemented_offline_path"
+  ],
+  "documents": [
+    {
+      "media_type": "application/pdf",
+      "page_count": 3,
+      "path": "documents/golden-001-native-clear/golden-001-native-clear.pdf",
+      "sha256": "ad751ebb35280e43a575d3eb22ab0580ce9e46a8e68ab62d9ce9c95821ac92f9"
+    }
+  ],
+  "generator": {
+    "template_version": "structured-a4-1.0.0",
+    "version": "findoc-golden-generator-2.0.0"
+  },
+  "schema_version": "1.0.0",
+  "seed": 1001,
+  "synthetic_data": true,
+  "truth_candidate": {
+    "expected_checked_facts": [
+      {
+        "acceptable_evidence": [
+          "page:1"
+        ],
+        "code": "VAL_NAME_CONSISTENCY_001"
+      }
+    ],
+    "expected_issues": [],
+    "prohibited_report_content": [
+      "approve loan",
+      "creditworthy"
+    ],
+    "report_availability": "ready",
+    "required_report_content": [
+      "documents checked",
+      "no registered review issue"
+    ]
+  },
+  "verification": {
+    "status": "confirmed",
+    "verified_at": "2026-09-06T13:07:51.156Z",
+    "verified_by": "sulmae"
+  }
+}

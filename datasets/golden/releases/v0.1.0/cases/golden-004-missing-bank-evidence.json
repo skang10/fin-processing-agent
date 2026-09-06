@@ -1,0 +1,66 @@
+{
+  "application_data": {
+    "applicant_display_name": "Eva Sample",
+    "demo_fixture_id": "golden-004-missing-bank-evidence",
+    "employment": {
+      "employer": "Sample Works Ltd"
+    },
+    "income": {
+      "currency": "EUR",
+      "monthly_net": "3100.00"
+    },
+    "synthetic_data": true
+  },
+  "case_id": "golden-004-missing-bank-evidence",
+  "coverage": [
+    "native_text",
+    "en",
+    "missing_evidence",
+    "additional_documents_needed"
+  ],
+  "documents": [
+    {
+      "media_type": "application/pdf",
+      "page_count": 2,
+      "path": "documents/golden-004-missing-bank-evidence/golden-004-missing-bank-evidence.pdf",
+      "sha256": "b6ca3a11f7952e48456ba3c0da7d83736f78333f3e265fcc18fba368e726f850"
+    }
+  ],
+  "generator": {
+    "template_version": "structured-a4-1.0.0",
+    "version": "findoc-golden-generator-2.0.0"
+  },
+  "schema_version": "1.0.0",
+  "seed": 1004,
+  "synthetic_data": true,
+  "truth_candidate": {
+    "expected_checked_facts": [
+      {
+        "acceptable_evidence": [
+          "page:1"
+        ],
+        "code": "VAL_NAME_CONSISTENCY_001"
+      }
+    ],
+    "expected_issues": [
+      {
+        "acceptable_evidence": [
+          "document:golden-004-missing-bank-evidence.pdf"
+        ],
+        "code": "VAL_DOC_COMPLETENESS_001"
+      }
+    ],
+    "prohibited_report_content": [
+      "customer contacted"
+    ],
+    "report_availability": "ready",
+    "required_report_content": [
+      "bank statement missing"
+    ]
+  },
+  "verification": {
+    "status": "confirmed",
+    "verified_at": "2026-09-06T13:07:52.229Z",
+    "verified_by": "sulmae"
+  }
+}

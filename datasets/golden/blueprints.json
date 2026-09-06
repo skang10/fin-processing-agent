@@ -56,7 +56,7 @@
       "seed": 1006,
       "generator": { "version": "findoc-golden-generator-2.0.0", "template_version": "structured-a4-1.0.0" },
       "verification": { "status": "pending_human_review" },
-      "coverage": ["scanned", "de", "complex_table", "adaptive_recovery", "report_unavailable", "runtime_support_pending"],
+      "coverage": ["scanned", "de", "complex_table", "adaptive_recovery", "report_unavailable", "implemented_offline_path"],
       "application_data": { "applicant_display_name": "Greta Demofall", "synthetic_data": true, "demo_fixture_id": "golden-006-scanned-adaptive-unavailable", "employment": { "employer": "Demowerk GmbH" }, "income": { "monthly_net": "3050.00", "currency": "EUR" } },
       "document_values": { "payslip_monthly_net": "2980.00", "bank_salary_credit": "3010.00" },
       "documents": [{ "path": "documents/golden-006-scanned-adaptive-unavailable.pdf", "media_type": "application/pdf", "page_count": 3 }],

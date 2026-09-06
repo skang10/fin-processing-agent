@@ -1,0 +1,87 @@
+{
+  "application_data": {
+    "applicant_display_name": "Anna Beispiel",
+    "demo_fixture_id": "golden-003-multiple-review-issues",
+    "employment": {
+      "employer": "Beispieltechnik GmbH"
+    },
+    "income": {
+      "currency": "EUR",
+      "monthly_net": "3480.00"
+    },
+    "synthetic_data": true
+  },
+  "case_id": "golden-003-multiple-review-issues",
+  "coverage": [
+    "native_text",
+    "de",
+    "multiple_review_issues",
+    "document_boundary",
+    "implemented_offline_path"
+  ],
+  "documents": [
+    {
+      "media_type": "application/pdf",
+      "page_count": 4,
+      "path": "documents/golden-003-multiple-review-issues/golden-003-multiple-review-issues.pdf",
+      "sha256": "d9be90b5f5860ffcb2e0c2516142f91411c6f02de911f2e0ac9b525d301b2612"
+    }
+  ],
+  "generator": {
+    "template_version": "structured-a4-1.0.0",
+    "version": "findoc-golden-generator-2.0.0"
+  },
+  "schema_version": "1.0.0",
+  "seed": 1003,
+  "synthetic_data": true,
+  "truth_candidate": {
+    "expected_checked_facts": [
+      {
+        "acceptable_evidence": [
+          "page:1"
+        ],
+        "code": "VAL_NAME_CONSISTENCY_001"
+      },
+      {
+        "acceptable_evidence": [
+          "page:1"
+        ],
+        "code": "VAL_ID_EXPIRY_001"
+      }
+    ],
+    "expected_issues": [
+      {
+        "acceptable_evidence": [
+          "page:3"
+        ],
+        "code": "VAL_DOC_COMPLETENESS_001"
+      },
+      {
+        "acceptable_evidence": [
+          "application:/employment/employer",
+          "page:4"
+        ],
+        "code": "VAL_EMPLOYER_CONSISTENCY_001"
+      },
+      {
+        "acceptable_evidence": [
+          "page:2"
+        ],
+        "code": "VAL_INCOME_CONSISTENCY_001"
+      }
+    ],
+    "prohibited_report_content": [
+      "approve loan",
+      "reject loan"
+    ],
+    "report_availability": "ready",
+    "required_report_content": [
+      "three review issues"
+    ]
+  },
+  "verification": {
+    "status": "confirmed",
+    "verified_at": "2026-09-06T13:07:51.879Z",
+    "verified_by": "sulmae"
+  }
+}
