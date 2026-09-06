@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 3.3.0
+Version: 3.4.0
 
 Status: Approved
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.0, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.0.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, and `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.2.0. `ADR_001_PI_AGENT_HARNESS.md` is accepted as amended for the single-session lifecycle; `ADR_002_PDF_INSPECTOR.md` and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
+All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.0, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.0.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, and `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.3.0. `ADR_001_PI_AGENT_HARNESS.md` is accepted as amended for the single-session lifecycle; `ADR_002_PDF_INSPECTOR.md` and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
 
 ## 3. Product Baseline
 
@@ -367,6 +367,7 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.4.0 | 2026-09-07 | Approved | Approved Agent component 3.3.0, aligning report tool validation with the verifier schema and adding semantic extraction-role guidance to the bounded manifest. |
 | 3.3.0 | 2026-09-07 | Approved | Approved the bounded visual-inspection boundary in Architecture 3.1.0, Document Processing 2.1.0, and Agent 3.2.0. |
 | 3.2.0 | 2026-09-07 | Approved | Approved Agent component 3.1.0, which makes the bounded Agent the source of document-derived values, replaces `get_extraction_gaps` with `get_case_manifest`, and scopes an extraction gap to its logical document. |
 | 3.1.0 | 2026-09-06 | Approved | Aligned the data model, document-processing boundary, and Pi harness ADR with the approved single-session Agent-led case review architecture. |

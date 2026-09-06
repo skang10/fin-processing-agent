@@ -87,6 +87,10 @@ export interface ExtractionGapScope {
 /** Explicit unresolved extraction requirement (DAT-REQ-101 to DAT-REQ-105). */
 export interface ExtractionGap {
   readonly gapId: string;
+  /** Stable declared requirement and semantic role; these guide extraction without granting policy authority. */
+  readonly requirementId?: string;
+  readonly role?: string;
+  readonly extractionGuidance?: string;
   readonly fieldSchemaId: string;
   readonly fieldSchemaVersion: string;
   readonly valueType: "string" | "money" | "date";

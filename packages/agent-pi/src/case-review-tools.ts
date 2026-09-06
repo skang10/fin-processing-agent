@@ -1,4 +1,5 @@
 import { Type } from "typebox";
+import { CaseReviewBriefCandidateSchema } from "@findoc/contracts";
 import type {
   AgentLedCaseReviewContext,
   CaseReviewContext,
@@ -22,7 +23,7 @@ import {
   type RecoveryToolState,
 } from "./recovery-tools.js";
 
-export const CASE_REVIEW_TOOL_REGISTRY_VERSION = "case-review-tools-3.1.0";
+export const CASE_REVIEW_TOOL_REGISTRY_VERSION = "case-review-tools-3.2.0";
 
 export interface AgentLedScope extends RecoveryScope {
   readonly context: AgentLedCaseReviewContext;
@@ -126,16 +127,10 @@ const getCurrentResultTool: Tool = {
   },
 };
 
-const BriefAttentionItem = Type.Object({
-  signal: Type.String({ minLength: 1, maxLength: 64 }), suggested_action: Type.String({ minLength: 1, maxLength: 64 }),
-  description: Type.String({ minLength: 1, maxLength: 500 }),
-  references: Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { minItems: 1, maxItems: 10 }),
-}, { additionalProperties: false });
-const SubmitBrief = Type.Object({ brief: Type.Object({
-  schema_version: Type.Literal("1.0.0"), result_revision_id: Type.String({ minLength: 1, maxLength: 64 }),
-  report_status: Type.Literal("ready"), summary: Type.String({ minLength: 1, maxLength: 500 }),
-  attention_items: Type.Array(BriefAttentionItem, { maxItems: 20 }),
-}, { additionalProperties: false }) }, { additionalProperties: false });
+// The tool boundary and the deterministic Report Verifier deliberately share one schema. If the
+// model invents a signal or action, Pi receives a repairable tool error instead of terminating with
+// a submission that the external verifier must reject.
+const SubmitBrief = Type.Object({ brief: CaseReviewBriefCandidateSchema }, { additionalProperties: false });
 
 const submitBriefTool: Tool = {
   name: "submit_case_review_brief", version: "1.0.0", label: "Submit Case Review Brief", costClass: "submit",

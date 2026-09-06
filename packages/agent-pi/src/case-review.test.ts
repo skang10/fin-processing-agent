@@ -7,7 +7,7 @@ import { CASE_REVIEW_PROMPT_HASH } from "./prompt.js";
 const page = { documentVersionId: "document-1", logicalDocumentRevisionId: "logical-1", pageNumber: 1, needsOcr: true, ocrAvailable: true, nativeCharacterCount: 0, renderAvailable: true };
 const context = (withGap: boolean): AgentLedCaseReviewContext => ({
   runId: "run-1", pages: [page], fieldSchemas: [{ fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money" }],
-  gaps: withGap ? [{ gapId: "gap-1", fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money", required: true, originatingStage: "extract", reasonCode: "missing", attemptedPaths: ["native_text"], scope: { documentVersionId: "document-1", logicalDocumentRevisionId: "logical-1", pageNumber: 1 } }] : [],
+  gaps: withGap ? [{ gapId: "gap-1", requirementId: "payslip_monthly_net_income", role: "payslip_income", extractionGuidance: "Extract the payslip's monthly net-pay amount, without currency conversion.", fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money", required: true, originatingStage: "extract", reasonCode: "missing", attemptedPaths: ["native_text"], scope: { documentVersionId: "document-1", logicalDocumentRevisionId: "logical-1", pageNumber: 1 } }] : [],
 });
 
 function ports(): CaseReviewProcessingPorts {
@@ -132,7 +132,10 @@ describe("PiAgentLedCaseReviewHarness", () => {
     const script: FakeModelScript = (turn, visible) => {
       const current = standardCaseReviewScript(turn, visible);
       if (current.kind === "tool_calls" && current.calls[0]?.name === "submit_case_review_brief") {
-        return { kind: "tool_calls", calls: [{ name: "submit_case_review_brief", args: { brief: { schema_version: "9.9.9" } } }] };
+        return { kind: "tool_calls", calls: [{ name: "submit_case_review_brief", args: { brief: {
+          schema_version: "1.0.0", result_revision_id: "result-1", report_status: "ready", summary: "Review required.",
+          attention_items: [{ signal: "employer_conflict", suggested_action: "review_employer_evidence", description: "Review employer evidence.", references: ["finding:VAL_EMPLOYER_CONSISTENCY_001"] }],
+        } } }] };
       }
       return current;
     };
@@ -191,6 +194,8 @@ describe("PiAgentLedCaseReviewHarness", () => {
     expect(seen.length).toBeGreaterThan(0);
     for (const manifest of seen) {
       expect(manifest).toContain("extraction_requirements");
+      expect(manifest).toContain('"target_role":"payslip_income"');
+      expect(manifest).toContain("monthly net-pay amount");
       expect(manifest).not.toContain("untrusted_document_text");
       expect(manifest).not.toContain("2980.00");
     }

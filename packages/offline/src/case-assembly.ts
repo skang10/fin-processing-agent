@@ -29,6 +29,7 @@ export interface DocumentFieldRequirement {
   readonly fieldSchemaVersion: string;
   readonly valueType: "string" | "money" | "date";
   readonly role: RequirementRole;
+  readonly extractionGuidance: string;
   readonly required: boolean;
 }
 
@@ -37,13 +38,13 @@ export interface DocumentFieldRequirement {
  * configuration: they never come from golden truth, and a model cannot add, remove, or reinterpret one.
  */
 export const DOCUMENT_FIELD_REQUIREMENTS: readonly DocumentFieldRequirement[] = Object.freeze(([
-  { requirementId: "identity_holder_name", documentType: "identity_document", fieldSchemaId: "person.name", fieldSchemaVersion: "1.0.0", valueType: "string", role: "identity_holder", required: true },
-  { requirementId: "identity_expiry_date", documentType: "identity_document", fieldSchemaId: "identity.expiry_date", fieldSchemaVersion: "1.0.0", valueType: "date", role: "identity_holder", required: true },
-  { requirementId: "employee_name", documentType: "payslip", fieldSchemaId: "person.name", fieldSchemaVersion: "1.0.0", valueType: "string", role: "employee", required: true },
-  { requirementId: "payslip_employer_name", documentType: "payslip", fieldSchemaId: "organization.name", fieldSchemaVersion: "1.0.0", valueType: "string", role: "payslip_employer", required: true },
-  { requirementId: "payslip_monthly_net_income", documentType: "payslip", fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money", role: "payslip_income", required: true },
-  { requirementId: "account_holder_name", documentType: "bank_statement", fieldSchemaId: "person.name", fieldSchemaVersion: "1.0.0", valueType: "string", role: "account_holder", required: true },
-  { requirementId: "payment_counterparty_name", documentType: "bank_statement", fieldSchemaId: "organization.name", fieldSchemaVersion: "1.0.0", valueType: "string", role: "payment_counterparty", required: true },
+  { requirementId: "identity_holder_name", documentType: "identity_document", fieldSchemaId: "person.name", fieldSchemaVersion: "1.0.0", valueType: "string", role: "identity_holder", extractionGuidance: "Extract the identity-document holder's name.", required: true },
+  { requirementId: "identity_expiry_date", documentType: "identity_document", fieldSchemaId: "identity.expiry_date", fieldSchemaVersion: "1.0.0", valueType: "date", role: "identity_holder", extractionGuidance: "Extract the identity document's expiry date.", required: true },
+  { requirementId: "employee_name", documentType: "payslip", fieldSchemaId: "person.name", fieldSchemaVersion: "1.0.0", valueType: "string", role: "employee", extractionGuidance: "Extract the employee name shown on the payslip.", required: true },
+  { requirementId: "payslip_employer_name", documentType: "payslip", fieldSchemaId: "organization.name", fieldSchemaVersion: "1.0.0", valueType: "string", role: "payslip_employer", extractionGuidance: "Extract the employer that issued the payslip.", required: true },
+  { requirementId: "payslip_monthly_net_income", documentType: "payslip", fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money", role: "payslip_income", extractionGuidance: "Extract the payslip's monthly net-pay amount, without currency conversion.", required: true },
+  { requirementId: "account_holder_name", documentType: "bank_statement", fieldSchemaId: "person.name", fieldSchemaVersion: "1.0.0", valueType: "string", role: "account_holder", extractionGuidance: "Extract the account holder's name, not a transaction counterparty.", required: true },
+  { requirementId: "payment_counterparty_name", documentType: "bank_statement", fieldSchemaId: "organization.name", fieldSchemaVersion: "1.0.0", valueType: "string", role: "payment_counterparty", extractionGuidance: "Extract the sender or counterparty of the salary-credit transaction. Do not extract the account-holding bank, its logo, or a page-header institution name.", required: true },
 ] satisfies DocumentFieldRequirement[]).map((entry) => Object.freeze(entry)));
 
 export const REQUIRED_DOCUMENT_TYPES: readonly RequiredDocumentType[] = Object.freeze(["identity_document", "payslip", "bank_statement"]);
@@ -103,7 +104,8 @@ export function buildExtractionPlan(context: CaseAssemblyContext): ExtractionPla
     if (!page) continue;
     const gapId = deterministicUuid(`${context.resultRevisionId}:gap:${requirement.requirementId}:${document.logicalDocumentRevisionId}`);
     gaps.push({
-      gapId, fieldSchemaId: requirement.fieldSchemaId, fieldSchemaVersion: requirement.fieldSchemaVersion,
+      gapId, requirementId: requirement.requirementId, role: requirement.role, extractionGuidance: requirement.extractionGuidance,
+      fieldSchemaId: requirement.fieldSchemaId, fieldSchemaVersion: requirement.fieldSchemaVersion,
       valueType: requirement.valueType, required: requirement.required, originatingStage: "extract",
       reasonCode: "no_deterministic_field_extractor",
       attemptedPaths: ["pdf_inspector_native_extraction", ...(page.ocrAvailable ? ["selective_ocr"] : [])],

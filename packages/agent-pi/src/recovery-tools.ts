@@ -138,7 +138,7 @@ type Tool<TParams extends Type.TSchema> = RegisteredToolSpec<TParams, RecoverySc
  * run. It carries no document content; every document value must come from a page tool.
  */
 export const getCaseManifestTool: Tool<typeof NoParameters> = {
-  name: "get_case_manifest", version: "1.0.0", label: "Get case manifest", costClass: "read",
+  name: "get_case_manifest", version: "2.0.0", label: "Get case manifest", costClass: "read",
   description: "Return the bounded case manifest: logical documents, authorized pages, declared extraction requirements, and structured application data. It contains no document content.",
   promptSnippet: "read the bounded case manifest before inspecting any page",
   parameters: NoParameters,
@@ -151,7 +151,9 @@ export const getCaseManifestTool: Tool<typeof NoParameters> = {
         document_type: document.documentType, start_page: document.startPage, end_page: document.endPage, uncertain: document.uncertain,
       })),
       extraction_requirements: scope.context.gaps.map((gap) => ({
-        gap_id: gap.gapId, field_schema_id: gap.fieldSchemaId, field_schema_version: gap.fieldSchemaVersion, value_type: gap.valueType,
+        gap_id: gap.gapId, ...(gap.requirementId ? { requirement_id: gap.requirementId } : {}),
+        ...(gap.role ? { target_role: gap.role } : {}), ...(gap.extractionGuidance ? { extraction_guidance: gap.extractionGuidance } : {}),
+        field_schema_id: gap.fieldSchemaId, field_schema_version: gap.fieldSchemaVersion, value_type: gap.valueType,
         required: gap.required, reason_code: gap.reasonCode, attempted_paths: [...gap.attemptedPaths],
         scope: { document_version_id: gap.scope.documentVersionId, page_number: gap.scope.pageNumber, logical_document_revision_id: gap.scope.logicalDocumentRevisionId },
         resolution_state: state.candidates.some((candidate) => candidate.gapId === gap.gapId) ? "candidate_submitted" : "open",
