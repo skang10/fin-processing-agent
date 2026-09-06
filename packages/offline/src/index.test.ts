@@ -84,14 +84,8 @@ describe("extraction plan", () => {
     ]);
   });
 
-  it("scopes a multi-page logical document to its first page and stays eligible", () => {
-    const assembly = context({
-      logicalDocuments: [
-        logical("logical-identity", "identity_document", 1),
-        logical("logical-payslip", "payslip", 2, 3),
-        logical("logical-bank", "bank_statement", 4),
-      ],
-    });
+  it("anchors a multi-page logical document on its first page and stays eligible", () => {
+    const assembly = multiPageContext();
     const plan = buildExtractionPlan(assembly);
     const payslipGaps = plan.gaps.filter((gap) => gap.scope.logicalDocumentRevisionId === "logical-payslip");
     expect(payslipGaps.map((gap) => gap.scope.pageNumber)).toEqual([2, 2, 2]);
@@ -101,6 +95,49 @@ describe("extraction plan", () => {
       registeredToolNames: ["request_validation", "submit_case_review_brief"], budgetAvailable: true, fatalFailure: false,
     }, "decision-1");
     expect(eligibility.decision).toBe("eligible");
+  });
+});
+
+/** A payslip that spans pages 2 and 3, so a field may legitimately sit on the second page. */
+function multiPageContext(): CaseAssemblyContext {
+  return context({
+    logicalDocuments: [
+      logical("logical-identity", "identity_document", 1),
+      logical("logical-payslip", "payslip", 2, 3),
+      logical("logical-bank", "bank_statement", 4),
+    ],
+  });
+}
+
+describe("multi-page logical documents", () => {
+  it("accepts a value the Agent read from the continuation page of its own document", () => {
+    const assembly = multiPageContext();
+    const plan = buildExtractionPlan(assembly);
+    // The income sits on page 3, the payslip's continuation page, not on the anchor page 2.
+    const candidates = candidatesFor(assembly, CLEAN_VALUES).map((candidate) =>
+      candidate.fieldSchemaId === "income.monthly_net" && candidate.page.pageNumber === 2
+        ? { ...candidate, page: { documentVersionId: DOCUMENT, pageNumber: 3 } }
+        : candidate);
+    const result = assembleCaseResult(assembly, plan, candidates);
+
+    expect(result.gapResolutions).toHaveLength(DOCUMENT_FIELD_REQUIREMENTS.length);
+    expect(issuesOf(result)).toEqual([]);
+    const income = result.claims.find((claim) => claim.fieldSchemaId === "income.monthly_net" && claim.rawValue === "3200.00" && claim.claimId !== undefined);
+    expect(income).toBeDefined();
+    const evidence = result.evidence.filter((item) => item.evidenceType === "page_level" && item.pageNumber === 3);
+    expect(evidence.map((item) => item.extractionMethod)).toContain("agent_native_text_reading");
+  });
+
+  it("still ignores a value read from a page outside the requirement's own document", () => {
+    const assembly = multiPageContext();
+    const plan = buildExtractionPlan(assembly);
+    const candidates = candidatesFor(assembly, CLEAN_VALUES).map((candidate) =>
+      candidate.fieldSchemaId === "income.monthly_net"
+        ? { ...candidate, rawValue: "9999.00", page: { documentVersionId: DOCUMENT, pageNumber: 4 } }
+        : candidate);
+    const result = assembleCaseResult(assembly, plan, candidates);
+    expect(result.claims.some((claim) => claim.rawValue === "9999.00")).toBe(false);
+    expect(issuesOf(result)).toEqual(["VAL_INCOME_CONSISTENCY_001"]);
   });
 });
 

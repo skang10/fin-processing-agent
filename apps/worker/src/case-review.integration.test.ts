@@ -63,11 +63,24 @@ const bankMarkdown = [
   "28.08 **Demowerk GmbH** Salary 08/2026 +3010.00",
 ].join("\n");
 
-/** The fixture OCR adapter recovers no field text from an image-only page; that is the point. */
-const scannedOcrArtifact = JSON.stringify({
-  rawText: "Synthetic OCR candidate for page 2",
-  spans: [{ text: "Synthetic OCR candidate for page 2", bbox: [0, 0, 935, 1210], confidence: { value: 1, scale: "zero_to_one", producer: "deterministic-fake-ocr" } }],
-});
+function ocrArtifact(lines: readonly string[]): string {
+  return JSON.stringify({
+    rawText: lines.join("\n"),
+    spans: lines.map((text, index) => ({
+      text, bbox: [90, 200 + index * 60, 845, 250 + index * 60],
+      confidence: { value: 1, scale: "zero_to_one", producer: "deterministic-fake-ocr" },
+    })),
+  });
+}
+
+/** The delivered fixture OCR engine recovers no field text from an image-only page; that is the point. */
+const OPAQUE_OCR_LINES = ["Synthetic OCR candidate for page 2"];
+
+/** What a recognizing OCR runtime would return for the same scanned payslip page. */
+const READABLE_OCR_LINES = [
+  "Monthly payslip", "SYNTHETIC DEMO - SCANNED TEST PAGE", "Applicant: Greta Demofall",
+  "Employer: Demowerk GmbH", "Payroll period: August 2026", "Monthly net pay: EUR 2980.00",
+];
 
 describe("Worker termination during Agent-led case review", () => {
   let container: Awaited<ReturnType<PostgreSqlContainer["start"]>>;
@@ -97,7 +110,7 @@ describe("Worker termination during Agent-led case review", () => {
    * One three-page synthetic case: the identity and bank pages carry real native text the Agent must
    * read, and the payslip page is image-only so it must go through the bounded OCR and VLM path.
    */
-  async function prepareCase(key: string) {
+  async function prepareCase(key: string, ocrLines: readonly string[] = OPAQUE_OCR_LINES) {
     const accepted = await new PostgresCaseCommandService(connection.db, `actor_${key}`).accept({
       applicantDisplayName: "Greta Demofall", idempotencyKey: key,
       applicationData: {
@@ -150,7 +163,7 @@ describe("Worker termination during Agent-led case review", () => {
     });
     artifactStore.set(`derived/${key}/native/page-1`, Buffer.from(identityMarkdown(key.slice(0, 6))));
     artifactStore.set(`derived/${key}/native/page-3`, Buffer.from(bankMarkdown));
-    artifactStore.set(`derived/${key}/ocr/page-2`, Buffer.from(scannedOcrArtifact));
+    artifactStore.set(`derived/${key}/ocr/page-2`, Buffer.from(ocrArtifact(ocrLines)));
     return accepted;
   }
 
@@ -212,6 +225,28 @@ describe("Worker termination during Agent-led case review", () => {
     expect(log.events[0]).toMatchObject({ actor: "system", activity: "System preprocessing inspected 3 pages and rendered their images, with text recognition routed for 1 of them" });
     expect(log.events.filter((event) => event.actor === "agent_document_tool")).toHaveLength(9);
     expect(log.events.map((event) => event.activity)).toContain("Started the bounded case review session");
+  });
+
+  it("resolves a scanned page from committed OCR text and spends no VLM call", async () => {
+    const accepted = await prepareCase("ocr_readable", READABLE_OCR_LINES);
+    const outcome = await processAgentLedCaseReview({ coordinator, selectHarness: harnessWith(durable), logger: silentLogger, readArtifact }, { case_id: accepted.caseId, run_id: accepted.runId });
+    expect(outcome).toBe("completed");
+
+    const snapshot = await durable.loadSnapshot(accepted.runId);
+    expect(snapshot?.consumed).toMatchObject({ ocrPages: 1, vlmCalls: 0 });
+    expect(snapshot?.steps.some((step) => step.toolName === "extract_with_vlm")).toBe(false);
+
+    const candidates = await connection.db.select({ method: extractionCandidates.extractionMethod, rawValue: extractionCandidates.rawValue })
+      .from(extractionCandidates).where(eq(extractionCandidates.runId, accepted.runId));
+    const byMethod = candidates.reduce<Record<string, number>>((totals, candidate) => ({ ...totals, [candidate.method]: (totals[candidate.method] ?? 0) + 1 }), {});
+    expect(byMethod).toEqual({ structured_input: 3, agent_native_text_reading: 4, agent_ocr_reading: 3 });
+    expect(candidates.map((candidate) => candidate.rawValue)).toContain("2980.00");
+
+    // The deterministic result is the same one the fixture VLM path produces for this case.
+    const findings = await connection.db.select({ ruleId: validationFindings.ruleId, status: validationFindings.status })
+      .from(validationFindings).innerJoin(resultRevisions, eq(validationFindings.resultRevisionId, resultRevisions.id))
+      .where(eq(resultRevisions.runId, accepted.runId));
+    expect(findings.filter((finding) => finding.status !== "passed").map((finding) => finding.ruleId)).toEqual(["VAL_INCOME_CONSISTENCY_001"]);
   });
 
   const boundaries = [

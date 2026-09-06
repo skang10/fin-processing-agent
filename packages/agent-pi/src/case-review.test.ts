@@ -181,3 +181,89 @@ describe("PiAgentLedCaseReviewHarness", () => {
     expect(outcome.submission).toBeUndefined();
   });
 });
+
+/**
+ * A payslip that spans two pages: page 1 carries native text without the fields, page 2 is
+ * image-only. Both requirements anchor on the document's first page, so this also covers reading a
+ * value from a continuation page.
+ */
+const twoPagePayslip = (): AgentLedCaseReviewContext => ({
+  runId: "run-2",
+  pages: [
+    { documentVersionId: "document-1", logicalDocumentRevisionId: "logical-payslip", pageNumber: 1, needsOcr: false, ocrAvailable: false, nativeCharacterCount: 200, renderAvailable: true },
+    { documentVersionId: "document-1", logicalDocumentRevisionId: "logical-payslip", pageNumber: 2, needsOcr: true, ocrAvailable: true, nativeCharacterCount: 0, renderAvailable: true },
+  ],
+  fieldSchemas: [
+    { fieldSchemaId: "organization.name", fieldSchemaVersion: "1.0.0", valueType: "string" },
+    { fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money" },
+  ],
+  gaps: [
+    { gapId: "gap-employer", fieldSchemaId: "organization.name", fieldSchemaVersion: "1.0.0", valueType: "string", required: true, originatingStage: "extract", reasonCode: "no_deterministic_field_extractor", attemptedPaths: [], scope: { documentVersionId: "document-1", logicalDocumentRevisionId: "logical-payslip", pageNumber: 1 } },
+    { gapId: "gap-income", fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money", required: true, originatingStage: "extract", reasonCode: "no_deterministic_field_extractor", attemptedPaths: [], scope: { documentVersionId: "document-1", logicalDocumentRevisionId: "logical-payslip", pageNumber: 1 } },
+  ],
+  documents: [{ logicalDocumentRevisionId: "logical-payslip", documentVersionId: "document-1", documentType: "payslip", startPage: 1, endPage: 2, uncertain: false }],
+});
+
+function payslipPorts(ocrLines: readonly string[]): CaseReviewProcessingPorts {
+  const service = ports();
+  service.inspectPage = vi.fn(async (page) => ({ needsOcr: page.pageNumber === 2, hasTable: false, hasColumns: false, nativeCharacterCount: page.pageNumber === 1 ? 200 : 0, renderAvailable: true, ocrAvailable: page.pageNumber === 2 }));
+  // Page 1 has native text, but none of the required fields appear in it.
+  service.getNativeText = vi.fn(async (page) => page.pageNumber === 1
+    ? { available: true, text: "Monthly payslip\nSYNTHETIC DEMO - payroll cover page", truncated: false }
+    : { available: false, text: "", truncated: false });
+  service.runOcr = vi.fn(async () => ({
+    engine: "fake", engineVersion: "1", modelAssetVersion: "fixture", reusedCommittedOutput: false,
+    lines: ocrLines.map((text, index) => ({ text, region: { x: 0.1, y: 0.1 + index * 0.1, width: 0.6, height: 0.05 }, rawConfidence: 0.9 })),
+  }));
+  service.extractWithVlm = vi.fn(async (request) => ({
+    modelLabel: "fake-vlm", promptVersion: "1",
+    ...(request.fieldSchemaId === "income.monthly_net"
+      ? { value: { rawValue: "2900.00", normalizedValue: "2900.00", region: { x: 0.5, y: 0.5, width: 0.2, height: 0.05 }, rawConfidence: 0.8 } }
+      : {}),
+  }));
+  return service;
+}
+
+describe("local-first extraction routing", () => {
+  it("resolves every requirement from OCR and spends no VLM call", async () => {
+    const service = payslipPorts(["Employer: Nordwerk Demo GmbH", "Monthly net pay: EUR 2900.00"]);
+    const outcome = await new PiAgentLedCaseReviewHarness({ model: { route: "fake", script: standardCaseReviewScript } }).review(twoPagePayslip(), service);
+
+    expect(outcome.trace.steps.map((step) => step.toolName)).toEqual([
+      "get_case_manifest", "inspect_page", "inspect_page", "get_native_text", "run_ocr",
+      "submit_extraction_candidates", "request_reconciliation", "request_validation", "get_current_result", "submit_case_review_brief",
+    ]);
+    expect(service.extractWithVlm).not.toHaveBeenCalled();
+    expect(outcome.trace.steps.some((step) => step.toolName === "extract_with_vlm")).toBe(false);
+    // Both values were read from page 2, the continuation page of a gap anchored on page 1.
+    expect(outcome.candidates.map((candidate) => [candidate.gapId, candidate.rawValue, candidate.page.pageNumber, candidate.extractionMethod])).toEqual([
+      ["gap-employer", "Nordwerk Demo GmbH", 2, "agent_ocr_reading"],
+      ["gap-income", "2900.00", 2, "agent_ocr_reading"],
+    ]);
+    expect(outcome.candidates.every((candidate) => candidate.region !== undefined)).toBe(true);
+  });
+
+  it("escalates only the requirement OCR could not resolve", async () => {
+    const service = payslipPorts(["Employer: Nordwerk Demo GmbH", "Net pay illegible"]);
+    const outcome = await new PiAgentLedCaseReviewHarness({ model: { route: "fake", script: standardCaseReviewScript } }).review(twoPagePayslip(), service);
+
+    const vlmSteps = outcome.trace.steps.filter((step) => step.toolName === "extract_with_vlm");
+    expect(vlmSteps).toHaveLength(1);
+    expect(vlmSteps[0]?.summary).toBe("Checked page 2 for monthly net income with fake-vlm");
+    expect(service.extractWithVlm).toHaveBeenCalledTimes(1);
+    expect(outcome.candidates.map((candidate) => [candidate.gapId, candidate.extractionMethod])).toEqual([
+      ["gap-employer", "agent_ocr_reading"],
+      ["gap-income", "agent_vlm_extraction"],
+    ]);
+  });
+
+  it("still rejects a value cited from a page outside the requirement's own document", async () => {
+    const service = payslipPorts(["Employer: Nordwerk Demo GmbH", "Monthly net pay: EUR 2900.00"]);
+    const script: FakeModelScript = (turn, visible) => turn === 1
+      ? { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates: [{ gap_id: "gap-income", raw_value: "2900.00", document_version_id: "document-1", page_number: 3 }] } }] }
+      : standardCaseReviewScript(turn - 1, visible);
+    const outcome = await new PiAgentLedCaseReviewHarness({ model: { route: "fake", script }, budget: { ...DEFAULT_AGENT_BUDGET, maxConsecutiveNoProgressSteps: 5 } }).review(twoPagePayslip(), service);
+    expect(outcome.trace.steps[0]).toMatchObject({ toolName: "submit_extraction_candidates", outcome: "authorization_rejected" });
+    expect(outcome.candidates.every((candidate) => candidate.page.pageNumber === 2)).toBe(true);
+  });
+});

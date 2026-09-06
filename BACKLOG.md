@@ -173,6 +173,7 @@ Remaining work:
 2. Attach normalized evidence regions to native-text candidates; PDF Inspector layout coordinates are not exposed through the current native-text boundary, so those candidates carry a page reference without a bounding box.
 3. Replace the fixture scanned-page adapter with the accepted real OCR runtime (BL-003) and an accepted VLM gateway (BL-004), and implement crop rendering so a Vision Language Model receives a region rather than a full page.
 4. Regenerate `golden-003-multiple-review-issues` so its documents carry the boundary ambiguity and unreadable income the case is named for, then confirm a new dataset release (BL-005).
+5. **Open governance question for the document-processing owner.** A synthetic page with no committed native text cannot be classified from its own content while OCR is a fixture, so the demonstration classifier falls back to the registered fixture's declared page type, recorded under its own method identity `synthetic-demo-fixture-page-adapter`. `DOC-REQ-069` covers readable pages and `DOC-REQ-071` lists layout, native text, OCR text, and bounded imagery as classifier inputs; a fixture declaration is neither addressed nor forbidden by them. `components/DOCUMENT_PROCESSING.md` should either register this demonstration-only provision or reject it, rather than leaving the implementation to reinterpret an approved owner. Accepting the real OCR runtime (BL-003) removes the need for it.
 
 **Target documents:**
 

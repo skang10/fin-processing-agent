@@ -208,10 +208,13 @@ export function assembleCaseResult(
     const requirement = plan.requirementByGapId.get(gap.gapId);
     const document = plan.documentByGapId.get(gap.gapId);
     if (!requirement || !document) continue;
+    // The gap anchors on its logical document's first page, but the value may sit on any page of
+    // that document, so a multi-page payslip or statement is not restricted to its first page.
     const proposal = submitted.find((item) => item.gapId === gap.gapId
       && item.fieldSchemaId === gap.fieldSchemaId
-      && item.page.documentVersionId === gap.scope.documentVersionId
-      && item.page.pageNumber === gap.scope.pageNumber);
+      && item.page.documentVersionId === document.documentVersionId
+      && item.page.pageNumber >= document.startPage
+      && item.page.pageNumber <= document.endPage);
     if (!proposal || seenGapIds.has(gap.gapId)) continue;
     seenGapIds.add(gap.gapId);
     const normalizedValue = normalizeValue(gap.valueType, proposal.rawValue);

@@ -1,4 +1,5 @@
 import { Type, type Static } from "typebox";
+import type { ExtractionGap } from "@findoc/core";
 import type { AdaptiveRecoveryContext, AgentExtractionMethod, NormalizedRegion, PageReference, RecoveryToolPorts, SubmittedExtractionCandidate } from "@findoc/agent";
 import type { RegisteredToolSpec } from "./session.js";
 
@@ -45,20 +46,24 @@ export interface ResolvedEvidenceSource {
 }
 
 /**
- * Resolve the tool boundary a submitted value came from. A VLM value must match exactly, an OCR
- * value must match a returned line exactly, and a native-text value must appear verbatim in the
- * bounded text the page tool returned. Anything else has no tool evidence.
+ * Resolve the tool boundary a submitted value came from. The rule is the same for every source: the
+ * value must appear verbatim in what an authorized tool returned for that page. A VLM value must
+ * match its returned value exactly; an OCR value must appear in a returned line, and inherits that
+ * line's region; a native-text value must appear in the bounded text the page tool returned. Anything
+ * else has no tool evidence.
  */
 export function resolveEvidenceSource(
   state: RecoveryToolState, page: PageReference, fieldSchemaId: string, rawValue: string,
 ): ResolvedEvidenceSource | undefined {
+  if (rawValue.length === 0) return undefined;
   const key = pageKey(page);
   const vlm = state.vlmResults.get(`${key}:${fieldSchemaId}`);
   if (vlm && vlm.rawValue === rawValue) return { extractionMethod: "agent_vlm_extraction", processorVersion: vlm.processorVersion, region: vlm.region };
-  const line = state.ocrLinesByPage.get(key)?.find((item) => item.text === rawValue);
+  const lines = state.ocrLinesByPage.get(key) ?? [];
+  const line = lines.find((item) => item.text === rawValue) ?? lines.find((item) => item.text.includes(rawValue));
   if (line) return { extractionMethod: "agent_ocr_reading", processorVersion: AGENT_OCR_READING_VERSION, region: line.region };
   const native = state.nativeTextByPage.get(key);
-  if (native && rawValue.length > 0 && native.includes(rawValue)) {
+  if (native && native.includes(rawValue)) {
     return { extractionMethod: "agent_native_text_reading", processorVersion: AGENT_NATIVE_TEXT_READING_VERSION };
   }
   return undefined;
@@ -95,6 +100,21 @@ const toPage = (args: { document_version_id: string; page_number: number }): Pag
 
 function authorizePage(args: { document_version_id: string; page_number: number }, scope: RecoveryScope): string | undefined {
   return scope.context.pages.some((page) => page.documentVersionId === args.document_version_id && page.pageNumber === args.page_number) ? undefined : "page_outside_session_scope";
+}
+
+/**
+ * Pages one gap may be worked from. A gap anchors on the first page of its logical document, but the
+ * value it needs can sit on any authorized page of that same document, so a multi-page payslip or
+ * statement is not restricted to its first page. When the session carries no document inventory the
+ * check falls back to the anchor page and stays closed.
+ */
+function pageWithinGapScope(gap: ExtractionGap, scope: RecoveryScope, page: PageReference): boolean {
+  if (page.documentVersionId !== gap.scope.documentVersionId) return false;
+  if (!scope.context.pages.some((item) => item.documentVersionId === page.documentVersionId && item.pageNumber === page.pageNumber)) return false;
+  const document = scope.context.documents?.find((item) => item.logicalDocumentRevisionId === gap.scope.logicalDocumentRevisionId);
+  return document
+    ? page.pageNumber >= document.startPage && page.pageNumber <= document.endPage
+    : page.pageNumber === gap.scope.pageNumber;
 }
 
 function validRegion(region: NormalizedRegion): boolean {
@@ -236,7 +256,7 @@ export const extractWithVlmTool: Tool<typeof VlmParameters> = {
     const pageRejection = authorizePage(args, scope);
     if (pageRejection) return pageRejection;
     if (!scope.context.fieldSchemas.some((schema) => schema.fieldSchemaId === args.field_schema_id)) return "field_schema_outside_session_scope";
-    if (!scope.context.gaps.some((gap) => gap.fieldSchemaId === args.field_schema_id && gap.scope.documentVersionId === args.document_version_id && gap.scope.pageNumber === args.page_number)) return "page_outside_gap_scope";
+    if (!scope.context.gaps.some((gap) => gap.fieldSchemaId === args.field_schema_id && pageWithinGapScope(gap, scope, toPage(args)))) return "page_outside_gap_scope";
     if (!state.inspectedPages.has(pageKey(toPage(args)))) return "page_inspection_required";
     if (!locallyProcessed(state, toPage(args))) return "local_processing_required";
     if (args.region && !validRegion(args.region)) return "region_invalid";
@@ -283,7 +303,7 @@ export const submitExtractionCandidatesTool: Tool<typeof SubmitParameters> = {
     for (const candidate of args.candidates) {
       const gap = scope.context.gaps.find((item) => item.gapId === candidate.gap_id);
       if (!gap) return "gap_outside_session_scope";
-      if (gap.scope.documentVersionId !== candidate.document_version_id || gap.scope.pageNumber !== candidate.page_number) return "page_outside_gap_scope";
+      if (!pageWithinGapScope(gap, scope, toPage(candidate))) return "page_outside_gap_scope";
       if (candidate.region && !validRegion(candidate.region)) return "region_invalid";
       if (!resolveEvidenceSource(state, toPage(candidate), gap.fieldSchemaId, candidate.raw_value)) return "value_without_tool_evidence";
       if (state.candidates.some((item) => item.gapId === candidate.gap_id) || proposed.has(candidate.gap_id)) return "gap_already_has_candidate";

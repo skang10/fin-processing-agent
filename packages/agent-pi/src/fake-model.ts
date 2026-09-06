@@ -161,17 +161,28 @@ const MONTH_SUFFIX = /\s+(?:January|February|March|April|May|June|July|August|Se
  */
 const FIELD_PATTERNS: Readonly<Record<string, Readonly<Record<string, readonly RegExp[]>>>> = {
   identity_document: {
-    "person.name": [/\*\*FULL NAME\*\*\s*\*\*([^*]+?)\*\*/u, /^#+\s*Applicant:\s*(.+?)\s*$/mu],
-    "identity.expiry_date": [/EXPIRY DATE\*\*\s*\*\*[^*]*?(\d{1,2}\s+[A-Za-z]+\s+\d{4})[^*]*?\*\*/u, /^#+\s*Expiry:\s*(\S+)\s*$/mu],
+    "person.name": [/\*\*FULL NAME\*\*\s*\*\*([^*]+?)\*\*/u, /^#*\s*(?:Applicant|Full name):\s*(.+?)\s*$/miu],
+    "identity.expiry_date": [
+      /EXPIRY DATE\*\*\s*\*\*[^*]*?(\d{1,2}\s+[A-Za-z]+\s+\d{4})[^*]*?\*\*/u,
+      /^#*\s*Expiry(?: date)?:\s*(\d{4}-\d{2}-\d{2})\s*$/miu,
+      /^#*\s*Expiry(?: date)?:\s*.*?(\d{1,2}\s+[A-Za-z]+\s+\d{4})/miu,
+    ],
   },
   payslip: {
-    "person.name": [/\*\*EMPLOYEE PAYROLL PERIOD\*\*\s*\*\*([^*]+?)\*\*/u],
-    "organization.name": [/\*\*EMPLOYER\*\*\s*\*\*([^*]+?)\*\*/u, /^#+\s*Employer:\s*(.+?)\s*$/mu],
-    "income.monthly_net": [/\|(?:Monthly net pay|Net payment)\|([\d.,]+)\|/u, /^#+\s*Net pay:\s*(?:EUR\s*)?([\d.,]+)\s*$/mu],
+    "person.name": [/\*\*EMPLOYEE PAYROLL PERIOD\*\*\s*\*\*([^*]+?)\*\*/u, /^#*\s*(?:Applicant|Employee):\s*(.+?)\s*$/miu],
+    "organization.name": [/\*\*EMPLOYER\*\*\s*\*\*([^*]+?)\*\*/u, /^#*\s*Employer:\s*(.+?)\s*$/miu],
+    "income.monthly_net": [
+      /\|(?:Monthly net pay|Net payment)\|([\d.,]+)\|/u,
+      /^#*\s*(?:Monthly net pay|Net pay|Net payment):\s*(?:EUR\s*)?([\d.,]+)\s*$/miu,
+    ],
   },
   bank_statement: {
-    "person.name": [/\*\*ACCOUNT HOLDER MASKED IBAN\*\*\s*\*\*([^*]+?)\*\*/u],
-    "organization.name": [/\*\*([^*]+?)\*\*\s*Salary/u, /^#+\s*Salary payment:\s*(.+?)\s*$/mu],
+    "person.name": [/\*\*ACCOUNT HOLDER MASKED IBAN\*\*\s*\*\*([^*]+?)\*\*/u, /^#*\s*(?:Applicant|Account holder):\s*(.+?)\s*$/miu],
+    "organization.name": [
+      /\*\*([^*]+?)\*\*\s*Salary/u,
+      /^#*\s*Salary payment:\s*(.+?)\s*$/miu,
+      /\|\s*([^|]+?)\s*\|\s*Salary\b/u,
+    ],
   },
 };
 
@@ -198,11 +209,15 @@ function capture(text: string, pattern: RegExp): string | undefined {
 
 const pageKey = (page: { document_version_id: string; page_number: number }) => `${page.document_version_id}:${page.page_number}`;
 
+interface PlannedCandidate { gap_id: string; raw_value: string; document_version_id: string; page_number: number }
+
 /**
- * One deterministic fake-model policy for the complete Agent-led case review session: read the
- * bounded manifest, inspect every authorized page, read committed native text, run the approved OCR
- * boundary where a page needs it, use bounded VLM extraction only for a page local processing could
- * not resolve, then submit evidence-backed candidates and the deterministic requests.
+ * One deterministic fake-model policy for the complete Agent-led case review session.
+ *
+ * It works locally first and escalates only what is left: read the bounded manifest, inspect every
+ * authorized page, read committed native text, run the approved OCR boundary where a page needs it,
+ * and satisfy each declared requirement from any authorized page of its own logical document. A
+ * bounded VLM call is spent only on a requirement that neither native text nor OCR could resolve.
  */
 export const standardCaseReviewScript: FakeModelScript = (_turn, context) => {
   const manifest = readToolResult<CaseManifest>(context, "get_case_manifest");
@@ -222,47 +237,77 @@ export const standardCaseReviewScript: FakeModelScript = (_turn, context) => {
     return { kind: "tool_calls", calls: nativePending.map((page) => ({ name: "get_native_text", args: { document_version_id: page.document_version_id, page_number: page.page_number } })) };
   }
 
-  const ocrRead = new Set(readAllToolResults<OcrResultView>(context, "run_ocr").map(pageKey));
+  const ocrCalls = readAllToolResults<OcrResultView>(context, "run_ocr");
+  const ocrRead = new Set(ocrCalls.map(pageKey));
+  const ocrByPage = new Map(ocrCalls.map((result) => [pageKey(result), result.untrusted_lines.map((line) => line.text).join("\n")]));
   const ocrPending = manifest.pages.filter((page) => page.needs_ocr && !ocrRead.has(pageKey(page)));
   if (ocrPending.length > 0) {
     return { kind: "tool_calls", calls: ocrPending.map((page) => ({ name: "run_ocr", args: { document_version_id: page.document_version_id, page_number: page.page_number } })) };
   }
 
-  const documentTypeOf = (requirement: ManifestRequirement) =>
+  const documentOf = (requirement: ManifestRequirement) =>
     manifest.documents.find((document) => document.document_version_id === requirement.scope.document_version_id
-      && document.start_page <= requirement.scope.page_number && document.end_page >= requirement.scope.page_number)?.document_type ?? "unknown";
+      && document.start_page <= requirement.scope.page_number && document.end_page >= requirement.scope.page_number);
+  const pagesOf = (requirement: ManifestRequirement) => {
+    const document = documentOf(requirement);
+    return manifest.pages.filter((page) => document
+      ? page.document_version_id === document.document_version_id && page.page_number >= document.start_page && page.page_number <= document.end_page
+      : pageKey(page) === pageKey(requirement.scope));
+  };
 
   const submitted = new Set(readAllToolResults<{ submitted?: { gap_id: string }[] }>(context, "submit_extraction_candidates").flatMap((result) => (result.submitted ?? []).map((item) => item.gap_id)));
   const open = manifest.extraction_requirements.filter((requirement) => !submitted.has(requirement.gap_id));
 
-  const readable = open.flatMap((requirement) => {
-    const text = nativeByPage.get(pageKey(requirement.scope));
-    const value = text ? readDocumentField(requirement.field_schema_id, documentTypeOf(requirement), text) : undefined;
-    return value ? [{ gap_id: requirement.gap_id, raw_value: value, document_version_id: requirement.scope.document_version_id, page_number: requirement.scope.page_number }] : [];
-  });
+  // A requirement is satisfied from any authorized page of its own logical document, so a value on
+  // the second page of a multi-page payslip or statement is reachable. Native text first, then OCR.
+  const resolvedLocally: PlannedCandidate[] = [];
+  const unresolved: ManifestRequirement[] = [];
+  for (const requirement of open) {
+    const documentType = documentOf(requirement)?.document_type ?? "unknown";
+    let candidate: PlannedCandidate | undefined;
+    for (const source of [nativeByPage, ocrByPage]) {
+      for (const page of pagesOf(requirement)) {
+        const text = source.get(pageKey(page));
+        const value = text ? readDocumentField(requirement.field_schema_id, documentType, text) : undefined;
+        if (!value) continue;
+        candidate = { gap_id: requirement.gap_id, raw_value: value, document_version_id: page.document_version_id, page_number: page.page_number };
+        break;
+      }
+      if (candidate) break;
+    }
+    if (candidate) resolvedLocally.push(candidate);
+    else unresolved.push(requirement);
+  }
 
-  // A page local processing could not read is the only reason to spend a bounded VLM call.
+  // Only a requirement local processing could not resolve is worth a bounded VLM call, and only on a
+  // page of its own document that carries no committed native text.
   const vlmResults = readAllToolResults<VlmResultView>(context, "extract_with_vlm");
-  const vlmByKey = new Map(vlmResults.filter((result) => result.value).map((result) => [`${pageKey(result)}:${result.field_schema_id}`, result]));
-  const vlmPending = open.filter((requirement) => !nativeByPage.get(pageKey(requirement.scope))
-    && !vlmResults.some((result) => `${pageKey(result)}:${result.field_schema_id}` === `${pageKey(requirement.scope)}:${requirement.field_schema_id}`));
-  if (vlmPending.length > 0) {
+  const vlmSeen = new Set(vlmResults.map((result) => `${pageKey(result)}:${result.field_schema_id}`));
+  const vlmTargets = unresolved.flatMap((requirement) => {
+    const page = pagesOf(requirement).find((item) => !nativeByPage.has(pageKey(item)));
+    return page && !vlmSeen.has(`${pageKey(page)}:${requirement.field_schema_id}`)
+      ? [{ requirement, page }]
+      : [];
+  });
+  if (vlmTargets.length > 0) {
     return {
       kind: "tool_calls",
-      calls: vlmPending.map((requirement) => ({
+      calls: vlmTargets.map(({ requirement, page }) => ({
         name: "extract_with_vlm",
-        args: { document_version_id: requirement.scope.document_version_id, page_number: requirement.scope.page_number, field_schema_id: requirement.field_schema_id },
+        args: { document_version_id: page.document_version_id, page_number: page.page_number, field_schema_id: requirement.field_schema_id },
       })),
     };
   }
-  const recovered = open.flatMap((requirement) => {
-    const result = vlmByKey.get(`${pageKey(requirement.scope)}:${requirement.field_schema_id}`);
-    return result?.value
-      ? [{ gap_id: requirement.gap_id, raw_value: result.value.raw_value, document_version_id: requirement.scope.document_version_id, page_number: requirement.scope.page_number, region: result.value.region }]
-      : [];
+  const vlmByKey = new Map(vlmResults.filter((result) => result.value).map((result) => [`${pageKey(result)}:${result.field_schema_id}`, result]));
+  const recovered = unresolved.flatMap((requirement): PlannedCandidate[] => {
+    for (const page of pagesOf(requirement)) {
+      const result = vlmByKey.get(`${pageKey(page)}:${requirement.field_schema_id}`);
+      if (result?.value) return [{ gap_id: requirement.gap_id, raw_value: result.value.raw_value, document_version_id: page.document_version_id, page_number: page.page_number }];
+    }
+    return [];
   });
 
-  const candidates = [...readable, ...recovered];
+  const candidates = [...resolvedLocally, ...recovered];
   if (candidates.length > 0) return { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates } }] };
 
   if (!readToolResult(context, "request_reconciliation")) return { kind: "tool_calls", calls: [{ name: "request_reconciliation", args: {} }] };

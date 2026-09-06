@@ -507,10 +507,19 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       sessionIds.length ? this.db.select().from(agentSessionAttempts).where(inArray(agentSessionAttempts.sessionId, sessionIds)).orderBy(asc(agentSessionAttempts.attemptNumber)) : [],
       this.db.select({
         fieldSchemaId: extractionGaps.fieldSchemaId, pageNumber: extractionGaps.pageNumber,
+        reference: gapResolutions.reference,
         resolutionType: gapResolutions.resolutionType, createdAt: gapResolutions.createdAt,
       }).from(gapResolutions).innerJoin(extractionGaps, eq(gapResolutions.gapId, extractionGaps.id))
         .where(eq(extractionGaps.runId, runId)).orderBy(asc(gapResolutions.createdAt)),
     ]);
+    // A gap anchors on its logical document's first page; the reviewer needs the page the accepted
+    // value actually came from, which is the page of the resolving claim's evidence.
+    const claimEvidencePages = await this.db.select({ claimId: claimEvidenceLinks.claimId, pageNumber: evidenceRecords.pageNumber })
+      .from(claimEvidenceLinks)
+      .innerJoin(claimRecords, eq(claimEvidenceLinks.claimId, claimRecords.id))
+      .innerJoin(evidenceRecords, eq(claimEvidenceLinks.evidenceId, evidenceRecords.id))
+      .where(eq(claimRecords.runId, runId));
+    const evidencePageOfClaim = new Map(claimEvidencePages.flatMap((row) => row.pageNumber === null ? [] : [[row.claimId, row.pageNumber] as const]));
     const attemptCount = new Map<string, number>();
     for (const attempt of attempts) attemptCount.set(attempt.sessionId, (attemptCount.get(attempt.sessionId) ?? 0) + 1);
     const originatingAttempt = new Map<string, string | null>();
@@ -567,7 +576,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
         ]),
         ...resolvedGaps.map((gap) => ({
           timestamp: gap.createdAt.toISOString(),
-          activity: `Deterministic reconciliation accepted the Agent's ${gap.fieldSchemaId === "income.monthly_net" ? "monthly net income" : gap.fieldSchemaId.replace(/[._]/g, " ")} candidate from page ${gap.pageNumber}`,
+          activity: `Deterministic reconciliation accepted the Agent's ${gap.fieldSchemaId === "income.monthly_net" ? "monthly net income" : gap.fieldSchemaId.replace(/[._]/g, " ")} candidate from page ${evidencePageOfClaim.get(gap.reference) ?? gap.pageNumber}`,
         })),
         ...reportEvents,
       ].sort((left, right) => left.timestamp.localeCompare(right.timestamp)),
