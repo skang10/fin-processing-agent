@@ -111,7 +111,13 @@ describe("PostgresCaseCommandService", () => {
     await coordinator.persistInspection(accepted.runId, document, {
       processor: "firecrawl/pdf-inspector", processorVersion: "1.17.0",
       pdfType: "text_based", routingSignal: 0.99, isComplex: false,
-      pages: [{ pageNumber: 1, needsOcr: false, hasTable: false, hasColumns: false, nativeCharacterCount: 42 }],
+      pages: [{
+        pageNumber: 1, needsOcr: false, hasTable: false, hasColumns: false, nativeCharacterCount: 42,
+        nativeTextArtifact: {
+          caseId: accepted.caseId, objectKey: "derived/native/page-1", sha256: "b".repeat(64),
+          byteSize: 16, mediaType: "text/markdown",
+        },
+      }],
     });
     await coordinator.persistInspection(accepted.runId, document, {
       processor: "firecrawl/pdf-inspector", processorVersion: "1.17.0",
@@ -125,8 +131,13 @@ describe("PostgresCaseCommandService", () => {
     ]);
     expect([inspectionCount?.value, pageCount?.value]).toEqual([1, 1]);
     await expect(queriesBeforeProcessing.getDocumentPage(accepted.caseId, document.documentVersionId, 1)).resolves.toMatchObject({
-      pageNumber: 1, nativeCharacterCount: 42,
+      pageNumber: 1, nativeCharacterCount: 42, nativeTextAvailable: true,
     });
+    await expect(queriesBeforeProcessing.getNativeTextArtifact(accepted.caseId, document.documentVersionId, 1)).resolves.toEqual({
+      objectKey: "derived/native/page-1", byteSize: 16, mediaType: "text/markdown",
+    });
+    await expect(queriesBeforeProcessing.getNativeTextArtifact("00000000-0000-4000-8000-000000000000", document.documentVersionId, 1))
+      .rejects.toBeInstanceOf(CaseNotFoundError);
 
     const inputRevisionId = await coordinator.loadInputRevisionId(accepted.caseId, accepted.runId);
     const sourceContext = await coordinator.loadOfflineSourceContext(accepted.caseId, accepted.runId);

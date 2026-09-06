@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type QueueCaseView, type ReviewCommandService, type ReviewIssueView } from "@findoc/core";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type StoredDerivedArtifact } from "@findoc/core";
 import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
@@ -628,7 +628,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       ocrReason: pages.ocrReason,
       hasTable: pages.hasTable,
       hasColumns: pages.hasColumns,
-      nativeCharacterCount: pages.nativeCharacterCount,
+      nativeCharacterCount: pages.nativeCharacterCount, nativeTextArtifactId: pages.nativeTextArtifactId,
     }).from(cases)
       .innerJoin(processingRuns, eq(cases.currentRunId, processingRuns.id))
       .innerJoin(inputDocumentSelections, eq(processingRuns.inputRevisionId, inputDocumentSelections.inputRevisionId))
@@ -641,8 +641,19 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       documentId: record.documentId, pageNumber: record.pageNumber, needsOcr: record.needsOcr,
       ...(record.ocrReason ? { ocrReason: record.ocrReason } : {}),
       hasTable: record.hasTable, hasColumns: record.hasColumns,
-      nativeCharacterCount: record.nativeCharacterCount,
+      nativeCharacterCount: record.nativeCharacterCount, nativeTextAvailable: Boolean(record.nativeTextArtifactId),
     };
+  }
+
+  async getNativeTextArtifact(caseId: string, documentId: string, pageNumber: number): Promise<NativeTextArtifactView> {
+    const [record] = await this.db.select({ objectKey: artifacts.objectKey, byteSize: artifacts.byteSize, mediaType: artifacts.detectedMediaType })
+      .from(pages).innerJoin(documentVersions, eq(pages.documentVersionId, documentVersions.id))
+      .innerJoin(physicalDocuments, eq(documentVersions.physicalDocumentId, physicalDocuments.id))
+      .innerJoin(artifacts, eq(pages.nativeTextArtifactId, artifacts.id))
+      .where(and(eq(physicalDocuments.caseId, caseId), eq(documentVersions.id, documentId), eq(pages.pageNumber, pageNumber))).limit(1);
+    if (!record) throw new CaseNotFoundError();
+    if (record.mediaType !== "text/markdown") throw new Error("Persisted native-text media type is invalid");
+    return { objectKey: record.objectKey, byteSize: record.byteSize, mediaType: "text/markdown" };
   }
 
   async getFindings(caseId: string): Promise<readonly FindingView[]> {
@@ -832,12 +843,26 @@ export class PostgresWorkflowCoordinator {
       const [persisted] = await tx.select({ id: documentInspections.id }).from(documentInspections)
         .where(and(eq(documentInspections.runId, runId), eq(documentInspections.documentVersionId, document.documentVersionId))).limit(1);
       if (!persisted || persisted.id !== inspectionId) return;
+      const derivedArtifacts = inspection.pages.flatMap((page) => page.nativeTextArtifact ? [{
+        id: randomUUID(), caseId: page.nativeTextArtifact.caseId, objectKey: page.nativeTextArtifact.objectKey,
+        sha256: page.nativeTextArtifact.sha256, byteSize: page.nativeTextArtifact.byteSize,
+        detectedMediaType: page.nativeTextArtifact.mediaType, artifactKind: "native_text",
+      }] : []);
+      const artifactIds = new Map<string, string>();
+      if (derivedArtifacts.length > 0) {
+        await tx.insert(artifacts).values(derivedArtifacts).onConflictDoNothing();
+        const persistedArtifacts = await tx.select({ id: artifacts.id, objectKey: artifacts.objectKey }).from(artifacts)
+          .where(inArray(artifacts.objectKey, derivedArtifacts.map((artifact) => artifact.objectKey)));
+        for (const artifact of persistedArtifacts) artifactIds.set(artifact.objectKey, artifact.id);
+        if (artifactIds.size !== derivedArtifacts.length) throw new Error("Native-text artifact metadata could not be resolved");
+      }
       await tx.insert(pages).values(inspection.pages.map((page) => ({
         id: randomUUID(), documentInspectionId: inspectionId,
         documentVersionId: document.documentVersionId, pageNumber: page.pageNumber,
         needsOcr: page.needsOcr, ocrReason: page.ocrReason,
         hasTable: page.hasTable, hasColumns: page.hasColumns,
         nativeCharacterCount: page.nativeCharacterCount,
+        nativeTextArtifactId: page.nativeTextArtifact ? artifactIds.get(page.nativeTextArtifact.objectKey) : null,
       })));
       await tx.update(documentVersions).set({ readabilityState: "inspected" })
         .where(eq(documentVersions.id, document.documentVersionId));
@@ -1173,6 +1198,7 @@ export interface InspectionRecord {
     hasTable: boolean;
     hasColumns: boolean;
     nativeCharacterCount: number;
+    nativeTextArtifact?: StoredDerivedArtifact & { readonly caseId: string };
   }[];
 }
 

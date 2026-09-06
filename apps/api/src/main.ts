@@ -23,6 +23,7 @@ const app = buildApp(
     maximumBytes: Number(process.env["MAX_SOURCE_BYTES"] ?? 10_000_000),
   }), discard: (artifact) => objectStore.remove(artifact.objectKey) },
   commandService,
+  objectStore,
 );
 app.addHook("onClose", async () => client.end());
 

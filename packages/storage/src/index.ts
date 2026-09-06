@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { Client } from "minio";
-import type { ObjectStore, StoredSourceArtifact, SupportedMediaType } from "@findoc/core";
+import type { ArtifactMediaType, ObjectStore, StoredDerivedArtifact, StoredSourceArtifact, SupportedMediaType } from "@findoc/core";
 
 export class UnsupportedDocumentMediaError extends Error {}
 export class DocumentSizeLimitError extends Error {}
@@ -105,7 +105,7 @@ export class MinioObjectStore implements ObjectStore {
     }
   }
 
-  async put(objectKey: string, content: AsyncIterable<Uint8Array>, mediaType: SupportedMediaType): Promise<void> {
+  async put(objectKey: string, content: AsyncIterable<Uint8Array>, mediaType: ArtifactMediaType): Promise<void> {
     await this.options.client.putObject(
       this.options.bucket,
       objectKey,
@@ -122,6 +122,18 @@ export class MinioObjectStore implements ObjectStore {
   async get(objectKey: string): Promise<AsyncIterable<Uint8Array>> {
     return this.options.client.getObject(this.options.bucket, objectKey);
   }
+}
+
+export async function storeNativeTextArtifact(
+  content: string,
+  store: ObjectStore,
+  keyPrefix: string,
+): Promise<StoredDerivedArtifact> {
+  const bytes = Buffer.from(content, "utf8");
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const objectKey = `${keyPrefix}/${sha256}`;
+  await store.put(objectKey, (async function* () { yield bytes; })(), "text/markdown");
+  return { objectKey, sha256, byteSize: bytes.byteLength, mediaType: "text/markdown" };
 }
 
 export async function readObjectBytes(store: ObjectStore, objectKey: string, maximumBytes: number): Promise<Buffer> {

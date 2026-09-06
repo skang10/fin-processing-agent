@@ -28,8 +28,8 @@ import {
   ResolveIssueResultSchema,
   ReviewIssuesSchema,
 } from "@findoc/contracts";
-import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService, type IntakeDocument, type ReviewCommandService, type SourceArtifactIntake } from "@findoc/core";
-import { DocumentSizeLimitError, EmptyDocumentError, UnsupportedDocumentMediaError } from "@findoc/storage";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService, type IntakeDocument, type ObjectStore, type ReviewCommandService, type SourceArtifactIntake } from "@findoc/core";
+import { DocumentSizeLimitError, EmptyDocumentError, readObjectBytes, UnsupportedDocumentMediaError } from "@findoc/storage";
 
 class IntakeRequestError extends Error {}
 
@@ -38,6 +38,7 @@ export function buildApp(
   caseQueries: CaseQueryService & CaseReviewQueryService,
   sourceIntake?: SourceArtifactIntake,
   reviewCommands?: ReviewCommandService,
+  artifactStore?: ObjectStore,
 ) {
   const app = Fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
   void app.register(multipart, { limits: { files: 10, fields: 10 } });
@@ -326,7 +327,16 @@ export function buildApp(
       ...(page.ocrReason ? { ocr_reason: page.ocrReason } : {}),
       has_table: page.hasTable, has_columns: page.hasColumns,
       native_character_count: page.nativeCharacterCount,
+      native_text_available: page.nativeTextAvailable,
     };
+  });
+
+  app.get("/api/v1/cases/:case_id/documents/:document_id/pages/:page_number/native-text", async (request, reply) => {
+    if (!artifactStore) throw new Error("Artifact content access is not configured");
+    const { case_id: caseId, document_id: documentId, page_number: rawPageNumber } = request.params as { case_id: string; document_id: string; page_number: string };
+    const artifact = await caseQueries.getNativeTextArtifact(caseId, documentId, Number(rawPageNumber));
+    const content = await readObjectBytes(artifactStore, artifact.objectKey, Math.max(artifact.byteSize, 1));
+    return reply.type("text/markdown; charset=utf-8").send(content);
   });
 
   app.get("/api/v1/cases/:case_id/issues", {

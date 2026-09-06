@@ -97,6 +97,7 @@ export const pages = pgTable("pages", {
   hasTable: boolean("has_table").notNull(),
   hasColumns: boolean("has_columns").notNull(),
   nativeCharacterCount: integer("native_character_count").notNull(),
+  nativeTextArtifactId: uuid("native_text_artifact_id").references(() => artifacts.id),
 }, (table) => [uniqueIndex("page_inspection_number_uq").on(table.documentInspectionId, table.pageNumber)]);
 
 export const processingRuns = pgTable("processing_runs", {

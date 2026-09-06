@@ -2,11 +2,11 @@
 
 Document ID: `DAT`
 
-Version: 2.2.0
+Version: 2.3.0
 
 Status: Approved
 
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 
 ## 1. Purpose
 
@@ -236,6 +236,8 @@ An Artifact is immutable stored content plus integrity and lineage metadata. Lar
 `DAT-REQ-032` A page must retain document-version identity, page number, dimensions, rotation, and the source or derived artifacts required to reproduce displayed content.
 
 `DAT-REQ-033` Page dimensions and rotation must identify the coordinate space to which original evidence coordinates apply.
+
+`DAT-REQ-198` When native text is retained, each page must reference its immutable native-text artifact; the artifact must retain explicit case membership and processing provenance and remain distinct from normalized claims or reviewer corrections.
 
 ## 7. Logical Documents and Boundary Revisions
 
@@ -639,6 +641,7 @@ The following details are intentionally deferred to later owning specifications:
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.3.0 | 2026-09-06 | Approved | Defined immutable page native-text artifacts and their provenance boundary. |
 | 2.2.0 | 2026-09-06 | Approved | Defined the immutable downstream-ready projection derived from a cleared final document review. |
 | 2.1.1 | 2026-09-05 | Approved | Reserved the previously unassigned `DAT-REQ-187` identifier explicitly for machine-verifiable requirement continuity. |
 | 2.1.0 | 2026-09-04 | Approved | Added review issues, requested-change drafts without delivery authority, final-review action consistency, and structured application review projections for the V1 HTML baseline. |

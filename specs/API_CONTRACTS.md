@@ -2,7 +2,7 @@
 
 Document ID: `API`
 
-Version: 1.3.0
+Version: 1.4.0
 
 Status: Approved
 
@@ -155,6 +155,7 @@ GET /api/v1/cases/{case_id}/agent-report
 GET /api/v1/cases/{case_id}/application-data
 GET /api/v1/cases/{case_id}/documents
 GET /api/v1/cases/{case_id}/documents/{document_id}/pages/{page_number}
+GET /api/v1/cases/{case_id}/documents/{document_id}/pages/{page_number}/native-text
 GET /api/v1/cases/{case_id}/evidence
 GET /api/v1/cases/{case_id}/evidence/{evidence_id}
 GET /api/v1/cases/{case_id}/findings
@@ -182,6 +183,8 @@ GET /api/v1/cases/{case_id}/downstream-handoff
 `API-REQ-095` `GET /findings` must return the current result revision's deterministic finding identifiers, registered rule and version, status, reason code, and authorized evidence references so that human review remains possible when the Agent report is unavailable.
 
 `API-REQ-045` Page bytes or rendered artifacts must be returned through an authorized API-mediated stream or short-lived scoped capability. Permanent object-store credentials and internal object keys must never be returned.
+
+`API-REQ-098` `GET /documents/{document_id}/pages/{page_number}/native-text` must return the immutable native-text representation for a page in the case's current run as `text/markdown`, return not found when that representation is unavailable or outside the case scope, and never expose its internal object key.
 
 `API-REQ-046` Issue collections and details must distinguish Agent-raised and human-raised origin, immutable source references, current human-review state, append-only edit history, requested-change draft state, predecessor result revision, and resource version.
 
@@ -332,6 +335,7 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.4.0 | 2026-09-06 | Approved | Added case-scoped API-mediated delivery of immutable page native text. |
 | 1.3.0 | 2026-09-06 | Approved | Added the case Agent-log link to the case resource projection. |
 | 1.2.0 | 2026-09-06 | Approved | Added the read-only downstream handoff projection for cases cleared after document review. |
 | 1.1.4 | 2026-09-06 | Approved | Selected confirmed issues for the applicant message by default while preserving reviewer opt-out. |

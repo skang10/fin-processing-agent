@@ -225,6 +225,7 @@ export const DocumentPageProjectionSchema = Type.Object({
   has_table: Type.Boolean(),
   has_columns: Type.Boolean(),
   native_character_count: Type.Integer({ minimum: 0 }),
+  native_text_available: Type.Boolean(),
 }, { additionalProperties: false });
 
 export const ReviewIssueSchema = Type.Object({

@@ -34,13 +34,23 @@ for (let attempt = 0; attempt < 60; attempt += 1) {
 if (current?.lifecycle !== "ready_for_review") {
   throw new Error(`Demo case did not become ready: ${current?.lifecycle ?? "timeout"}`);
 }
-const [report, findings, issues] = await Promise.all([
+const [report, findings, issues, documents] = await Promise.all([
   fetch(`${apiBaseUrl}${current.links.agent_report}`).then(requireOk),
   fetch(`${apiBaseUrl}${current.links.findings}`).then(requireOk),
   fetch(`${apiBaseUrl}${current.links.issues}`).then(requireOk),
+  fetch(`${apiBaseUrl}${current.links.documents}`).then(requireOk),
 ]);
 if (report.availability !== "ready" || findings.findings.length !== 5 || issues.issues.length !== 3) {
   throw new Error("Demo result did not match the registered offline acceptance fixture");
+}
+const firstDocument = documents.documents[0];
+if (!firstDocument) throw new Error("Demo result did not expose its processed document");
+const firstPageUrl = `${apiBaseUrl}/api/v1/cases/${accepted.case_id}/documents/${firstDocument.document_id}/pages/1`;
+const firstPage = await fetch(firstPageUrl).then(requireOk);
+if (!firstPage.native_text_available) throw new Error("Demo result did not retain page native text");
+const nativeTextResponse = await fetch(`${firstPageUrl}/native-text`);
+if (!nativeTextResponse.ok || !(await nativeTextResponse.text()).trim()) {
+  throw new Error("Demo native-text stream was unavailable or empty");
 }
 console.log(JSON.stringify({
   case_id: accepted.case_id,

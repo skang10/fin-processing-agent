@@ -5,7 +5,7 @@ import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
 import { PdfInspectorAdapter } from "@findoc/document-processing";
 import { buildOfflineFixture, OfflineFixtureUnavailableError, runOfflineReport } from "@findoc/offline";
 import { PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
-import { createMinioObjectStore, readObjectBytes } from "@findoc/storage";
+import { createMinioObjectStore, readObjectBytes, storeNativeTextArtifact } from "@findoc/storage";
 import { CASE_PROCESSING_QUEUE, OutboxRelay } from "./outbox.js";
 
 const logger = pino({ name: "worker" });
@@ -60,12 +60,18 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
     if (document.mediaType === "application/pdf") {
       const source = await readObjectBytes(objectStore, document.objectKey, maximumSourceBytes);
       const inspection = await pdfInspector.inspect(source);
+      const pages = await Promise.all(inspection.pages.map(async (page) => ({
+        ...page,
+        nativeCharacterCount: page.nativeMarkdown.length,
+        nativeTextArtifact: {
+          ...await storeNativeTextArtifact(page.nativeMarkdown, objectStore,
+            `derived/${job.data.case_id}/${document.documentVersionId}/native-text/page-${page.pageNumber}`),
+          caseId: job.data.case_id,
+        },
+      })));
       await coordinator.persistInspection(job.data.run_id, document, {
         ...inspection,
-        pages: inspection.pages.map((page) => ({
-          ...page,
-          nativeCharacterCount: page.nativeMarkdown.length,
-        })),
+        pages,
       });
     } else {
       await coordinator.persistInspection(job.data.run_id, document, {

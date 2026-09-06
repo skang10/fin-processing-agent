@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ObjectStore } from "@findoc/core";
-import { DocumentSizeLimitError, UnsupportedDocumentMediaError, storeSourceArtifact } from "./index.js";
+import { DocumentSizeLimitError, UnsupportedDocumentMediaError, storeNativeTextArtifact, storeSourceArtifact } from "./index.js";
 
 async function* chunks(...values: Uint8Array[]) { yield* values; }
 
@@ -36,5 +36,31 @@ describe("source artifact intake", () => {
     };
     await expect(storeSourceArtifact(chunks(Buffer.from("%PDF-123456")), store, { maximumBytes: 6 }))
       .rejects.toBeInstanceOf(DocumentSizeLimitError);
+  });
+});
+
+describe("derived native-text storage", () => {
+  it("stores immutable markdown under a content-addressed key", async () => {
+    let storedKey = "";
+    let storedMediaType = "";
+    let stored = Buffer.alloc(0);
+    const store: ObjectStore = {
+      async put(key, content, mediaType) {
+        storedKey = key;
+        storedMediaType = mediaType;
+        for await (const chunk of content) stored = Buffer.concat([stored, Buffer.from(chunk)]);
+      },
+      async remove() {},
+      async get() { return chunks(); },
+    };
+
+    const result = await storeNativeTextArtifact("# Synthetic page", store, "derived/case-1/page-1");
+
+    expect(result.objectKey).toBe(`derived/case-1/page-1/${result.sha256}`);
+    expect(result.mediaType).toBe("text/markdown");
+    expect(result.byteSize).toBe(Buffer.byteLength("# Synthetic page"));
+    expect(storedKey).toBe(result.objectKey);
+    expect(storedMediaType).toBe("text/markdown");
+    expect(stored.toString("utf8")).toBe("# Synthetic page");
   });
 });

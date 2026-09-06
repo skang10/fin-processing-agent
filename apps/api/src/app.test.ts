@@ -93,8 +93,9 @@ describe("case intake", () => {
     }]),
     getDocumentPage: vi.fn(async () => ({
       documentId: "4c816f67-5f2f-4e21-8c17-7eb1e5383998",
-      pageNumber: 1, needsOcr: false, hasTable: true, hasColumns: false, nativeCharacterCount: 42,
+      pageNumber: 1, needsOcr: false, hasTable: true, hasColumns: false, nativeCharacterCount: 42, nativeTextAvailable: true,
     })),
+    getNativeTextArtifact: vi.fn(async () => ({ objectKey: "derived/native/page-1", byteSize: 16, mediaType: "text/markdown" as const })),
     getDownstreamHandoff: vi.fn(async () => ({
       caseId: "4c816f67-5f2f-4e21-8c17-7eb1e53838bd",
       status: "ready_for_handoff" as const,
@@ -264,6 +265,23 @@ describe("case intake", () => {
     expect(applicationData.json()).toMatchObject({ groups: [{ group: "applicant" }, { group: "contact", fields: [{ display_value: "a***@example.invalid" }] }] });
     expect(documents.json()).toMatchObject({ documents: [{ submitted_filename: "statement.pdf", page_count: 1 }] });
     expect(page.json()).toMatchObject({ page_number: 1, has_table: true, native_character_count: 42 });
+    await app.close();
+  });
+
+  it("streams authorized native page text without exposing its object key", async () => {
+    const artifactStore = {
+      put: vi.fn(async () => undefined), remove: vi.fn(async () => undefined),
+      get: vi.fn(async () => (async function* () { yield Buffer.from("# Synthetic page"); })()),
+    };
+    const app = buildApp({ accept: vi.fn() }, caseQueries, undefined, undefined, artifactStore);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/documents/4c816f67-5f2f-4e21-8c17-7eb1e5383998/pages/1/native-text",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/markdown");
+    expect(response.body).toBe("# Synthetic page");
+    expect(response.body).not.toContain("derived/native/page-1");
     await app.close();
   });
 

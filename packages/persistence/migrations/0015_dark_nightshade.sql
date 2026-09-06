@@ -1,0 +1,2 @@
+ALTER TABLE "pages" ADD COLUMN "native_text_artifact_id" uuid;--> statement-breakpoint
+ALTER TABLE "pages" ADD CONSTRAINT "pages_native_text_artifact_id_artifacts_id_fk" FOREIGN KEY ("native_text_artifact_id") REFERENCES "public"."artifacts"("id") ON DELETE no action ON UPDATE no action;

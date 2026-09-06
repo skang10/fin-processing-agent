@@ -2,9 +2,10 @@ export type CaseId = string;
 export type RunId = string;
 
 export type SupportedMediaType = "application/pdf" | "image/jpeg" | "image/png";
+export type ArtifactMediaType = SupportedMediaType | "text/markdown";
 
 export interface ObjectStore {
-  put(objectKey: string, content: AsyncIterable<Uint8Array>, mediaType: SupportedMediaType): Promise<void>;
+  put(objectKey: string, content: AsyncIterable<Uint8Array>, mediaType: ArtifactMediaType): Promise<void>;
   get(objectKey: string): Promise<AsyncIterable<Uint8Array>>;
   remove(objectKey: string): Promise<void>;
 }
@@ -14,6 +15,13 @@ export interface StoredSourceArtifact {
   readonly sha256: string;
   readonly byteSize: number;
   readonly detectedMediaType: SupportedMediaType;
+}
+
+export interface StoredDerivedArtifact {
+  readonly objectKey: string;
+  readonly sha256: string;
+  readonly byteSize: number;
+  readonly mediaType: "text/markdown";
 }
 
 export interface SourceArtifactIntake {
@@ -233,6 +241,13 @@ export interface DocumentPageView {
   readonly hasTable: boolean;
   readonly hasColumns: boolean;
   readonly nativeCharacterCount: number;
+  readonly nativeTextAvailable: boolean;
+}
+
+export interface NativeTextArtifactView {
+  readonly objectKey: string;
+  readonly byteSize: number;
+  readonly mediaType: "text/markdown";
 }
 
 export interface ReviewIssueView {
@@ -295,6 +310,7 @@ export interface CaseReviewQueryService {
   getApplicationData(caseId: CaseId): Promise<ApplicationDataView>;
   getDocuments(caseId: CaseId): Promise<readonly DocumentView[]>;
   getDocumentPage(caseId: CaseId, documentId: string, pageNumber: number): Promise<DocumentPageView>;
+  getNativeTextArtifact(caseId: CaseId, documentId: string, pageNumber: number): Promise<NativeTextArtifactView>;
   getFindings(caseId: CaseId): Promise<readonly FindingView[]>;
   getDownstreamHandoff(caseId: CaseId): Promise<DownstreamHandoffView>;
 }
