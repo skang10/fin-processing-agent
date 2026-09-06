@@ -626,7 +626,10 @@ export interface AgentReportView {
 export interface AgentLogSessionView {
   readonly harnessLabel: string;
   readonly mode: AgentSessionMode;
-  readonly terminalReason: AgentTerminalReason;
+  readonly status: AgentSessionStatus;
+  readonly terminalReason?: AgentTerminalReason;
+  /** Linked execution attempts; more than one means processing resumed from saved progress. */
+  readonly attempts: number;
   readonly iterations: number;
   readonly toolCalls: number;
   readonly usageAvailable: boolean;

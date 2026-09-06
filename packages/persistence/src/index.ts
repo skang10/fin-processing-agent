@@ -474,8 +474,14 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     };
   }
 
+  /**
+   * One bounded, chronological case Agent log (OPS-REQ-031). It represents a running, interrupted,
+   * resumed, or terminal case-review attempt without exposing database vocabulary, hashes, prompts,
+   * or raw model messages.
+   */
   async getAgentLog(caseId: string): Promise<AgentLogView> {
-    const [caseRecord] = await this.db.select({ lifecycle: cases.lifecycle }).from(cases).where(eq(cases.id, caseId)).limit(1);
+    const [caseRecord] = await this.db.select({ lifecycle: cases.lifecycle, currentRunId: cases.currentRunId })
+      .from(cases).where(eq(cases.id, caseId)).limit(1);
     if (!caseRecord) throw new CaseNotFoundError();
     const [report] = await this.db.select({
       availability: agentReports.availability, modelLabel: agentReports.modelLabel,
@@ -484,37 +490,57 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     }).from(agentReports).where(eq(agentReports.caseId, caseId)).orderBy(sql`${agentReports.createdAt} desc`).limit(1);
     const currentStep = caseRecord.lifecycle === "processing" ? "processing" as const
       : caseRecord.lifecycle === "review_complete" ? "review_completed" as const : "awaiting_human_review" as const;
-    if (!report) return { availability: "pending", currentStep, events: [] };
-    const sessions = await this.db.select().from(agentSessions).where(eq(agentSessions.runId, report.runId)).orderBy(asc(agentSessions.startedAt));
-    const steps = sessions.length
-      ? await this.db.select().from(agentSteps).where(inArray(agentSteps.sessionId, sessions.map((session) => session.id))).orderBy(asc(agentSteps.startedAt), asc(agentSteps.sequence))
-      : [];
-    const resolvedGaps = await this.db.select({
-      fieldSchemaId: extractionGaps.fieldSchemaId, pageNumber: extractionGaps.pageNumber,
-      resolutionType: gapResolutions.resolutionType, createdAt: gapResolutions.createdAt,
-    }).from(gapResolutions).innerJoin(extractionGaps, eq(gapResolutions.gapId, extractionGaps.id))
-      .where(eq(extractionGaps.runId, report.runId)).orderBy(asc(gapResolutions.createdAt));
-    const timestamp = report.createdAt.toISOString();
-    const factCount = (report.checkedFacts as unknown[]).length;
-    const issueCount = (report.issueLinks as unknown[]).length;
+    const runId = report?.runId ?? caseRecord.currentRunId;
+    if (!runId) return { availability: "pending", currentStep, events: [] };
+
+    const sessions = await this.db.select().from(agentSessions).where(eq(agentSessions.runId, runId)).orderBy(asc(agentSessions.startedAt));
+    if (!report && sessions.length === 0) return { availability: "pending", currentStep, events: [] };
+    const sessionIds = sessions.map((session) => session.id);
+    const [steps, attempts, resolvedGaps] = await Promise.all([
+      sessionIds.length ? this.db.select().from(agentSteps).where(inArray(agentSteps.sessionId, sessionIds)).orderBy(asc(agentSteps.sequence)) : [],
+      sessionIds.length ? this.db.select().from(agentSessionAttempts).where(inArray(agentSessionAttempts.sessionId, sessionIds)).orderBy(asc(agentSessionAttempts.attemptNumber)) : [],
+      this.db.select({
+        fieldSchemaId: extractionGaps.fieldSchemaId, pageNumber: extractionGaps.pageNumber,
+        resolutionType: gapResolutions.resolutionType, createdAt: gapResolutions.createdAt,
+      }).from(gapResolutions).innerJoin(extractionGaps, eq(gapResolutions.gapId, extractionGaps.id))
+        .where(eq(extractionGaps.runId, runId)).orderBy(asc(gapResolutions.createdAt)),
+    ]);
+    const attemptCount = new Map<string, number>();
+    for (const attempt of attempts) attemptCount.set(attempt.sessionId, (attemptCount.get(attempt.sessionId) ?? 0) + 1);
+    const originatingAttempt = new Map<string, string | null>();
+    for (const step of steps) {
+      if (step.toolInvocationId && !step.reusedInvocationId) originatingAttempt.set(step.toolInvocationId, step.attemptId);
+    }
     const view = (session: typeof sessions[number]): AgentLogSessionView => ({
       harnessLabel: `${session.harnessId} (${session.harnessVersion})`,
       mode: session.mode as AgentSessionMode,
-      terminalReason: (session.terminalReason ?? "internal_error") as AgentTerminalReason,
+      status: session.terminalReason ? "terminal" : "running",
+      ...(session.terminalReason ? { terminalReason: session.terminalReason as AgentTerminalReason } : {}),
+      attempts: attemptCount.get(session.id) ?? 1,
       iterations: session.iterations, toolCalls: session.toolCalls,
-      usageAvailable: (session.usage as { available?: boolean } | null)?.available === true,
+      usageAvailable: session.usageAvailable,
     });
-    const reportSession = sessions.find((session) => session.id === report.sessionId);
+    const currentSession = sessions.find((session) => session.id === report?.sessionId) ?? sessions.at(-1);
+    const reportEvents = report
+      ? [
+        { timestamp: report.createdAt.toISOString(), activity: `Checked ${(report.checkedFacts as unknown[]).length} facts` },
+        { timestamp: report.createdAt.toISOString(), activity: `Created ${(report.issueLinks as unknown[]).length} review issues` },
+        { timestamp: report.createdAt.toISOString(), activity: report.availability === "ready" ? "Generated review report" : "Report verification failed" },
+      ]
+      : [];
     return {
-      availability: report.availability === "ready" ? "ready" : "unavailable",
-      modelLabel: report.modelLabel,
-      ...(report.estimatedCost !== null ? { estimatedCost: { amount: report.estimatedCost, currency: "EUR" } } : {}),
+      availability: report ? (report.availability === "ready" ? "ready" : "unavailable") : "pending",
+      ...(report ? { modelLabel: report.modelLabel } : currentSession ? { modelLabel: currentSession.modelLabel } : {}),
+      ...(report?.estimatedCost != null ? { estimatedCost: { amount: report.estimatedCost, currency: "EUR" } } : {}),
       currentStep,
-      ...(reportSession ? { session: view(reportSession) } : {}),
+      ...(currentSession ? { session: view(currentSession) } : {}),
       events: [
         ...sessions.flatMap((session) => [
           { timestamp: session.startedAt.toISOString(), activity: `Started ${session.mode.replace(/_/g, " ")} session` },
-          ...steps.filter((step) => step.sessionId === session.id).map((step) => ({ timestamp: step.completedAt.toISOString(), activity: step.summary, toolLabel: step.toolName })),
+          ...attempts.filter((attempt) => attempt.sessionId === session.id && attempt.attemptNumber > 1)
+            .map((attempt) => ({ timestamp: attempt.startedAt.toISOString(), activity: "Processing resumed from saved progress" })),
+          ...steps.filter((step) => step.sessionId === session.id)
+            .map((step) => ({ timestamp: step.completedAt.toISOString(), activity: reviewerActivity(step, originatingAttempt), toolLabel: step.toolName })),
           ...(session.completedAt && session.terminalReason
             ? [{ timestamp: session.completedAt.toISOString(), activity: `Session ended: ${session.terminalReason.replace(/_/g, " ")}` }]
             : []),
@@ -523,9 +549,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
           timestamp: gap.createdAt.toISOString(),
           activity: `Deterministic reconciliation accepted the Agent's ${gap.fieldSchemaId === "income.monthly_net" ? "monthly net income" : gap.fieldSchemaId.replace(/[._]/g, " ")} candidate from page ${gap.pageNumber}`,
         })),
-        { timestamp, activity: `Checked ${factCount} facts` },
-        { timestamp, activity: `Created ${issueCount} review issues` },
-        { timestamp, activity: report.availability === "ready" ? "Generated review report" : "Report verification failed" },
+        ...reportEvents,
       ].sort((left, right) => left.timestamp.localeCompare(right.timestamp)),
     };
   }
@@ -1307,6 +1331,27 @@ function validateOfflineProvenance(
 }
 
 type Transaction = Parameters<Parameters<ReturnType<typeof drizzle>["transaction"]>[0]>[0];
+
+const REUSED_WORK_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  run_ocr: "Reused the previously extracted page result after processing resumed",
+  get_native_text: "Reused the previously extracted page text after processing resumed",
+  extract_with_vlm: "Reused the previously extracted field value after processing resumed",
+  inspect_page: "Reused the previously inspected page after processing resumed",
+});
+
+/**
+ * Reviewer-readable activity for one committed step. Work reused from an earlier attempt says so
+ * plainly; a repeat inside the same attempt keeps its own wording.
+ */
+function reviewerActivity(
+  step: typeof agentSteps.$inferSelect,
+  originatingAttempt: ReadonlyMap<string, string | null>,
+): string {
+  if (!step.reusedInvocationId) return step.summary;
+  const origin = originatingAttempt.get(step.reusedInvocationId);
+  if (origin && step.attemptId && origin === step.attemptId) return step.summary;
+  return REUSED_WORK_LABELS[step.toolName] ?? "Reused previously saved work after processing resumed";
+}
 
 /**
  * Durable Agent session and step records (DAT-REQ-131, DAT-REQ-132) for harnesses that do not

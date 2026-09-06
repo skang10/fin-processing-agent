@@ -43,9 +43,10 @@ describe("case intake", () => {
     getAgentLog: vi.fn(async () => ({
       availability: "ready" as const, modelLabel: "fake-pi-harness-v1",
       estimatedCost: { amount: "0.0000", currency: "EUR" as const }, currentStep: "awaiting_human_review" as const,
-      session: { harnessLabel: "pi-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review" as const, terminalReason: "report_submitted" as const, iterations: 3, toolCalls: 3, usageAvailable: true },
+      session: { harnessLabel: "pi-agent-led-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review" as const, status: "terminal" as const, terminalReason: "report_submitted" as const, attempts: 2, iterations: 3, toolCalls: 3, usageAvailable: true },
       events: [
-        { timestamp: "2026-09-01T10:04:00.000Z", activity: "Listed deterministic findings", toolLabel: "list_findings" },
+        { timestamp: "2026-09-01T10:03:00.000Z", activity: "Processing resumed from saved progress" },
+        { timestamp: "2026-09-01T10:04:00.000Z", activity: "Reused the previously extracted page result after processing resumed", toolLabel: "run_ocr" },
         { timestamp: "2026-09-01T10:05:00.000Z", activity: "Generated review report" },
       ],
     })),
@@ -163,9 +164,10 @@ describe("case intake", () => {
     expect(response.json()).toEqual({
       availability: "ready", model_label: "fake-pi-harness-v1",
       estimated_cost: { amount: "0.0000", currency: "EUR" }, current_step: "awaiting_human_review",
-      session: { harness_label: "pi-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review", terminal_reason: "report_submitted", iterations: 3, tool_calls: 3, usage_available: true },
+      session: { harness_label: "pi-agent-led-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review", status: "terminal", terminal_reason: "report_submitted", attempts: 2, iterations: 3, tool_calls: 3, usage_available: true },
       events: [
-        { timestamp: "2026-09-01T10:04:00.000Z", activity: "Listed deterministic findings", tool_label: "list_findings" },
+        { timestamp: "2026-09-01T10:03:00.000Z", activity: "Processing resumed from saved progress" },
+        { timestamp: "2026-09-01T10:04:00.000Z", activity: "Reused the previously extracted page result after processing resumed", tool_label: "run_ocr" },
         { timestamp: "2026-09-01T10:05:00.000Z", activity: "Generated review report" },
       ],
     });

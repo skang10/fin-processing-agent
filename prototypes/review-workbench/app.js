@@ -1079,10 +1079,15 @@ function renderAgentLog() {
   };
   const sessionHeader = function (title, session) {
     if (!session) return '';
-    const detail = session.terminal_reason === 'gaps_resolved' ? 'Recovery completed' :
-      session.terminal_reason === 'report_submitted' ? 'Report submitted' : session.terminal_reason.replaceAll('_', ' ');
+    const detail = session.status === 'running' ? 'In progress'
+      : session.terminal_reason === 'report_submitted' ? 'Report submitted'
+        : session.terminal_reason === 'gaps_resolved' ? 'Recovery completed'
+          : (session.terminal_reason || 'Ended').replaceAll('_', ' ');
+    const resumed = session.attempts > 1
+      ? ', resumed ' + (session.attempts - 1) + (session.attempts === 2 ? ' time' : ' times')
+      : '';
     return '<header><div><h3>' + title + '</h3><span>' + escapeHtml(detail) + '</span></div>' +
-      '<small>' + session.iterations + ' iterations, ' + session.tool_calls + ' tool calls</small></header>';
+      '<small>' + session.iterations + ' iterations, ' + session.tool_calls + ' tool calls' + escapeHtml(resumed) + '</small></header>';
   };
   const reportOutcome = apiReport && apiReport.availability === 'unavailable'
     ? '<div class="agent-log-outcome rejected"><span>Report rejected by verifier</span><small>' +

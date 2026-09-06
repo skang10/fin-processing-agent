@@ -557,7 +557,9 @@ function readApplicationData(value: unknown): Readonly<Record<string, unknown>> 
 
 function projectAgentSession(session: AgentLogSessionView) {
   return {
-    harness_label: session.harnessLabel, mode: session.mode, terminal_reason: session.terminalReason,
-    iterations: session.iterations, tool_calls: session.toolCalls, usage_available: session.usageAvailable,
+    harness_label: session.harnessLabel, mode: session.mode, status: session.status,
+    ...(session.terminalReason ? { terminal_reason: session.terminalReason } : {}),
+    attempts: session.attempts, iterations: session.iterations, tool_calls: session.toolCalls,
+    usage_available: session.usageAvailable,
   };
 }

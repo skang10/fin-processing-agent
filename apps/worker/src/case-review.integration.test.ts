@@ -172,6 +172,12 @@ describe("Worker termination during Agent-led case review", () => {
     expect(interrupted?.steps.map((step) => step.toolName)).toContain(tool);
     const consumedBeforeRecovery = interrupted?.consumed;
 
+    const queries = new PostgresCaseQueryService(connection.db);
+    const interruptedLog = await queries.getAgentLog(accepted.caseId);
+    expect(interruptedLog).toMatchObject({ availability: "pending", currentStep: "processing", session: { status: "running", attempts: 1 } });
+    expect(interruptedLog.session?.terminalReason).toBeUndefined();
+    expect(interruptedLog.events.map((event) => event.activity)).toContain("Started case review session");
+
     const outcome = await processAgentLedCaseReview({ coordinator, selectHarness: harnessWith(durable), logger: silentLogger }, job);
     expect(outcome).toBe("completed");
 
@@ -187,8 +193,21 @@ describe("Worker termination during Agent-led case review", () => {
     expect(new Set(sequences).size).toBe(sequences.length);
     expect(recovered?.steps.filter((step) => step.toolName === "submit_case_review_brief" && step.outcome === "succeeded")).toHaveLength(1);
 
-    const report = await new PostgresCaseQueryService(connection.db).getAgentReport(accepted.caseId);
+    const report = await queries.getAgentReport(accepted.caseId);
     expect(report).toMatchObject({ availability: "unavailable", failureReason: "policy_rejected_loan_approval" });
+
+    const log = await queries.getAgentLog(accepted.caseId);
+    expect(log.session).toMatchObject({ status: "terminal", terminalReason: "report_submitted", attempts: 2 });
+    const activities = log.events.map((event) => event.activity);
+    expect(activities).toContain("Processing resumed from saved progress");
+    expect(activities.filter((activity) => activity === "Processing resumed from saved progress")).toHaveLength(1);
+    expect(activities.at(-1)).toBe("Report verification failed");
+    const timestamps = log.events.map((event) => event.timestamp);
+    expect(timestamps).toEqual([...timestamps].sort());
+    const projection = JSON.stringify(log);
+    expect(projection).not.toMatch(/[0-9a-f]{64}/);
+    expect(projection).not.toContain("untrusted");
+    expect(projection).not.toContain("argumentHash");
   }, 120_000);
 
   it("does not create a second report when the Worker is lost after report completion", async () => {

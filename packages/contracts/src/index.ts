@@ -157,7 +157,9 @@ export const AgentTerminalReasonSchema = Type.Union([
 const AgentLogSessionFields = {
   harness_label: Type.String(),
   mode: Type.Literal("case_review"),
-  terminal_reason: AgentTerminalReasonSchema,
+  status: Type.Union([Type.Literal("running"), Type.Literal("terminal")]),
+  terminal_reason: Type.Optional(AgentTerminalReasonSchema),
+  attempts: Type.Integer({ minimum: 1 }),
   iterations: Type.Integer({ minimum: 0 }),
   tool_calls: Type.Integer({ minimum: 0 }),
   usage_available: Type.Boolean(),
