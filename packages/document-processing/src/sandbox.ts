@@ -16,6 +16,8 @@ export interface DocumentSandboxLimits {
   readonly maximumPages: number;
   readonly maximumPixelsPerPage: number;
   readonly targetDpi: number;
+  readonly ocrMode?: "fake" | "pdf_inspector";
+  readonly ocrModelDirectory?: string;
 }
 
 export class DocumentSandboxError extends Error {
@@ -49,6 +51,8 @@ export class DocumentSandboxClient {
         source_sha256: sourceSha256, limits: {
           maximum_pages: limits.maximumPages, maximum_pixels_per_page: limits.maximumPixelsPerPage,
           target_dpi: limits.targetDpi,
+          ocr_mode: limits.ocrMode ?? "pdf_inspector",
+          ...(limits.ocrModelDirectory ? { ocr_model_directory: limits.ocrModelDirectory } : {}),
         },
       }, limits.timeoutMs);
       const parsed = parseResponse(response, limits.maximumPages);
@@ -82,7 +86,9 @@ function parseOcrResult(value: string): OcrResult {
   }
   const result = parsed as OcrResult;
   const transform = result.sourceTransform;
-  if (transform.sourceCoordinateSpace !== "pdf_points_top_left" || !Number.isFinite(transform.scaleX) || transform.scaleX <= 0 ||
+  if ((result.pageConfidence !== undefined && (!Number.isFinite(result.pageConfidence.value) || result.pageConfidence.value < 0 ||
+      result.pageConfidence.value > 1 || result.pageConfidence.scale !== "zero_to_one" || !result.pageConfidence.producer)) ||
+      transform.sourceCoordinateSpace !== "pdf_points_top_left" || !Number.isFinite(transform.scaleX) || transform.scaleX <= 0 ||
       !Number.isFinite(transform.scaleY) || transform.scaleY <= 0 || transform.translateX !== 0 || transform.translateY !== 0 ||
       result.languages.some((language) => language !== "de" && language !== "en") || result.spans.some((span) =>
     typeof span.text !== "string" || !Array.isArray(span.bbox) || span.bbox.length !== 4 || span.bbox.some((coordinate) => !Number.isFinite(coordinate)) ||
@@ -98,6 +104,10 @@ function validateLimits(limits: DocumentSandboxLimits): void {
   if (!Number.isSafeInteger(limits.maximumPages) || limits.maximumPages < 1 || limits.maximumPages > 100) throw new Error("Sandbox page limit is invalid");
   if (!Number.isSafeInteger(limits.maximumPixelsPerPage) || limits.maximumPixelsPerPage < 1) throw new Error("Sandbox pixel limit is invalid");
   if (!Number.isFinite(limits.targetDpi) || limits.targetDpi < 72 || limits.targetDpi > 300) throw new Error("Sandbox DPI is invalid");
+  if (limits.ocrMode === "fake" && process.env["NODE_ENV"] !== "test" && process.env["FINDOC_SYNTHETIC_DEMO"] !== "true") {
+    throw new Error("Fake OCR is restricted to tests and the synthetic demo");
+  }
+  if ((limits.ocrMode ?? "pdf_inspector") === "pdf_inspector" && !limits.ocrModelDirectory) throw new Error("OCR_MODEL_DIRECTORY is required for offline PDF Inspector OCR");
 }
 
 async function runTask(entrypoint: string, taskDirectory: string, request: unknown, timeoutMs: number): Promise<string> {

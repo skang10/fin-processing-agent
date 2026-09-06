@@ -2,11 +2,11 @@
 
 Document ID: `MLE`
 
-Version: 1.1.1
+Version: 1.2.0
 
 Status: Approved
 
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 
 ## 1. Purpose
 
@@ -16,7 +16,7 @@ V1 evaluates one primary machine-learning capability:
 
 > Can the bounded Pi Case Review Agent use persisted document-processing results and evidence to produce a reliable, evidence-grounded pre-screening report for a human reviewer?
 
-PDF Inspector remains the initial foundation for PDF inspection, native extraction, layout, rendering integration, and selective OCR routing. PP-OCRv6 is the independent initial `OcrEngine` target. Their outputs are necessary inputs to the evaluated report and receive focused fixture coverage, but V1 does not turn every document-processing component into a separate research benchmark.
+PDF Inspector remains the initial foundation for PDF inspection, native extraction, layout, rendering integration, selective OCR routing, and local PP-OCRv6 Small execution behind the project-owned adapter. These outputs are necessary inputs to the evaluated report and receive focused fixture coverage, but V1 does not turn every document-processing component into a separate research benchmark.
 
 ## 2. Authority and Dependencies
 
@@ -316,7 +316,7 @@ The ML evaluation system is acceptable for implementation when automated tests d
 
 1. Six curated cases are sufficient to start the vertical slice; twenty remain the completed V1 target. Neither supports representative statistical or production claims.
 2. Exact issue-matching normalization, baseline values, regression tolerances, and default/fallback VLM selection require measured evidence.
-3. PDF Inspector remains the accepted inspection and OCR-routing foundation, and PP-OCRv6 remains the independent initial OCR target; integration quality is demonstrated through focused fixtures and end-to-end report outcomes.
+3. PDF Inspector remains the accepted inspection, OCR-routing, and local PP-OCRv6 Small execution foundation behind project-owned contracts; integration quality is demonstrated through focused fixtures and end-to-end report outcomes.
 4. Human-review time savings and inter-reviewer agreement are useful future studies but are outside the V1 ML evaluation.
 5. Authorized real-data, fairness, subgroup, drift, and production model-risk evaluation remain deferred in [`BACKLOG.md`](../BACKLOG.md).
 
@@ -326,6 +326,7 @@ No unresolved decision blocks review of the V1 evaluation scope. Numerical thres
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.2.0 | 2026-09-06 | Approved | Aligned evaluation provenance with PDF Inspector 1.17.0's local PP-OCRv6 Small execution path without expanding headline evaluation scope. |
 | 1.1.1 | 2026-09-05 | Approved | Clarified the independent PDF Inspector and PP-OCRv6 adapter boundaries without changing evaluation scope. |
 | 1.1.0 | 2026-09-04 | Approved | Reduced the first vertical-slice dataset to six complete golden cases while retaining twenty as the completed V1 target. |
 | 1.0.0 | 2026-09-04 | Approved | Approved one primary V1 ML task with three report-quality dimensions, retained PDF Inspector as the processing foundation, and limited supporting components to focused fixtures and diagnostics. No unresolved evaluation-scope decision remains; numerical thresholds and model selection remain evidence-dependent. |

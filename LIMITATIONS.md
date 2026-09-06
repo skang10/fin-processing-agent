@@ -40,6 +40,7 @@ This document defines the known limitations of the initial release. These limita
 4. Model output may be incomplete, inconsistent, or incorrect. Schema validation, evidence requirements, deterministic checks, and human review reduce but do not eliminate this risk.
 5. Model confidence values are not assumed to be calibrated unless a documented evaluation and calibration version is attached.
 6. The project does not train a proprietary foundation model. It evaluates and orchestrates pretrained components.
+7. The default synthetic demo OCR mode emits deterministic fixture text for pipeline testing; it does not perform text recognition and its output must not be treated as OCR quality evidence. The PDF Inspector PP-OCRv6 Small adapter exists, but its offline runtime assets and platform deployment have not yet completed acceptance testing.
 
 ## Document and Scenario Coverage
 

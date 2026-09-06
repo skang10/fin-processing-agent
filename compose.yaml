@@ -7,6 +7,8 @@ x-app-environment: &app-environment
   MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
   MINIO_BUCKET: findoc-artifacts
   MAX_SOURCE_BYTES: "10000000"
+  OCR_MODE: fake
+  FINDOC_SYNTHETIC_DEMO: "true"
 
 services:
   postgres:

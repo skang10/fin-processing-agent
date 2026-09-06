@@ -63,7 +63,14 @@ The implementation spike must prove:
 
 **Status:** PDF Inspector, native-text persistence, PDF.js reviewer display, pinned PDFium full-page rendering, the credential-stripped bounded subprocess protocol, and selective OCR orchestration with a deterministic fake adapter and persisted provenance are implemented; dataset evidence, hardened OS resource/network isolation, crop rendering, and the real pinned PP-OCRv6 runtime remain pending
 
-Use `firecrawl/pdf-inspector` as the initial PDF classification, native text and coordinate extraction, layout, table, rendering integration, and selective OCR-routing foundation. Keep PDF rendering and the independent PP-OCRv6-targeted `OcrEngine` behind project interfaces.
+The current OCR result is a deterministic synthetic fixture output. It proves routing, sandbox execution, artifact persistence, provenance, confidence semantics, and coordinate transforms, but it does not recognize text and must not be presented or evaluated as real OCR. Defer the following until the end-to-end candidate-to-report path is complete:
+
+1. Pre-provision and verify PDF Inspector's pinned local PP-OCRv6 Small, PDFium, and ONNX Runtime assets.
+2. Exercise the `processPdfWithOcr` adapter in offline mode across supported development and Docker platforms.
+3. JPEG and PNG OCR execution, bounded region and crop OCR, and mixed-language quality tuning.
+4. OCR quality, latency, and resource measurements on the versioned synthetic dataset.
+
+Use `firecrawl/pdf-inspector` as the initial PDF classification, native text and coordinate extraction, layout, table, rendering integration, selective OCR-routing, and PP-OCRv6 Small execution foundation. Keep its OCR result behind the project-owned adapter contract.
 
 The evaluation must report results for German and English synthetic identity documents, payslips, bank statements, native PDFs, scanned pages, mixed PDFs, and complex tables. Versions of PDF Inspector, PDFium, ONNX Runtime, and OCR model assets must be pinned and recorded.
 
@@ -130,6 +137,27 @@ Define implementation contracts for the approved V1 HTML UX baseline:
 2. Refresh and concurrent commands converge to the persisted reviewer workflow state.
 3. Replaying `clear_for_downstream` cannot create a duplicate final review or downstream-ready record.
 4. No V1 state or copy claims applicant delivery or successful downstream consumption without an acknowledged integration.
+
+### BL-008 — Logical Documents and Candidate Reconciliation
+
+**Status:** Approved architecture and data semantics; implementation pending
+
+Implement the minimum deterministic path in dependency order:
+
+1. Persist page classifications and boundary predictions for the existing synthetic case types.
+2. Create deterministic contiguous logical-document revisions from those committed inputs.
+3. Create schema-valid structured-input and document-derived extraction candidates with distinct evidence links.
+4. Reconcile candidates deterministically into claims while preserving every considered candidate and selection reason.
+5. Replace the offline fixture shortcut that currently materializes claims directly, without changing the five-rule validation semantics or Agent authority.
+
+Do not add new business fields or document types until their owning schema and rule inputs are approved. A document-derived candidate must not be persisted before its logical-document revision exists.
+
+**Target documents:**
+
+1. `specs/SYSTEM_ARCHITECTURE.md`
+2. `specs/DATA_MODEL.md`
+3. `specs/components/DOCUMENT_PROCESSING.md`
+4. `specs/components/VALIDATION_AND_DISPOSITION.md`
 
 ## Deferred Production Work
 

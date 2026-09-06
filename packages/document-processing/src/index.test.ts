@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
-import { PdfType } from "@firecrawl/pdf-inspector";
-import { DocumentSandboxClient, FakeOcrEngine, PdfInspectorAdapter, PdfiumPageRenderer, runSelectiveOcr, type OcrEngine, type PdfInspectorEngine } from "./index.js";
+import { PageContentSource, PdfType } from "@firecrawl/pdf-inspector";
+import { DocumentSandboxClient, FakeOcrEngine, PdfInspectorAdapter, PdfInspectorOcrAdapter, PdfiumPageRenderer, groupLogicalDocuments, runSelectiveOcr, type BoundaryPrediction, type OcrEngine, type PageClassification, type PdfInspectorEngine } from "./index.js";
 
 describe("PdfInspectorAdapter", () => {
   it("translates zero-based native pages into project-owned one-based pages", async () => {
@@ -50,7 +50,7 @@ describe("DocumentSandboxClient", () => {
     try {
       const entrypoint = fileURLToPath(new URL("../test-fixtures/sandbox-success.mjs", import.meta.url));
       const result = await new DocumentSandboxClient(entrypoint).inspectAndRender(Buffer.from("fixture"), "a".repeat(64), {
-        timeoutMs: 5_000, maximumPages: 2, maximumPixelsPerPage: 1_000, targetDpi: 110,
+        timeoutMs: 5_000, maximumPages: 2, maximumPixelsPerPage: 1_000, targetDpi: 110, ocrMode: "fake",
       });
       expect(result.inspection.pageCount).toBe(1);
       expect(result.renders[0]).toMatchObject({ pageNumber: 1, width: 10, height: 20 });
@@ -86,5 +86,64 @@ describe("FakeOcrEngine", () => {
     ], engine);
     expect(calls).toEqual([2]);
     expect(outputs.map((output) => output.pageNumber)).toEqual([2]);
+  });
+});
+
+describe("PdfInspectorOcrAdapter", () => {
+  it("maps the pinned offline OCR result without exposing SDK types downstream", async () => {
+    let receivedOptions: unknown;
+    const adapter = new PdfInspectorOcrAdapter(async (_source, options) => {
+      receivedOptions = options;
+      return {
+        markdown: "Recognized text", pageCount: 1, pagesRecommendedForOcr: [1], pagesRoutedToOcr: [1],
+        pagesRecommendingHosted: [], ocrReasonsByPage: [], pagesWithTables: [], pagesWithColumns: [], isComplex: false,
+        processingTimeMs: 12, renderTimeMs: 3, ocrTimeMs: 8,
+        pages: [{ pageNumber: 1, markdown: "Recognized text", provenance: {
+          pageNumber: 1, source: PageContentSource.Ocr, ocrModel: { name: "PP-OCRv6-small", revision: "fixture-revision" },
+          renderDpi: 144, ocrConfidence: 0.91, timings: { renderMs: 3, ocrMs: 8, assemblyMs: 1 },
+          warnings: [], hostedRecommended: false,
+        } }],
+      };
+    });
+    const output = await adapter.recognize(Buffer.from("pdf"), [1], { targetDpi: 144, modelDirectory: "/models/ocr" });
+
+    expect(receivedOptions).toMatchObject({ mode: "Auto", pageNumbers: [1], offline: true, modelDirectory: "/models/ocr" });
+    expect(output[0]?.result).toMatchObject({
+      rawText: "Recognized text", engine: "firecrawl/pdf-inspector-oar",
+      modelAssetVersion: "PP-OCRv6-small@fixture-revision",
+      pageConfidence: { value: 0.91, scale: "zero_to_one", producer: "firecrawl/pdf-inspector-oar" },
+      sourceTransform: { scaleX: 0.5, scaleY: 0.5 },
+    });
+  });
+});
+
+describe("groupLogicalDocuments", () => {
+  it("creates deterministic contiguous groups and preserves uncertainty", () => {
+    const classification = (pageNumber: number, selectedType: PageClassification["selectedType"], qualityStatus: PageClassification["qualityStatus"] = "accepted"): PageClassification => ({
+      pageNumber, selectedType, method: "deterministic-fixture", version: "1.0.0",
+      qualityStatus, rawConfidence: { value: 0.8, scale: "zero_to_one", producer: "deterministic-fixture" }, alternatives: [],
+    });
+    const boundary = (pageNumber: number, startsNewDocument: boolean): BoundaryPrediction => ({
+      pageNumber, startsNewDocument, method: "deterministic-fixture", version: "1.0.0",
+      rawConfidence: { value: 1, scale: "zero_to_one", producer: "deterministic-fixture" },
+    });
+    const result = groupLogicalDocuments([
+      classification(1, "identity_document"), classification(2, "payslip"),
+      classification(3, "payslip", "uncertain"), classification(4, "bank_statement"),
+    ], [boundary(2, true), boundary(3, false), boundary(4, true)]);
+
+    expect(result).toEqual([
+      { startPage: 1, endPage: 1, documentType: "identity_document", uncertain: false, pageNumbers: [1] },
+      { startPage: 2, endPage: 3, documentType: "payslip", uncertain: true, pageNumbers: [2, 3] },
+      { startPage: 4, endPage: 4, documentType: "bank_statement", uncertain: false, pageNumbers: [4] },
+    ]);
+  });
+
+  it("fails when a boundary prediction is missing", () => {
+    const classifications: PageClassification[] = [1, 2].map((pageNumber) => ({
+      pageNumber, selectedType: "payslip", method: "fixture", version: "1", qualityStatus: "accepted",
+      rawConfidence: { value: 1, scale: "zero_to_one", producer: "fixture" }, alternatives: [],
+    }));
+    expect(() => groupLogicalDocuments(classifications, [])).toThrow("every page after the first");
   });
 });

@@ -8,7 +8,7 @@ Date: 2026-09-05
 
 V1 needs local-first PDF inspection, native text and coordinates, page classification signals, layout and table candidates, selected-page processing, and per-page or region OCR routing before VLM use.
 
-The official `@firecrawl/pdf-inspector` Node package provides a Rust core through native Node bindings, PDF type classification, native and region text extraction, layout information, tables, and `pagesNeedingOcr` or region `needsOcr` signals. Its public documentation positions it as a component for hybrid OCR pipelines. It is not a malware scanner, Content Disarm and Reconstruction system, authoritative truth source, or stable project-domain contract.
+The official `@firecrawl/pdf-inspector` Node package provides a Rust core through native Node bindings, PDF type classification, native and region text extraction, layout information, tables, `pagesNeedingOcr` or region `needsOcr` signals, and opt-in local PP-OCRv6 Small execution through `processPdfWithOcr`. Its OCR model, PDFium, and ONNX Runtime assets remain external runtime dependencies. It is not a malware scanner, Content Disarm and Reconstruction system, authoritative truth source, or stable project-domain contract.
 
 ## Decision
 
@@ -21,10 +21,10 @@ The adapter will:
 3. Preserve page geometry, native coordinates, page order, classification and OCR-routing signals, layout and table candidates, processor version, and configuration provenance.
 4. Use full per-page inspection for evaluated V1 documents rather than sampling that could hide mixed pages.
 5. Treat PDF Inspector confidence and routing output as uncalibrated processing signals, not truth.
-6. Keep server rendering behind a project-owned renderer interface and OCR behind an independent `OcrEngine` interface.
-7. Route scanned or unreliable pages and regions to the selected OCR adapter only under project-owned policy.
+6. Keep server rendering and translated OCR results behind project-owned interfaces even when PDF Inspector supplies their initial implementation.
+7. Route scanned or unreliable pages and regions to PDF Inspector's selected OCR execution only under project-owned policy.
 
-The initial OCR target is PP-OCRv6, but its runtime is not assumed to be supplied or fixed by PDF Inspector. The OCR integration must be verified and pinned separately.
+The initial OCR implementation is PDF Inspector's local PP-OCRv6 Small path. The deployment must pre-provision and verify the documented PDFium, ONNX Runtime, and model assets and use offline mode; runtime model downloads are not part of the delivered demo path.
 
 ## Rejected Alternatives
 
@@ -46,7 +46,7 @@ Costs and risks:
 
 1. Native binaries and platform support must be pinned and tested for the delivered container target.
 2. Layout and Markdown behavior can vary across versions and complex PDFs.
-3. OCR remains a separate integration and resource-management concern.
+3. OCR runtime assets remain a separate deployment and resource-management concern even though PDF Inspector supplies the execution path.
 4. PDF Inspector does not replace sandboxing or file-security controls.
 
 ## Verification

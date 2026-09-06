@@ -16,6 +16,8 @@ const minioAccessKey = process.env["MINIO_ACCESS_KEY"];
 const minioSecretKey = process.env["MINIO_SECRET_KEY"];
 if (!minioEndpoint || !minioAccessKey || !minioSecretKey) throw new Error("MinIO configuration is required");
 const maximumSourceBytes = Number(process.env["MAX_SOURCE_BYTES"] ?? 10_000_000);
+const ocrMode = process.env["OCR_MODE"] === "fake" ? "fake" : "pdf_inspector";
+const ocrModelDirectory = process.env["OCR_MODEL_DIRECTORY"];
 
 const { client, db } = createDatabase(databaseUrl);
 const objectStore = createMinioObjectStore({
@@ -61,6 +63,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
       const source = await readObjectBytes(objectStore, document.objectKey, maximumSourceBytes);
       const sandboxResult = await documentSandbox.inspectAndRender(source, document.sha256, {
         timeoutMs: 60_000, maximumPages: 50, maximumPixelsPerPage: 8_000_000, targetDpi: 110,
+        ocrMode, ...(ocrModelDirectory ? { ocrModelDirectory } : {}),
       });
       const inspection = sandboxResult.inspection;
       const pages = [];

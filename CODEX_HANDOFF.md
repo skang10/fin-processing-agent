@@ -54,7 +54,7 @@ The system has no permission or interface to disburse funds, open accounts, appr
 1. Local processing is the default. PDF native extraction and selective OCR precede VLM use.
 2. [`firecrawl/pdf-inspector`](https://github.com/firecrawl/pdf-inspector) is the initial PDF classification, native extraction, layout, rendering, and selective OCR foundation.
 3. PDF processing runs in an isolated, resource-limited worker. The prototype implements basic file validation, not enterprise malware scanning or Content Disarm and Reconstruction (CDR).
-4. PDF Inspector supplies OCR-routing inputs. The initial independent `OcrEngine` target is PP-OCRv6 behind a replaceable interface, subject to an implementation spike and pinned runtime verification.
+4. PDF Inspector supplies OCR-routing inputs and the initial local PP-OCRv6 Small execution path. Its result is translated behind a replaceable project-owned OCR interface, subject to pinned offline runtime and model-asset verification.
 5. External VLM use is allowed for the prototype. A provider-neutral gateway must allow later private-cloud or local deployment.
 6. A VLM receives only selected pages, bounded consecutive-page windows, or cropped regions. It never receives an entire case package.
 7. Models produce candidates, classifications, constrained matching opinions, or non-authoritative review briefs. They do not create validation rules, determine authoritative validation findings or dispositions, or select business decisions.

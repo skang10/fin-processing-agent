@@ -1,7 +1,11 @@
 import {
   classifyPdfAsync,
   extractPagesMarkdownAsync,
+  OcrMode,
+  PageContentSource,
+  processPdfWithOcr,
   type PdfClassification,
+  type OcrPdfResult,
   type PagesExtractionResult,
 } from "@firecrawl/pdf-inspector";
 import { createHash } from "node:crypto";
@@ -54,6 +58,7 @@ export interface OcrResult {
   readonly engineVersion: string;
   readonly modelAssetVersion: string;
   readonly coordinateSpace: "render_pixels_top_left";
+  readonly pageConfidence?: { readonly value: number; readonly scale: "zero_to_one"; readonly producer: string };
   readonly sourceTransform: {
     readonly sourceCoordinateSpace: "pdf_points_top_left";
     readonly scaleX: number;
@@ -63,8 +68,116 @@ export interface OcrResult {
   };
 }
 
+export interface PdfInspectorOcrOptions {
+  readonly targetDpi: number;
+  readonly modelDirectory: string;
+  readonly languages?: readonly ("de" | "en")[];
+}
+
+export class PdfInspectorOcrAdapter {
+  constructor(private readonly processor: (source: Buffer, options: Parameters<typeof processPdfWithOcr>[1]) => Promise<OcrPdfResult> = processPdfWithOcr) {}
+
+  async recognize(source: Buffer, pageNumbers: readonly number[], options: PdfInspectorOcrOptions): Promise<readonly { pageNumber: number; result: OcrResult }[]> {
+    if (pageNumbers.length === 0) return [];
+    if (!options.modelDirectory || !Number.isFinite(options.targetDpi) || options.targetDpi < 72 || options.targetDpi > 300 ||
+        new Set(pageNumbers).size !== pageNumbers.length || pageNumbers.some((pageNumber) => !Number.isInteger(pageNumber) || pageNumber < 1)) {
+      throw new Error("PDF Inspector OCR configuration is invalid");
+    }
+    const output = await this.processor(source, {
+      mode: OcrMode.Auto, pageNumbers: [...pageNumbers], dpi: options.targetDpi,
+      modelDirectory: options.modelDirectory, offline: true,
+    });
+    const routed = new Set(output.pagesRoutedToOcr);
+    if (pageNumbers.some((pageNumber) => !routed.has(pageNumber))) throw new Error("PDF Inspector did not OCR an explicitly routed page");
+    return output.pages.filter((page) => routed.has(page.pageNumber)).map((page) => {
+      if (page.provenance.source !== PageContentSource.Ocr && page.provenance.source !== PageContentSource.Fused) {
+        throw new Error("PDF Inspector returned invalid OCR provenance");
+      }
+      const model = page.provenance.ocrModel;
+      const dpi = page.provenance.renderDpi;
+      if (!model || !model.name || !model.revision || !dpi ||
+          (page.provenance.ocrConfidence !== undefined && (!Number.isFinite(page.provenance.ocrConfidence) || page.provenance.ocrConfidence < 0 || page.provenance.ocrConfidence > 1))) {
+        throw new Error("PDF Inspector omitted or returned invalid OCR provenance");
+      }
+      return { pageNumber: page.pageNumber, result: {
+        rawText: page.markdown, spans: [], languages: [...(options.languages ?? ["de", "en"])],
+        engine: "firecrawl/pdf-inspector-oar", engineVersion: PDF_INSPECTOR_VERSION,
+        modelAssetVersion: `${model.name}@${model.revision}`, coordinateSpace: "render_pixels_top_left",
+        ...(page.provenance.ocrConfidence === undefined ? {} : { pageConfidence: {
+          value: page.provenance.ocrConfidence, scale: "zero_to_one", producer: "firecrawl/pdf-inspector-oar",
+        } }),
+        sourceTransform: {
+          sourceCoordinateSpace: "pdf_points_top_left", scaleX: 72 / dpi, scaleY: 72 / dpi,
+          translateX: 0, translateY: 0,
+        },
+      } };
+    });
+  }
+}
+
 export interface OcrEngine {
   recognize(request: OcrRequest): Promise<OcrResult>;
+}
+
+export type BusinessPageType = "identity_document" | "payslip" | "bank_statement" | "other" | "unknown";
+
+export interface PageClassification {
+  readonly pageNumber: number;
+  readonly selectedType: BusinessPageType;
+  readonly method: string;
+  readonly version: string;
+  readonly qualityStatus: "accepted" | "uncertain";
+  readonly rawConfidence: { readonly value: number; readonly scale: "zero_to_one"; readonly producer: string };
+  readonly alternatives: readonly { readonly type: BusinessPageType; readonly value: number }[];
+}
+
+export interface BoundaryPrediction {
+  readonly pageNumber: number;
+  readonly startsNewDocument: boolean;
+  readonly method: string;
+  readonly version: string;
+  readonly rawConfidence: { readonly value: number; readonly scale: "zero_to_one"; readonly producer: string };
+}
+
+export interface LogicalDocumentGroup {
+  readonly startPage: number;
+  readonly endPage: number;
+  readonly documentType: BusinessPageType;
+  readonly uncertain: boolean;
+  readonly pageNumbers: readonly number[];
+}
+
+export function groupLogicalDocuments(
+  classifications: readonly PageClassification[],
+  boundaries: readonly BoundaryPrediction[],
+): readonly LogicalDocumentGroup[] {
+  if (classifications.length === 0) return [];
+  const ordered = [...classifications].sort((left, right) => left.pageNumber - right.pageNumber);
+  if (ordered.some((item, index) => item.pageNumber !== index + 1)) throw new Error("Page classifications must form one ordered inventory");
+  if (boundaries.length !== ordered.length - 1 || boundaries.some((item, index) => item.pageNumber !== index + 2)) {
+    throw new Error("Boundary predictions must identify every page after the first");
+  }
+  const groups: LogicalDocumentGroup[] = [];
+  let current = [ordered[0]!];
+  for (let index = 1; index < ordered.length; index += 1) {
+    const page = ordered[index]!;
+    const prior = ordered[index - 1]!;
+    if (boundaries[index - 1]!.startsNewDocument || page.selectedType !== prior.selectedType) {
+      groups.push(toLogicalGroup(current));
+      current = [page];
+    } else current.push(page);
+  }
+  groups.push(toLogicalGroup(current));
+  return groups;
+}
+
+function toLogicalGroup(pages: readonly PageClassification[]): LogicalDocumentGroup {
+  const first = pages[0]!;
+  return {
+    startPage: first.pageNumber, endPage: pages.at(-1)!.pageNumber, documentType: first.selectedType,
+    uncertain: pages.some((page) => page.selectedType === "unknown" || page.qualityStatus === "uncertain"),
+    pageNumbers: pages.map((page) => page.pageNumber),
+  };
 }
 
 export class FakeOcrEngine implements OcrEngine {

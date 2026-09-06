@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, realpath, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
-import { FakeOcrEngine, PdfInspectorAdapter, PdfiumPageRenderer, runSelectiveOcr } from "./index.js";
+import { FakeOcrEngine, PdfInspectorAdapter, PdfInspectorOcrAdapter, PdfiumPageRenderer, runSelectiveOcr } from "./index.js";
 
 const raw = await readStdin(64_000);
 const request = parseRequest(raw);
@@ -27,7 +27,11 @@ for (const page of inspection.pages) {
     targetDpi: rendered.targetDpi,
   });
 }
-const recognized = await runSelectiveOcr(inspection.pages, renderedPages, new FakeOcrEngine());
+const recognized = request.limits.ocr_mode === "fake"
+  ? await runSelectiveOcr(inspection.pages, renderedPages, new FakeOcrEngine())
+  : await new PdfInspectorOcrAdapter().recognize(source, inspection.pages.filter((page) => page.needsOcr).map((page) => page.pageNumber), {
+    targetDpi: request.limits.target_dpi, modelDirectory: request.limits.ocr_model_directory!,
+  });
 const ocrOutputs = [];
 for (const output of recognized) {
   const ocrPath = `page-${output.pageNumber}-ocr.json`;
@@ -50,7 +54,7 @@ async function readStdin(maximumBytes: number): Promise<string> {
 
 function parseRequest(value: string): {
   source_path: string; source_sha256: string;
-  limits: { maximum_pages: number; maximum_pixels_per_page: number; target_dpi: number };
+  limits: { maximum_pages: number; maximum_pixels_per_page: number; target_dpi: number; ocr_mode: "fake" | "pdf_inspector"; ocr_model_directory?: string };
 } {
   const parsed: unknown = JSON.parse(value);
   if (!parsed || typeof parsed !== "object" || !("schema_version" in parsed) || parsed.schema_version !== "1.0.0" ||
@@ -61,8 +65,10 @@ function parseRequest(value: string): {
   const request = parsed as { source_path: string; source_sha256: string; limits: Record<string, unknown> };
   if (!Number.isSafeInteger(request.limits.maximum_pages) || Number(request.limits.maximum_pages) < 1 ||
       !Number.isSafeInteger(request.limits.maximum_pixels_per_page) || Number(request.limits.maximum_pixels_per_page) < 1 ||
-      typeof request.limits.target_dpi !== "number" || request.limits.target_dpi < 72 || request.limits.target_dpi > 300) {
+      typeof request.limits.target_dpi !== "number" || request.limits.target_dpi < 72 || request.limits.target_dpi > 300 ||
+      (request.limits.ocr_mode !== "fake" && request.limits.ocr_mode !== "pdf_inspector") ||
+      (request.limits.ocr_mode === "pdf_inspector" && typeof request.limits.ocr_model_directory !== "string")) {
     throw new Error("Invalid sandbox limits");
   }
-  return request as { source_path: string; source_sha256: string; limits: { maximum_pages: number; maximum_pixels_per_page: number; target_dpi: number } };
+  return request as { source_path: string; source_sha256: string; limits: { maximum_pages: number; maximum_pixels_per_page: number; target_dpi: number; ocr_mode: "fake" | "pdf_inspector"; ocr_model_directory?: string } };
 }
