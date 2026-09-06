@@ -16,14 +16,18 @@ import {
   claimEvidenceLinks,
   claimRecords,
   createDatabase,
+  boundaryPredictions,
   idempotencyRecords,
   inputDocumentSelections,
   inputRevisions,
+  logicalDocumentPages,
+  logicalDocumentRevisions,
   documentVersions,
   documentInspections,
   evidenceRecords,
   outboxEvents,
   pageOcrOutputs,
+  pageClassifications,
   processingRuns,
   processingRunTransitions,
   physicalDocuments,
@@ -134,6 +138,13 @@ describe("PostgresCaseCommandService", () => {
           modelAssetVersion: "synthetic-fixture-v1", languages: ["de", "en"], coordinateSpace: "render_pixels_top_left",
         },
       }],
+      classifications: [{
+        pageNumber: 1, selectedType: "bank_statement", method: "synthetic-demo-heading-classifier", version: "1.0.0",
+        qualityStatus: "accepted", rawConfidence: { value: 1, scale: "zero_to_one", producer: "deterministic-demo-rule" },
+        alternatives: [],
+      }],
+      boundaries: [],
+      logicalDocuments: [{ startPage: 1, endPage: 1, documentType: "bank_statement", uncertain: false, pageNumbers: [1] }],
     });
     await coordinator.persistInspection(accepted.runId, document, {
       processor: "firecrawl/pdf-inspector", processorVersion: "1.17.0",
@@ -141,12 +152,17 @@ describe("PostgresCaseCommandService", () => {
       pages: [{ pageNumber: 1, needsOcr: false, hasTable: false, hasColumns: false, nativeCharacterCount: 42 }],
     });
     expect(await coordinator.loadUninspectedDocuments(accepted.caseId, accepted.runId)).toEqual([]);
-    const [[inspectionCount], [pageCount], [ocrCount]] = await Promise.all([
+    const [[inspectionCount], [pageCount], [ocrCount], [classificationCount], [boundaryCount], [logicalCount], [logicalPageCount]] = await Promise.all([
       connection.db.select({ value: count() }).from(documentInspections),
       connection.db.select({ value: count() }).from(pages),
       connection.db.select({ value: count() }).from(pageOcrOutputs),
+      connection.db.select({ value: count() }).from(pageClassifications),
+      connection.db.select({ value: count() }).from(boundaryPredictions),
+      connection.db.select({ value: count() }).from(logicalDocumentRevisions),
+      connection.db.select({ value: count() }).from(logicalDocumentPages),
     ]);
     expect([inspectionCount?.value, pageCount?.value, ocrCount?.value]).toEqual([1, 1, 1]);
+    expect([classificationCount?.value, boundaryCount?.value, logicalCount?.value, logicalPageCount?.value]).toEqual([1, 0, 1, 1]);
     await expect(queriesBeforeProcessing.getDocumentPage(accepted.caseId, document.documentVersionId, 1)).resolves.toMatchObject({
       pageNumber: 1, nativeCharacterCount: 42, nativeTextAvailable: true, renderAvailable: true,
     });

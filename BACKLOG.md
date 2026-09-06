@@ -140,7 +140,7 @@ Define implementation contracts for the approved V1 HTML UX baseline:
 
 ### BL-008 — Logical Documents and Candidate Reconciliation
 
-**Status:** Approved architecture and data semantics; implementation pending
+**Status:** Deterministic synthetic page classification, boundary prediction, contiguous grouping, Worker wiring, and PostgreSQL persistence implemented; extraction candidates and reconciliation pending
 
 Implement the minimum deterministic path in dependency order:
 

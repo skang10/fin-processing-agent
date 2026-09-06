@@ -117,6 +117,28 @@ export const pageOcrOutputs = pgTable("page_ocr_outputs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("page_ocr_output_page_uq").on(table.pageId)]);
 
+export const pageClassifications = pgTable("page_classifications", {
+  id: uuid("id").primaryKey(),
+  pageId: uuid("page_id").notNull().references(() => pages.id),
+  selectedType: text("selected_type").notNull(),
+  method: text("method").notNull(),
+  version: text("version").notNull(),
+  qualityStatus: text("quality_status").notNull(),
+  rawConfidence: jsonb("raw_confidence").notNull(),
+  alternatives: jsonb("alternatives").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("page_classification_page_uq").on(table.pageId)]);
+
+export const boundaryPredictions = pgTable("boundary_predictions", {
+  id: uuid("id").primaryKey(),
+  pageId: uuid("page_id").notNull().references(() => pages.id),
+  startsNewDocument: boolean("starts_new_document").notNull(),
+  method: text("method").notNull(),
+  version: text("version").notNull(),
+  rawConfidence: jsonb("raw_confidence").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("boundary_prediction_page_uq").on(table.pageId)]);
+
 export const processingRuns = pgTable("processing_runs", {
   id: uuid("id").primaryKey(),
   caseId: uuid("case_id").notNull().references(() => cases.id),
@@ -136,6 +158,28 @@ export const processingRunTransitions = pgTable("processing_run_transitions", {
   reason: text("reason").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index("run_transition_idx").on(table.runId, table.createdAt)]);
+
+export const logicalDocumentRevisions = pgTable("logical_document_revisions", {
+  id: uuid("id").primaryKey(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id),
+  documentVersionId: uuid("document_version_id").notNull().references(() => documentVersions.id),
+  startPage: integer("start_page").notNull(),
+  endPage: integer("end_page").notNull(),
+  documentType: text("document_type").notNull(),
+  uncertain: boolean("uncertain").notNull(),
+  groupingMethod: text("grouping_method").notNull(),
+  groupingVersion: text("grouping_version").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("logical_document_range_uq").on(table.runId, table.documentVersionId, table.startPage, table.endPage)]);
+
+export const logicalDocumentPages = pgTable("logical_document_pages", {
+  id: uuid("id").primaryKey(),
+  logicalDocumentRevisionId: uuid("logical_document_revision_id").notNull().references(() => logicalDocumentRevisions.id),
+  pageId: uuid("page_id").notNull().references(() => pages.id),
+}, (table) => [
+  uniqueIndex("logical_document_page_uq").on(table.logicalDocumentRevisionId, table.pageId),
+  uniqueIndex("machine_grouped_page_uq").on(table.pageId),
+]);
 
 export const resultRevisions = pgTable("result_revisions", {
   id: uuid("id").primaryKey(),

@@ -127,6 +127,13 @@
       "when": 1788658637316,
       "tag": "0017_glamorous_zemo",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788660387908,
+      "tag": "0018_fantastic_daimon_hellstrom",
+      "breakpoints": true
     }
   ]
 }

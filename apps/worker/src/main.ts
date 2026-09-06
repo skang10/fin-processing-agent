@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import pino from "pino";
 import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
-import { DocumentSandboxClient } from "@findoc/document-processing";
+import { DocumentSandboxClient, classifySyntheticDemoPages, groupLogicalDocuments } from "@findoc/document-processing";
 import { buildOfflineFixture, OfflineFixtureUnavailableError, runOfflineReport } from "@findoc/offline";
 import { PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
 import { createMinioObjectStore, readObjectBytes, storeNativeTextArtifact, storeOcrArtifact, storePageRenderArtifact } from "@findoc/storage";
@@ -66,6 +66,9 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
         ocrMode, ...(ocrModelDirectory ? { ocrModelDirectory } : {}),
       });
       const inspection = sandboxResult.inspection;
+      const demoAnalysis = process.env["FINDOC_SYNTHETIC_DEMO"] === "true"
+        ? classifySyntheticDemoPages(inspection.pages)
+        : undefined;
       const pages = [];
       for (const page of inspection.pages) {
         const rendered = sandboxResult.renders.find((candidate) => candidate.pageNumber === page.pageNumber);
@@ -97,6 +100,10 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
       await coordinator.persistInspection(job.data.run_id, document, {
         ...inspection,
         pages,
+        ...(demoAnalysis ? {
+          ...demoAnalysis,
+          logicalDocuments: groupLogicalDocuments(demoAnalysis.classifications, demoAnalysis.boundaries),
+        } : {}),
       });
     } else {
       await coordinator.persistInspection(job.data.run_id, document, {

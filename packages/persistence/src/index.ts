@@ -3,7 +3,7 @@ import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type PageRenderArtifactView, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type SourceDocumentArtifactView, type StoredDerivedArtifact, type StoredOcrArtifact, type StoredPageRenderArtifact } from "@findoc/core";
-import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pageOcrOutputs, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
+import { agentReports, applicationSnapshots, artifacts, boundaryPredictions, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, logicalDocumentPages, logicalDocumentRevisions, outboxEvents, pageClassifications, pageOcrOutputs, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
@@ -917,6 +917,37 @@ export class PostgresWorkflowCoordinator {
         coordinateSpace: page.ocrArtifact.coordinateSpace,
       }] : []);
       if (ocrRows.length > 0) await tx.insert(pageOcrOutputs).values(ocrRows);
+      if (inspection.classifications) {
+        const pageIds = new Map(pageRows.map((row) => [row.source.pageNumber, row.id]));
+        const classifiedPages = new Set(inspection.classifications.map((item) => item.pageNumber));
+        const groupedPages = (inspection.logicalDocuments ?? []).flatMap((group) => group.pageNumbers);
+        if (classifiedPages.size !== pageRows.length || pageRows.some((row) => !classifiedPages.has(row.source.pageNumber)) ||
+            !inspection.boundaries || inspection.boundaries.length !== Math.max(0, pageRows.length - 1) ||
+            groupedPages.length !== pageRows.length || new Set(groupedPages).size !== pageRows.length ||
+            pageRows.some((row) => !groupedPages.includes(row.source.pageNumber))) {
+          throw new Error("Document classification and grouping do not cover the page inventory");
+        }
+        await tx.insert(pageClassifications).values(inspection.classifications.map((item) => ({
+          id: randomUUID(), pageId: pageIds.get(item.pageNumber)!, selectedType: item.selectedType,
+          method: item.method, version: item.version, qualityStatus: item.qualityStatus,
+          rawConfidence: item.rawConfidence, alternatives: [...item.alternatives],
+        })));
+        if (inspection.boundaries && inspection.boundaries.length > 0) await tx.insert(boundaryPredictions).values(inspection.boundaries.map((item) => ({
+          id: randomUUID(), pageId: pageIds.get(item.pageNumber)!, startsNewDocument: item.startsNewDocument,
+          method: item.method, version: item.version, rawConfidence: item.rawConfidence,
+        })));
+        for (const group of inspection.logicalDocuments ?? []) {
+          const logicalDocumentRevisionId = randomUUID();
+          await tx.insert(logicalDocumentRevisions).values({
+            id: logicalDocumentRevisionId, runId, documentVersionId: document.documentVersionId,
+            startPage: group.startPage, endPage: group.endPage, documentType: group.documentType,
+            uncertain: group.uncertain, groupingMethod: "deterministic-contiguous-grouping", groupingVersion: "1.0.0",
+          });
+          await tx.insert(logicalDocumentPages).values(group.pageNumbers.map((pageNumber) => ({
+            id: randomUUID(), logicalDocumentRevisionId, pageId: pageIds.get(pageNumber)!,
+          })));
+        }
+      }
       await tx.update(documentVersions).set({ readabilityState: "inspected" })
         .where(eq(documentVersions.id, document.documentVersionId));
     });
@@ -1255,6 +1286,21 @@ export interface InspectionRecord {
     nativeTextArtifact?: StoredDerivedArtifact & { readonly caseId: string };
     renderArtifact?: StoredPageRenderArtifact & { readonly caseId: string };
     ocrArtifact?: StoredOcrArtifact & { readonly caseId: string; readonly coordinateSpace: "render_pixels_top_left" };
+  }[];
+  readonly classifications?: readonly {
+    readonly pageNumber: number; readonly selectedType: "identity_document" | "payslip" | "bank_statement" | "other" | "unknown";
+    readonly method: string; readonly version: string; readonly qualityStatus: "accepted" | "uncertain";
+    readonly rawConfidence: { readonly value: number; readonly scale: "zero_to_one"; readonly producer: string };
+    readonly alternatives: readonly { readonly type: "identity_document" | "payslip" | "bank_statement" | "other" | "unknown"; readonly value: number }[];
+  }[];
+  readonly boundaries?: readonly {
+    readonly pageNumber: number; readonly startsNewDocument: boolean; readonly method: string; readonly version: string;
+    readonly rawConfidence: { readonly value: number; readonly scale: "zero_to_one"; readonly producer: string };
+  }[];
+  readonly logicalDocuments?: readonly {
+    readonly startPage: number; readonly endPage: number;
+    readonly documentType: "identity_document" | "payslip" | "bank_statement" | "other" | "unknown";
+    readonly uncertain: boolean; readonly pageNumbers: readonly number[];
   }[];
 }
 
