@@ -656,8 +656,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .checked-fact.expanded > .checked-fact-summary { border-bottom: 1px solid var(--line); background: var(--accent-soft); }
 .report-links button:hover, .checked-fact-summary:hover, .checked-source:hover { background: var(--accent-soft); }
 .report-links b { color: var(--quiet); font-size: 10px; }
-.report-links span, .checked-facts strong, .checked-facts small { display: block; }
-.report-links span, .checked-facts strong { font-size: 12px; font-weight: 650; }
+.report-links span, .report-links strong, .report-links small, .checked-facts strong, .checked-facts small { display: block; }
+.report-links strong, .checked-facts strong { font-size: 12px; font-weight: 650; }
+.report-links small { margin-top: 3px; color: var(--muted); font-size: 9px; font-weight: 500; }
 .checked-fact-summary > i { width: 18px; height: 18px; border-radius: 50%; background: var(--success-soft); color: var(--success); display: grid; place-items: center; font-size: 9px; font-style: normal; }
 .checked-facts small { margin-top: 3px; color: #48555e; font-size: 10px; font-weight: 400; line-height: 1.4; }
 .report-links em, .checked-fact-summary > b { color: var(--accent); font-size: 12px; font-style: normal; }

@@ -1084,10 +1084,13 @@ function renderApiReport(report) {
     ? 'Agent report unavailable. Reason: ' + reportFailureMessage(report.failure_reason) + ' System-generated review issues remain available for manual review.'
     : (report.summary || 'Agent report unavailable.');
   document.querySelector('.report-links').innerHTML = issues.map(function (issue, index) { return { issue, index }; })
-    .filter(function (entry) { return entry.issue.origin === 'agent'; }).map(function (entry) {
+    .filter(function (entry) {
+      return report.availability === 'unavailable' ? entry.issue.origin === 'system' : entry.issue.origin === 'agent';
+    }).map(function (entry) {
     const issue = entry.issue;
     const index = entry.index;
-    return '<button data-report-issue="' + index + '"><b>' + String(index + 1).padStart(2, '0') + '</b><span>' + escapeHtml(issue.title) + '</span><em>→</em></button>';
+    const originLabel = report.availability === 'unavailable' ? '<small>System detected</small>' : '';
+    return '<button data-report-issue="' + index + '"><b>' + String(index + 1).padStart(2, '0') + '</b><span><strong>' + escapeHtml(issue.title) + '</strong>' + originLabel + '</span><em>→</em></button>';
   }).join('');
   document.querySelector('.checked-facts').innerHTML = report.checked_facts.map(function (fact, index) {
     const availableReferences = fact.references.filter(function (reference) { return apiEvidenceByReference[reference]; });
