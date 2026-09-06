@@ -2,8 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentSessionMode, type AgentTerminalReason, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type PageRenderArtifactView, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type SourceDocumentArtifactView, type StoredDerivedArtifact, type StoredOcrArtifact, type StoredPageRenderArtifact } from "@findoc/core";
-import { agentReports, agentSessions, agentSteps, applicationSnapshots, artifacts, boundaryPredictions, candidateEvidenceLinks, cases, caseStateTransitions, claimCandidateLinks, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, extractionCandidates, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, logicalDocumentPages, logicalDocumentRevisions, outboxEvents, pageClassifications, pageOcrOutputs, pages, physicalDocuments, processingRuns, processingRunTransitions, reconciliationCandidateLinks, reconciliationDecisions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogSessionView, type AgentLogView, type AgentSessionMode, type AgentSessionTrace, type AgentTerminalReason, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type PageRenderArtifactView, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type SourceDocumentArtifactView, type StoredDerivedArtifact, type StoredOcrArtifact, type StoredPageRenderArtifact } from "@findoc/core";
+import { agentEligibilityDecisions, agentReports, agentSessions, agentSteps, applicationSnapshots, extractionGaps, gapResolutions, artifacts, boundaryPredictions, candidateEvidenceLinks, cases, caseStateTransitions, claimCandidateLinks, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, extractionCandidates, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, logicalDocumentPages, logicalDocumentRevisions, outboxEvents, pageClassifications, pageOcrOutputs, pages, physicalDocuments, processingRuns, processingRunTransitions, reconciliationCandidateLinks, reconciliationDecisions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
@@ -473,36 +473,44 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     const [report] = await this.db.select({
       availability: agentReports.availability, modelLabel: agentReports.modelLabel,
       estimatedCost: agentReports.estimatedCost, checkedFacts: agentReports.checkedFacts,
-      issueLinks: agentReports.issueLinks, createdAt: agentReports.createdAt, sessionId: agentReports.sessionId,
+      issueLinks: agentReports.issueLinks, createdAt: agentReports.createdAt, sessionId: agentReports.sessionId, runId: agentReports.runId,
     }).from(agentReports).where(eq(agentReports.caseId, caseId)).orderBy(sql`${agentReports.createdAt} desc`).limit(1);
     const currentStep = caseRecord.lifecycle === "processing" ? "processing" as const
       : caseRecord.lifecycle === "review_complete" ? "review_completed" as const : "awaiting_human_review" as const;
     if (!report) return { availability: "pending", currentStep, events: [] };
-    const [session] = report.sessionId
-      ? await this.db.select().from(agentSessions).where(eq(agentSessions.id, report.sessionId)).limit(1)
-      : [];
-    const steps = session
-      ? await this.db.select().from(agentSteps).where(eq(agentSteps.sessionId, session.id)).orderBy(asc(agentSteps.sequence))
+    const sessions = await this.db.select().from(agentSessions).where(eq(agentSessions.runId, report.runId)).orderBy(asc(agentSessions.startedAt));
+    const steps = sessions.length
+      ? await this.db.select().from(agentSteps).where(inArray(agentSteps.sessionId, sessions.map((session) => session.id))).orderBy(asc(agentSteps.startedAt), asc(agentSteps.sequence))
       : [];
     const timestamp = report.createdAt.toISOString();
     const factCount = (report.checkedFacts as unknown[]).length;
     const issueCount = (report.issueLinks as unknown[]).length;
-    const usage = session?.usage as { available?: boolean } | undefined;
+    const view = (session: typeof sessions[number]): AgentLogSessionView => ({
+      harnessLabel: `${session.harnessId} (${session.harnessVersion})`,
+      mode: session.mode as AgentSessionMode,
+      terminalReason: session.terminalReason as AgentTerminalReason,
+      iterations: session.iterations, toolCalls: session.toolCalls,
+      usageAvailable: (session.usage as { available?: boolean } | null)?.available === true,
+    });
+    const reportSession = sessions.find((session) => session.id === report.sessionId);
+    const recoverySession = [...sessions].reverse().find((session) => session.mode === "adaptive_recovery");
     return {
       availability: report.availability === "ready" ? "ready" : "unavailable",
       modelLabel: report.modelLabel,
       ...(report.estimatedCost !== null ? { estimatedCost: { amount: report.estimatedCost, currency: "EUR" } } : {}),
       currentStep,
-      ...(session ? { session: {
-        harnessLabel: `${session.harnessId} (${session.harnessVersion})`,
-        mode: session.mode as AgentSessionMode,
-        terminalReason: session.terminalReason as AgentTerminalReason,
-        iterations: session.iterations, toolCalls: session.toolCalls, usageAvailable: usage?.available === true,
+      ...(reportSession ? { session: view(reportSession) } : {}),
+      ...(recoverySession ? { recoverySession: {
+        ...view(recoverySession),
+        gapCount: ((recoverySession.boundGapIds as unknown[] | null) ?? []).length,
+        candidatesSubmitted: steps.filter((step) => step.sessionId === recoverySession.id && step.toolName === "submit_extraction_candidates" && step.outcome === "succeeded").length,
       } } : {}),
       events: [
-        ...(session ? [{ timestamp: session.startedAt.toISOString(), activity: `Started ${session.mode.replace(/_/g, " ")} session` }] : []),
-        ...steps.map((step) => ({ timestamp: step.completedAt.toISOString(), activity: step.summary, toolLabel: step.toolName })),
-        ...(session ? [{ timestamp: session.completedAt.toISOString(), activity: `Session ended: ${session.terminalReason.replace(/_/g, " ")}` }] : []),
+        ...sessions.flatMap((session) => [
+          { timestamp: session.startedAt.toISOString(), activity: `Started ${session.mode.replace(/_/g, " ")} session` },
+          ...steps.filter((step) => step.sessionId === session.id).map((step) => ({ timestamp: step.completedAt.toISOString(), activity: step.summary, toolLabel: step.toolName })),
+          { timestamp: session.completedAt.toISOString(), activity: `Session ended: ${session.terminalReason.replace(/_/g, " ")}` },
+        ]),
         { timestamp, activity: `Checked ${factCount} facts` },
         { timestamp, activity: `Created ${issueCount} review issues` },
         { timestamp, activity: report.availability === "ready" ? "Generated review report" : "Report verification failed" },
@@ -832,7 +840,7 @@ export class PostgresWorkflowCoordinator {
   async loadOfflineSourceContext(caseId: string, runId: string): Promise<{
     inputRevisionId: string;
     applicationSnapshotId: string;
-    pages: readonly { documentVersionId: string; submittedFilename: string; pageNumber: number }[];
+    pages: readonly { documentVersionId: string; submittedFilename: string; pageNumber: number; needsOcr: boolean; nativeCharacterCount: number; ocrAvailable: boolean; renderAvailable: boolean }[];
     logicalDocuments: readonly { logicalDocumentRevisionId: string; documentVersionId: string; startPage: number; endPage: number }[];
   }> {
     const [run] = await this.db.select({
@@ -841,15 +849,21 @@ export class PostgresWorkflowCoordinator {
     }).from(processingRuns).innerJoin(inputRevisions, eq(processingRuns.inputRevisionId, inputRevisions.id))
       .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
     if (!run) throw new CaseNotFoundError();
-    const pageRecords = await this.db.select({
+    const pageRecords = (await this.db.select({
       documentVersionId: pages.documentVersionId,
       submittedFilename: documentVersions.submittedFilename,
       pageNumber: pages.pageNumber,
+      needsOcr: pages.needsOcr,
+      nativeCharacterCount: pages.nativeCharacterCount,
+      ocrOutputId: pageOcrOutputs.id,
+      renderArtifactId: pages.renderArtifactId,
     }).from(pages)
       .innerJoin(documentInspections, eq(pages.documentInspectionId, documentInspections.id))
       .innerJoin(documentVersions, eq(pages.documentVersionId, documentVersions.id))
+      .leftJoin(pageOcrOutputs, eq(pageOcrOutputs.pageId, pages.id))
       .where(eq(documentInspections.runId, runId))
-      .orderBy(asc(documentVersions.submittedFilename), asc(pages.pageNumber));
+      .orderBy(asc(documentVersions.submittedFilename), asc(pages.pageNumber)))
+      .map(({ ocrOutputId, renderArtifactId, ...page }) => ({ ...page, ocrAvailable: ocrOutputId !== null, renderAvailable: renderArtifactId !== null }));
     const logicalDocuments = await this.db.select({
       logicalDocumentRevisionId: logicalDocumentRevisions.id,
       documentVersionId: logicalDocumentRevisions.documentVersionId,
@@ -1030,7 +1044,7 @@ export class PostgresWorkflowCoordinator {
       );
 
       const completedAt = new Date();
-      const stages = ["inspect", "extract", "validate"];
+      const stages = ["inspect", "extract", ...(result.recoverySession ? ["agent_recovery"] : []), "validate"];
       await tx.insert(stageExecutions).values(stages.map((stageType, sequence) => ({
         id: randomUUID(), runId, stageType, sequence: sequence + 1, status: "succeeded", completedAt,
       })));
@@ -1080,6 +1094,27 @@ export class PostgresWorkflowCoordinator {
           id: randomUUID(), reconciliationId: item.reconciliationId, candidateId: candidate.candidateId, status: candidate.status,
         }))));
       }
+      if (result.gaps?.length) {
+        const gapIds = new Set(result.gaps.map((gap) => gap.gapId));
+        await tx.insert(extractionGaps).values(result.gaps.map((gap) => ({
+          id: gap.gapId, runId, fieldSchemaId: gap.fieldSchemaId, fieldSchemaVersion: gap.fieldSchemaVersion, valueType: gap.valueType,
+          required: gap.required, originatingStage: gap.originatingStage, reasonCode: gap.reasonCode, attemptedPaths: gap.attemptedPaths,
+          documentVersionId: gap.scope.documentVersionId, logicalDocumentRevisionId: gap.scope.logicalDocumentRevisionId, pageNumber: gap.scope.pageNumber,
+        })));
+        const resolutions = (result.gapResolutions ?? []).filter((resolution) => gapIds.has(resolution.gapId));
+        if (resolutions.length) {
+          await tx.insert(gapResolutions).values(resolutions.map((resolution) => ({
+            id: randomUUID(), gapId: resolution.gapId, resolutionType: resolution.resolutionType, reference: resolution.reference,
+          })));
+        }
+      }
+      if (result.eligibility) {
+        await tx.insert(agentEligibilityDecisions).values({
+          id: result.eligibility.decisionId, runId, policyVersion: result.eligibility.policyVersion, gapIds: result.eligibility.gapIds,
+          decision: result.eligibility.decision, reasonCodes: result.eligibility.reasonCodes,
+        });
+      }
+      if (result.recoverySession) await insertAgentSession(tx, caseId, runId, null, result.recoverySession);
       await tx.insert(validationFindings).values(result.findings.map((item) => ({
         id: randomUUID(), resultRevisionId: result.resultRevisionId,
         ruleId: item.ruleId, ruleVersion: item.ruleVersion, ruleSetId: item.ruleSetId,
@@ -1140,27 +1175,7 @@ export class PostgresWorkflowCoordinator {
       }));
       if (issues.length > 0) await tx.insert(reviewIssues).values(issues);
       const session = report.session;
-      if (session) {
-        await tx.insert(agentSessions).values({
-          id: session.sessionId, caseId, runId, resultRevisionId, mode: session.mode,
-          harnessId: session.harnessId, harnessVersion: session.harnessVersion,
-          modelLabel: session.modelLabel, modelRoute: session.modelRoute,
-          promptVersion: session.promptVersion, promptHash: session.promptHash,
-          configurationVersion: session.configurationVersion, toolRegistryVersion: session.toolRegistryVersion,
-          offeredTools: session.offeredTools, budget: session.budget,
-          iterations: session.iterations, toolCalls: session.toolCalls, usage: session.usage,
-          estimatedCost: session.estimatedCost?.amount ?? null, terminalReason: session.terminalReason,
-          startedAt: new Date(session.startedAt), completedAt: new Date(session.completedAt),
-        });
-        if (session.steps.length > 0) {
-          await tx.insert(agentSteps).values(session.steps.map((step) => ({
-            id: randomUUID(), sessionId: session.sessionId, sequence: step.sequence,
-            toolName: step.toolName, toolVersion: step.toolVersion ?? null, argumentHash: step.argumentHash,
-            outcome: step.outcome, summary: step.summary, budgetState: step.budgetState,
-            startedAt: new Date(step.startedAt), completedAt: new Date(step.completedAt),
-          })));
-        }
-      }
+      if (session) await insertAgentSession(tx, caseId, runId, resultRevisionId, session);
       await tx.insert(agentReports).values({
         id: randomUUID(), caseId, runId, resultRevisionId, sessionId: session?.sessionId ?? null,
         availability: report.reportAvailability,
@@ -1172,8 +1187,9 @@ export class PostgresWorkflowCoordinator {
         modelLabel: report.modelLabel, estimatedCost: report.estimatedCost ?? null,
       });
       const completedAt = new Date();
+      const [{ value: stageCount } = { value: 0 }] = await tx.select({ value: count() }).from(stageExecutions).where(eq(stageExecutions.runId, runId));
       await tx.insert(stageExecutions).values({
-        id: randomUUID(), runId, stageType: "agent_report", sequence: 4, status: "succeeded", completedAt,
+        id: randomUUID(), runId, stageType: "agent_report", sequence: Number(stageCount) + 1, status: "succeeded", completedAt,
       });
       await tx.update(processingRuns).set({ status: "completed", completedAt }).where(eq(processingRuns.id, runId));
       await tx.insert(processingRunTransitions).values({
@@ -1266,6 +1282,32 @@ function validateOfflineProvenance(
   if (reconciledClaimIds.size !== claimIds.size || [...claimIds].some((id) => !reconciledClaimIds.has(id))) throw new Error("Every claim must result from reconciliation");
   if (result.findings.some((item) => item.materialInputRefs.length === 0 || item.materialInputRefs.some((id) => !evidenceIds.has(id) && !claimIds.has(id)))) {
     throw new Error("Offline finding reference is invalid");
+  }
+}
+
+type Transaction = Parameters<Parameters<ReturnType<typeof drizzle>["transaction"]>[0]>[0];
+
+/** Durable Agent session and step records (DAT-REQ-131, DAT-REQ-132). */
+async function insertAgentSession(tx: Transaction, caseId: string, runId: string, resultRevisionId: string | null, session: AgentSessionTrace): Promise<void> {
+  await tx.insert(agentSessions).values({
+    id: session.sessionId, caseId, runId, resultRevisionId, mode: session.mode,
+    harnessId: session.harnessId, harnessVersion: session.harnessVersion,
+    modelLabel: session.modelLabel, modelRoute: session.modelRoute,
+    promptVersion: session.promptVersion, promptHash: session.promptHash,
+    configurationVersion: session.configurationVersion, toolRegistryVersion: session.toolRegistryVersion,
+    offeredTools: session.offeredTools, budget: session.budget,
+    iterations: session.iterations, toolCalls: session.toolCalls, usage: session.usage,
+    estimatedCost: session.estimatedCost?.amount ?? null, terminalReason: session.terminalReason,
+    boundGapIds: session.boundGapIds ?? null, submittedCandidateIds: session.submittedCandidateIds ?? null,
+    startedAt: new Date(session.startedAt), completedAt: new Date(session.completedAt),
+  });
+  if (session.steps.length > 0) {
+    await tx.insert(agentSteps).values(session.steps.map((step) => ({
+      id: randomUUID(), sessionId: session.sessionId, sequence: step.sequence,
+      toolName: step.toolName, toolVersion: step.toolVersion ?? null, argumentHash: step.argumentHash,
+      outcome: step.outcome, summary: step.summary, budgetState: step.budgetState,
+      startedAt: new Date(step.startedAt), completedAt: new Date(step.completedAt),
+    })));
   }
 }
 

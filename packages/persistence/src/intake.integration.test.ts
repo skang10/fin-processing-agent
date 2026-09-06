@@ -8,6 +8,7 @@ import {
   PostgresCaseCommandService,
   PostgresCaseQueryService,
   PostgresWorkflowCoordinator,
+  agentEligibilityDecisions,
   agentReports,
   agentSessions,
   agentSteps,
@@ -30,6 +31,8 @@ import {
   documentInspections,
   evidenceRecords,
   extractionCandidates,
+  extractionGaps,
+  gapResolutions,
   outboxEvents,
   pageOcrOutputs,
   pageClassifications,
@@ -206,7 +209,7 @@ describe("PostgresCaseCommandService", () => {
         harnessId: "pi-case-review-harness", harnessVersion: "pi-coding-agent@0.85.1", modelLabel: "findoc-fake/case-review-script-v1", modelRoute: "fake" as const,
         promptVersion: "case-review-report-prompt-1.0.0", promptHash: "abc", configurationVersion: "pi-harness-1.0.0", toolRegistryVersion: "case-review-tools-1.0.0",
         offeredTools: ["list_findings", "get_finding_references", "submit_case_review_brief"],
-        budget: { maxIterations: 6, maxToolCalls: 8, maxModelCalls: 6, maxInputTokens: 60000, maxOutputTokens: 8000, maxWallClockMs: 60000, maxEstimatedCostUsd: 0.25, maxConsecutiveNoProgressSteps: 2 },
+        budget: { maxIterations: 6, maxToolCalls: 8, maxModelCalls: 6, maxInputTokens: 60000, maxOutputTokens: 8000, maxWallClockMs: 60000, maxEstimatedCostUsd: 0.25, maxVlmCalls: 2, maxOcrPages: 3, maxConsecutiveNoProgressSteps: 2 },
         iterations: 2, toolCalls: 2, usage: { available: true, modelCalls: 2, inputTokens: 400, outputTokens: 80 },
         estimatedCost: { amount: "0.0000", currency: "EUR" as const }, terminalReason: "report_submitted" as const,
         steps: [
@@ -216,6 +219,28 @@ describe("PostgresCaseCommandService", () => {
         startedAt: "2026-09-06T10:00:00.000Z", completedAt: "2026-09-06T10:00:04.000Z",
       },
       originalSubmission: { schema_version: "1.0.0", summary: "Synthetic case requires review." },
+      gaps: [{
+        gapId: "4c816f67-5f2f-4e21-8c17-7eb1e5383bbb", fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money" as const, required: true,
+        originatingStage: "extract" as const, reasonCode: "scanned_page_value_unresolved", attemptedPaths: ["native_text", "fixture_ocr"],
+        scope: { documentVersionId: document.documentVersionId, logicalDocumentRevisionId: logicalDocument.id, pageNumber: 1 },
+      }],
+      gapResolutions: [{ gapId: "4c816f67-5f2f-4e21-8c17-7eb1e5383bbb", resolutionType: "claim" as const, reference: claimId }],
+      eligibility: { decisionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383ccc", policyVersion: "recovery-eligibility-1.0.0", gapIds: ["4c816f67-5f2f-4e21-8c17-7eb1e5383bbb"], decision: "eligible" as const, reasonCodes: ["eligible_required_gap"] },
+      recoverySession: {
+        sessionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383ddd", mode: "adaptive_recovery" as const,
+        harnessId: "pi-adaptive-recovery-harness", harnessVersion: "pi-coding-agent@0.85.1", modelLabel: "findoc-fake/case-review-script-v1", modelRoute: "fake" as const,
+        promptVersion: "adaptive-recovery-prompt-1.0.0", promptHash: "abc", configurationVersion: "pi-harness-1.1.0", toolRegistryVersion: "adaptive-recovery-tools-1.0.0",
+        offeredTools: ["get_extraction_gaps", "extract_with_vlm", "submit_extraction_candidates"],
+        budget: { maxIterations: 6, maxToolCalls: 8, maxModelCalls: 6, maxInputTokens: 60000, maxOutputTokens: 8000, maxWallClockMs: 60000, maxEstimatedCostUsd: 0.25, maxVlmCalls: 2, maxOcrPages: 3, maxConsecutiveNoProgressSteps: 2 },
+        iterations: 3, toolCalls: 3, usage: { available: true, modelCalls: 3, inputTokens: 300, outputTokens: 60 },
+        estimatedCost: { amount: "0.0000", currency: "EUR" as const }, terminalReason: "gaps_resolved" as const,
+        boundGapIds: ["4c816f67-5f2f-4e21-8c17-7eb1e5383bbb"],
+        steps: [
+          { sequence: 1, toolName: "get_extraction_gaps", toolVersion: "1.0.0", argumentHash: "g1", outcome: "succeeded" as const, summary: "Listed bound extraction gaps", startedAt: "2026-09-06T09:59:00.000Z", completedAt: "2026-09-06T09:59:01.000Z", budgetState: { iterationsUsed: 1, toolCallsUsed: 1 } },
+          { sequence: 2, toolName: "submit_extraction_candidates", toolVersion: "1.0.0", argumentHash: "g2", outcome: "succeeded" as const, summary: "Submitted 1 extraction candidate(s)", startedAt: "2026-09-06T09:59:02.000Z", completedAt: "2026-09-06T09:59:03.000Z", budgetState: { iterationsUsed: 2, toolCallsUsed: 2 } },
+        ],
+        startedAt: "2026-09-06T09:59:00.000Z", completedAt: "2026-09-06T09:59:04.000Z",
+      },
       findings: ruleIds.map((ruleId) => ({
         ruleId, ruleVersion: "1.0.0", ruleSetId: "demo-de-personal-loan-v1", ruleSetVersion: "1.0.0",
         inputSnapshotId: inputRevisionId, resultRevisionId, status: ruleId === "VAL_EMPLOYER_CONSISTENCY_001" ? "failed" : "passed",
@@ -274,7 +299,7 @@ describe("PostgresCaseCommandService", () => {
       connection.db.select({ value: count() }).from(reconciliationCandidateLinks),
     ]);
     expect(status).toMatchObject({ lifecycle: "ready_for_review", progress: "human_review", version: 2 });
-    expect([stageCount?.value, issueCount?.value, reportCount?.value]).toEqual([4, 1, 1]);
+    expect([stageCount?.value, issueCount?.value, reportCount?.value]).toEqual([5, 1, 1]);
     expect([resultCount?.value, findingCount?.value, dispositionCount?.value]).toEqual([1, 5, 1]);
     expect([evidenceCount?.value, claimCount?.value, claimEvidenceCount?.value]).toEqual([1, 1, 1]);
     expect([candidateCount?.value, candidateEvidenceCount?.value, claimCandidateCount?.value]).toEqual([1, 1, 1]);
@@ -290,7 +315,12 @@ describe("PostgresCaseCommandService", () => {
       availability: "ready", modelLabel: "fake-pi-harness-v1", estimatedCost: { amount: "0.0000", currency: "EUR" },
       currentStep: "awaiting_human_review",
       session: { harnessLabel: "pi-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review_report", terminalReason: "report_submitted", iterations: 2, toolCalls: 2, usageAvailable: true },
+      recoverySession: { harnessLabel: "pi-adaptive-recovery-harness (pi-coding-agent@0.85.1)", mode: "adaptive_recovery", terminalReason: "gaps_resolved", iterations: 3, toolCalls: 3, usageAvailable: true, gapCount: 1, candidatesSubmitted: 1 },
       events: [
+        { activity: "Started adaptive recovery session" },
+        { activity: "Listed bound extraction gaps", toolLabel: "get_extraction_gaps" },
+        { activity: "Submitted 1 extraction candidate(s)", toolLabel: "submit_extraction_candidates" },
+        { activity: "Session ended: gaps resolved" },
         { activity: "Started case review report session" },
         { activity: "Listed deterministic findings", toolLabel: "list_findings" },
         { activity: "Submitted a Case Review Brief", toolLabel: "submit_case_review_brief" },
@@ -298,11 +328,14 @@ describe("PostgresCaseCommandService", () => {
         { activity: "Checked 4 facts" }, { activity: "Created 1 review issues" }, { activity: "Generated review report" },
       ],
     });
-    const [[sessionCount], [stepCount]] = await Promise.all([
+    const [[sessionCount], [stepCount], [gapCount], [resolutionCount], [eligibilityCount]] = await Promise.all([
       connection.db.select({ value: count() }).from(agentSessions),
       connection.db.select({ value: count() }).from(agentSteps),
+      connection.db.select({ value: count() }).from(extractionGaps),
+      connection.db.select({ value: count() }).from(gapResolutions),
+      connection.db.select({ value: count() }).from(agentEligibilityDecisions),
     ]);
-    expect([sessionCount?.value, stepCount?.value]).toEqual([1, 2]);
+    expect([sessionCount?.value, stepCount?.value, gapCount?.value, resolutionCount?.value, eligibilityCount?.value]).toEqual([2, 4, 1, 1, 1]);
     const [persistedReport] = await connection.db.select({ sessionId: agentReports.sessionId, originalSubmission: agentReports.originalSubmission }).from(agentReports)
       .where(eq(agentReports.caseId, accepted.caseId)).limit(1);
     expect(persistedReport).toMatchObject({ sessionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383aaa", originalSubmission: { schema_version: "1.0.0" } });

@@ -6,12 +6,13 @@ This section is the operational starting point for the next implementation agent
 
 ### Repository and runtime state
 
-1. The repository is on `main`. The latest committed change before this handoff update is `b3fdef3 data: confirm first five golden candidates`; the bounded Pi harness described below is the next commit.
-2. The Docker Compose API, Worker, Review Web, PostgreSQL, and MinIO services were rebuilt and healthy after the harness change. The local Review Workbench is available at `http://localhost:5173` and the API at `http://localhost:3000` while those services remain running.
-3. The Worker now runs every processable case through `packages/agent-pi`, a real `pi-coding-agent` session (pinned `@earendil-works/pi-coding-agent@0.85.1`; the `@mariozechner` scope named in ADR-001 is deprecated upstream) with an empty base-tool set, a discovery-free resource loader, in-memory session, settings, credential, and model-runtime stores, three registered report tools (`list_findings`, `get_finding_references`, `submit_case_review_brief`), a control plane that enforces schema validation, scope authorization, tool-call reservation, idempotent duplicate resolution, no-progress stopping, iteration, token, cost, and wall-clock budgets, and a deterministic scripted fake model. Sessions and steps are persisted in `agent_sessions` and `agent_steps` (migration `0020`), linked from `agent_reports`, and projected into the case Agent log with harness label, terminal reason, iteration and tool-call counts, and one event per tool step.
-4. Worker configuration: `AGENT_HARNESS=pi|fake` (default `pi`), `AGENT_MODEL=fake|<provider>/<model-id>` (default `fake`), `AGENT_MODEL_API_KEY` for a live route, and `PI_OFFLINE=1` (set automatically for the fake route). The live route is implemented but has not been run against any provider.
-5. `pnpm check` (85 unit tests), `pnpm test:integration` (7 Docker-backed tests), `pnpm build`, and `git diff --check` passed. The six golden cases were rerun through the rebuilt demo with identical report availability, issue codes, and finding counts to the previous run.
-6. Docker Compose still warns when shell-level `POSTGRES_PASSWORD` and `MINIO_SECRET_KEY` are absent even though the running demo uses its generated local configuration. Treat removal of this warning as cleanup, not as evidence that a service is unhealthy.
+1. The repository is on `main`. The latest committed change before this handoff update is `65908d2 feat: embed bounded Pi case review harness`; the adaptive-recovery slice described below is the next commit.
+2. The Docker Compose API, Worker, Review Web, PostgreSQL, and MinIO services were rebuilt and healthy after the recovery change. The local Review Workbench is available at `http://localhost:5173` and the API at `http://localhost:3000` while those services remain running.
+3. The Worker runs every processable case through `packages/agent-pi`, a real `pi-coding-agent` session (pinned `@earendil-works/pi-coding-agent@0.85.1`; the `@mariozechner` scope named in ADR-001 is deprecated upstream) with an empty base-tool set, a discovery-free resource loader, in-memory stores, and a trusted control plane for schema validation, scope authorization, tool-call, VLM-call, and OCR-page reservation, idempotent duplicate resolution, no-progress stopping, and iteration, token, cost, and wall-clock budgets. Report mode offers `list_findings`, `get_finding_references`, and `submit_case_review_brief`; adaptive-recovery mode offers the eight tools of the Agent specification and accepts only submitted values that a tool returned for the same page.
+4. Fixed extraction now opens explicit required gaps (`extraction_gaps`, `gap_resolutions`, migration `0021`) and the versioned policy `recovery-eligibility-1.0.0` persists its decision (`agent_eligibility_decisions`) before any recovery session starts. Submitted candidates enter ordinary reconciliation; a resolved gap becomes a claim, an unresolved required gap keeps `unresolvedRequiredGap` true and routes the case to human review with an inconclusive income finding.
+5. Worker configuration: `AGENT_HARNESS=pi|fake` (default `pi`), `AGENT_MODEL=fake|<provider>/<model-id>` (default `fake`), `AGENT_MODEL_API_KEY` for a live route, and `PI_OFFLINE=1` (set automatically for the fake route). The `fake` harness uses model-free adapters for both modes so golden outcomes stay identical. The live route is implemented for both modes but has not been run against any provider.
+6. `pnpm check` (99 unit tests), `pnpm test:integration` (7 Docker-backed tests), `pnpm build`, and `git diff --check` passed. The six golden cases were rerun through the rebuilt demo; 001 to 005 are unchanged and 006 now records an eligible decision, a recovery session `gaps_resolved` after `get_extraction_gaps`, `inspect_page`, `run_ocr`, `extract_with_vlm`, and `submit_extraction_candidates`, the deterministic `income_conflict` finding, and a `policy_rejected` report.
+7. Docker Compose still warns when shell-level `POSTGRES_PASSWORD` and `MINIO_SECRET_KEY` are absent even though the running demo uses its generated local configuration. Treat removal of this warning as cleanup, not as evidence that a service is unhealthy.
 
 ### Implemented baseline
 
@@ -21,7 +22,7 @@ The implemented baseline is summarized in `AGENTS.md`. In practical terms, the r
 2. Durable PostgreSQL workflow state, a transactional outbox, pg-boss processing, immutable run and result revisions, MinIO artifact storage, and scoped artifact delivery.
 3. PDF Inspector-backed native extraction and PDFium rendering behind project interfaces.
 4. Selective OCR orchestration and persisted OCR provenance using a deterministic fixture adapter. This is not real OCR and must not be evaluated or described as OCR recognition quality.
-5. Deterministic page classification, contiguous logical-document grouping, candidate creation, reconciliation lineage, five registered validation rules, recommended document-processing dispositions, deterministic report verification, and the bounded report-mode Pi harness with persisted session traces.
+5. Deterministic page classification, contiguous logical-document grouping, candidate creation, reconciliation lineage, explicit extraction gaps with a versioned recovery eligibility policy, five registered validation rules, recommended document-processing dispositions, deterministic report verification, and bounded report-mode and adaptive-recovery Pi harnesses with persisted session traces.
 6. The Review Workbench flows for active review, changes requested, completed cases, evidence navigation, Agent and human issues, requested-change drafts, final review, downstream handoff projection, and bounded case Agent logs.
 7. Six structured synthetic golden candidates, runtime loading, candidate lifecycle commands, evaluation-run capture, and immutable offline evaluation reports.
 
@@ -36,34 +37,32 @@ Candidates 001–005 were confirmed by `sulmae` on 2026-09-06 after explicit hum
 | `golden-003-multiple-review-issues` | Report ready; completeness, employer, and income issues; five findings; three tool steps | Confirmed by `sulmae`. |
 | `golden-004-missing-bank-evidence` | Report ready; document-completeness issue; five findings; three tool steps | Confirmed by `sulmae`. |
 | `golden-005-instruction-inert` | Report ready; no issues; five findings; two tool steps | Confirmed by `sulmae`; mixed-PDF coverage records `implemented_offline_path`. |
-| `golden-006-scanned-adaptive-unavailable` | Report unavailable with `policy_rejected` from the policy-violation script; deterministic `income_conflict` finding present; issue projection empty | Keep pending. The bounded adaptive extraction path is not implemented, so this candidate must not be used to claim that acceptance path is complete. |
+| `golden-006-scanned-adaptive-unavailable` | Eligible decision; recovery session `gaps_resolved` with five tool steps; recovered payslip income claim; deterministic `income_conflict` finding; report unavailable with `policy_rejected`; issue projection empty | Keep pending until a human reviews the PDF, the truth file, and the recovery trace in the Workbench. The recovery ports are fixture adapters, so this case demonstrates the bounded loop, not OCR or VLM quality. The `runtime_support_pending` coverage marker is now a human decision. |
 
 The most recent successfully submitted runtime case identifiers were:
 
 ```text
-golden-001-native-clear                  bd3d47a6-e31f-449b-bf3f-dbb658a8ba4e
-golden-002-employer-conflict             58016b1e-ea03-492b-bc96-0ad51e352c56
-golden-003-multiple-review-issues        95e768c3-69ab-425a-b8eb-56bfaab6de20
-golden-004-missing-bank-evidence         7581354c-e1ce-4e7e-aee2-225d3d59c079
-golden-005-instruction-inert             a2da52ad-fab6-434a-a3e9-41305532b3f8
-golden-006-scanned-adaptive-unavailable  4fe1c511-0661-44f8-a8de-9d866e87ae7a
+golden-001-native-clear                  0820da8a-d447-4568-9aad-649247d5fc26
+golden-002-employer-conflict             303ccab1-5f5a-4823-961f-bc446c13da2b
+golden-003-multiple-review-issues        1bb8719a-1e2d-4282-84e0-75950c99b897
+golden-004-missing-bank-evidence         cbc53f6b-b865-434c-9a54-edcc5a197661
+golden-005-instruction-inert             43b76085-50d0-4d19-948c-f3f3cd4cb166
+golden-006-scanned-adaptive-unavailable  457193f6-c76c-4bfc-a91e-8e6700e8e6c5
 ```
 
 These identifiers belong to the preserved local demo database and may disappear after `pnpm demo:reset`.
 
 ### Immediate next task
 
-Continue `BL-002` with the adaptive-recovery mode, keeping the report-mode harness boundaries intact:
+Human review checkpoint for the adaptive case, then the remaining `BL-002` hardening:
 
-1. Add the extraction-gap model (`DAT-REQ-101` to `DAT-REQ-105`): persisted gaps with originating stage, attempted fixed paths, and resolution records; make `unresolvedRequiredGap` in the validation input read from persisted gaps instead of the fixed `false`.
-2. Implement the versioned eligibility policy (`AGT-REQ-104` to `AGT-REQ-109`) as deterministic workflow code that persists its decision and reason codes.
-3. Register the recovery tools (`inspect_page`, `get_native_text`, `run_ocr`, `render_page_region`, `classify_page`, `extract_with_vlm`, `get_extraction_gaps`, `submit_extraction_candidates`) in the same immutable catalog pattern as the report tools, with page, region, and field-schema scope authorization and fake adapters for `run_ocr`, `render_page_region`, and `extract_with_vlm`.
-4. Route submitted Agent candidates through the existing reconciliation path and gap resolution; never into claims or findings directly.
-5. Give candidate 006 a real recovery path: open an income-evidence gap on its scanned payslip page, let the fake-model recovery script resolve it through the bounded loop, and keep the report verifier rejection fixture separate from the recovery fixture.
-6. Extend the Review Workbench Agent log to show the new `session` block (harness label, terminal reason, iterations, tool calls) and per-step events; the API already returns them.
-7. Run `pnpm check`, `pnpm test:integration`, `pnpm build`, `git diff --check`, and the six-case Docker rerun after each slice.
+1. Open case `457193f6-c76c-4bfc-a91e-8e6700e8e6c5` in the Review Workbench, read the Agent log (recovery and report sessions), the findings, and the evidence, and judge whether the trace is understandable to a reviewer. Record any wording or ordering changes as issues rather than editing truth.
+2. Decide on the `runtime_support_pending` coverage marker of candidate 006. If the human review accepts the implemented offline recovery path, replace it with `implemented_offline_path`, run `pnpm dataset:validate`, and confirm the candidate with `pnpm dataset:confirm -- golden-006-scanned-adaptive-unavailable REVIEWER` using the real reviewer identity. Do not confirm on an AI agent's authority.
+3. Persist Agent steps incrementally during a session (AGT-REQ-074, AGT-REQ-099) instead of at session end, and add a Worker-termination test that recovers from PostgreSQL state.
+4. Replace the fixture recovery ports with real adapters behind the same interface: committed OCR artifact reuse for `run_ocr`, PDFium crop rendering for `render_page_region`, and the provider-neutral VLM gateway for `extract_with_vlm`, each labeled by mode so the demo never claims recognition quality it does not have.
+5. Run `pnpm check`, `pnpm test:integration`, `pnpm build`, `git diff --check`, and the six-case Docker rerun after each slice.
 
-Do not run `pnpm dataset:build` while any candidate remains pending. In particular, do not remove candidate 006's runtime gate simply to create a release.
+Do not run `pnpm dataset:build` while any candidate remains pending.
 
 ### Global next steps
 
@@ -77,7 +76,7 @@ After the immediate task, proceed in this order:
 6. **Expand from six to twenty golden cases** only after the six-case pipeline is credible. Prioritize meaningful document variation rather than many nearly identical templates.
 7. **Finish V1 hardening and demonstration evidence**: crop rendering, JPEG/PNG execution, OS resource and network isolation, observability evidence, browser acceptance coverage, README/demo limitations, and a reproducible Docker acceptance run.
 
-The next human review checkpoint should be after the adaptive-recovery slice: inspect the difficult scanned adaptive case in the Review Workbench, confirm that its evidence, recovery trace, and Agent report are understandable, and approve the frozen six-case golden release before benchmark numbers are presented.
+The next human review checkpoint is now: inspect the difficult scanned adaptive case in the Review Workbench, confirm that its evidence, recovery trace, and Agent report are understandable, confirm candidate 006, and approve the frozen six-case golden release before benchmark numbers are presented.
 
 ## Project
 

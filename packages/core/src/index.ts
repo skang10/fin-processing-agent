@@ -71,7 +71,43 @@ export interface AgentBudgetEnvelope {
   readonly maxOutputTokens: number;
   readonly maxWallClockMs: number;
   readonly maxEstimatedCostUsd: number;
+  readonly maxVlmCalls: number;
+  readonly maxOcrPages: number;
   readonly maxConsecutiveNoProgressSteps: number;
+}
+
+export interface ExtractionGapScope {
+  readonly documentVersionId: string;
+  readonly logicalDocumentRevisionId: string;
+  readonly pageNumber: number;
+}
+
+/** Explicit unresolved extraction requirement (DAT-REQ-101 to DAT-REQ-105). */
+export interface ExtractionGap {
+  readonly gapId: string;
+  readonly fieldSchemaId: string;
+  readonly fieldSchemaVersion: string;
+  readonly valueType: "string" | "money" | "date";
+  readonly required: boolean;
+  readonly originatingStage: "extract";
+  readonly reasonCode: string;
+  readonly attemptedPaths: readonly string[];
+  readonly scope: ExtractionGapScope;
+}
+
+export interface GapResolution {
+  readonly gapId: string;
+  readonly resolutionType: "claim" | "terminal_reason" | "review_action";
+  readonly reference: string;
+}
+
+/** Persisted Agent-in-the-Loop eligibility decision (AGT-REQ-105). */
+export interface AgentEligibilityDecision {
+  readonly decisionId: string;
+  readonly policyVersion: string;
+  readonly gapIds: readonly string[];
+  readonly decision: "eligible" | "ineligible";
+  readonly reasonCodes: readonly string[];
 }
 
 export interface AgentStepTrace {
@@ -114,6 +150,8 @@ export interface AgentSessionTrace {
   readonly steps: readonly AgentStepTrace[];
   readonly startedAt: string;
   readonly completedAt: string;
+  readonly boundGapIds?: readonly string[];
+  readonly submittedCandidateIds?: readonly string[];
 }
 
 export interface OfflineIssueResult {
@@ -143,6 +181,10 @@ export interface OfflineDeterministicResult extends OfflineReportInput {
   readonly claims: readonly OfflineClaimResult[];
   readonly candidates: readonly ExtractionCandidate[];
   readonly reconciliations: readonly PersistedCandidateReconciliation[];
+  readonly gaps?: readonly ExtractionGap[];
+  readonly gapResolutions?: readonly GapResolution[];
+  readonly eligibility?: AgentEligibilityDecision;
+  readonly recoverySession?: AgentSessionTrace;
 }
 
 export interface OfflineReportResult {
@@ -165,7 +207,7 @@ export interface OfflineEvidenceResult {
   readonly jsonPointer?: string;
   readonly documentVersionId?: string;
   readonly pageNumber?: number;
-  readonly extractionMethod: "structured_input" | "offline_fixture";
+  readonly extractionMethod: "structured_input" | "offline_fixture" | "agent_vlm_extraction" | "agent_ocr_reading";
   readonly processorVersion: string;
 }
 
@@ -331,19 +373,22 @@ export interface AgentReportView {
   readonly checkedFacts: readonly { ruleId: string; statement: string; sourceType: "deterministic_check"; status: "passed"; references: readonly string[] }[];
 }
 
+export interface AgentLogSessionView {
+  readonly harnessLabel: string;
+  readonly mode: AgentSessionMode;
+  readonly terminalReason: AgentTerminalReason;
+  readonly iterations: number;
+  readonly toolCalls: number;
+  readonly usageAvailable: boolean;
+}
+
 export interface AgentLogView {
   readonly availability: "pending" | "ready" | "unavailable";
   readonly modelLabel?: string;
   readonly estimatedCost?: { readonly amount: string; readonly currency: "EUR" };
   readonly currentStep: "processing" | "awaiting_human_review" | "review_completed";
-  readonly session?: {
-    readonly harnessLabel: string;
-    readonly mode: AgentSessionMode;
-    readonly terminalReason: AgentTerminalReason;
-    readonly iterations: number;
-    readonly toolCalls: number;
-    readonly usageAvailable: boolean;
-  };
+  readonly session?: AgentLogSessionView;
+  readonly recoverySession?: AgentLogSessionView & { readonly gapCount: number; readonly candidatesSubmitted: number };
   readonly events: readonly { readonly timestamp: string; readonly activity: string; readonly toolLabel?: string }[];
 }
 

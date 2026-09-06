@@ -386,6 +386,40 @@ export const finalReviews = pgTable("final_reviews", {
   uniqueIndex("final_review_command_uq").on(table.actorId, table.commandId),
 ]);
 
+export const extractionGaps = pgTable("extraction_gaps", {
+  id: uuid("id").primaryKey(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id),
+  fieldSchemaId: text("field_schema_id").notNull(),
+  fieldSchemaVersion: text("field_schema_version").notNull(),
+  valueType: text("value_type").notNull(),
+  required: boolean("required").notNull(),
+  originatingStage: text("originating_stage").notNull(),
+  reasonCode: text("reason_code").notNull(),
+  attemptedPaths: jsonb("attempted_paths").notNull(),
+  documentVersionId: uuid("document_version_id").notNull().references(() => documentVersions.id),
+  logicalDocumentRevisionId: uuid("logical_document_revision_id").notNull().references(() => logicalDocumentRevisions.id),
+  pageNumber: integer("page_number").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("extraction_gap_run_idx").on(table.runId)]);
+
+export const gapResolutions = pgTable("gap_resolutions", {
+  id: uuid("id").primaryKey(),
+  gapId: uuid("gap_id").notNull().references(() => extractionGaps.id),
+  resolutionType: text("resolution_type").notNull(),
+  reference: text("reference").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("gap_resolution_gap_idx").on(table.gapId)]);
+
+export const agentEligibilityDecisions = pgTable("agent_eligibility_decisions", {
+  id: uuid("id").primaryKey(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id),
+  policyVersion: text("policy_version").notNull(),
+  gapIds: jsonb("gap_ids").notNull(),
+  decision: text("decision").notNull(),
+  reasonCodes: jsonb("reason_codes").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("agent_eligibility_run_idx").on(table.runId)]);
+
 export const agentSessions = pgTable("agent_sessions", {
   id: uuid("id").primaryKey(),
   caseId: uuid("case_id").notNull().references(() => cases.id),
@@ -407,6 +441,8 @@ export const agentSessions = pgTable("agent_sessions", {
   usage: jsonb("usage").notNull(),
   estimatedCost: text("estimated_cost"),
   terminalReason: text("terminal_reason").notNull(),
+  boundGapIds: jsonb("bound_gap_ids"),
+  submittedCandidateIds: jsonb("submitted_candidate_ids"),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
   completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

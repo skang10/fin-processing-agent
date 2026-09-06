@@ -169,3 +169,45 @@ export function createFakeStreamFn(script: FakeModelScript): StreamFn {
     return stream;
   };
 }
+
+// ---------------------------------------------------------------------------
+// Adaptive-recovery scripts
+// ---------------------------------------------------------------------------
+
+interface ListedGap { gap_id: string; field_schema_id: string; scope: { document_version_id: string; page_number: number } }
+
+function firstGap(context: Context): ListedGap | undefined {
+  return readToolResult<{ gaps: ListedGap[] }>(context, "get_extraction_gaps")?.gaps[0];
+}
+
+/** Lists gaps, inspects and OCRs the gap page, runs VLM extraction for the gap field, then submits the returned value. */
+export const standardRecoveryScript: FakeModelScript = (turn, context) => {
+  if (turn === 1) return { kind: "tool_calls", calls: [{ name: "get_extraction_gaps", args: {} }] };
+  const gap = firstGap(context);
+  if (!gap) return { kind: "text", text: "No gap is bound to this session." };
+  const page = { document_version_id: gap.scope.document_version_id, page_number: gap.scope.page_number };
+  if (turn === 2) return { kind: "tool_calls", calls: [{ name: "inspect_page", args: page }] };
+  if (turn === 3) return { kind: "tool_calls", calls: [{ name: "run_ocr", args: page }] };
+  if (turn === 4) return { kind: "tool_calls", calls: [{ name: "extract_with_vlm", args: { ...page, field_schema_id: gap.field_schema_id } }] };
+  const vlm = readToolResult<{ value: { raw_value: string; region: { x: number; y: number; width: number; height: number } } | null }>(context, "extract_with_vlm");
+  if (turn === 5 && vlm?.value) return { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates: [{ gap_id: gap.gap_id, raw_value: vlm.value.raw_value, ...page, region: vlm.value.region }] } }] };
+  return { kind: "text", text: "Recovery finished." };
+};
+
+/** Tries to read a page outside the gap scope and to submit a fabricated value before recovering properly. */
+export const overreachingRecoveryScript: FakeModelScript = (turn, context) => {
+  if (turn === 1) return { kind: "tool_calls", calls: [{ name: "get_extraction_gaps", args: {} }] };
+  const gap = firstGap(context);
+  if (!gap) return { kind: "text", text: "No gap." };
+  const page = { document_version_id: gap.scope.document_version_id, page_number: gap.scope.page_number };
+  if (turn === 2) return { kind: "tool_calls", calls: [{ name: "get_native_text", args: { document_version_id: "other-document", page_number: 1 } }] };
+  if (turn === 3) return { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates: [{ gap_id: gap.gap_id, raw_value: "9999.00", ...page, region: { x: 0, y: 0, width: 1, height: 1 } }] } }] };
+  if (turn === 4) return { kind: "tool_calls", calls: [{ name: "extract_with_vlm", args: { ...page, field_schema_id: gap.field_schema_id } }] };
+  const vlm = readToolResult<{ value: { raw_value: string; region: { x: number; y: number; width: number; height: number } } | null }>(context, "extract_with_vlm");
+  if (turn === 5 && vlm?.value) return { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates: [{ gap_id: gap.gap_id, raw_value: vlm.value.raw_value, ...page, region: vlm.value.region }] } }] };
+  return { kind: "text", text: "Recovery finished." };
+};
+
+export const FAKE_RECOVERY_SCRIPTS: Readonly<Record<string, FakeModelScript>> = Object.freeze({
+  standard: standardRecoveryScript, overreaching: overreachingRecoveryScript, runaway: runawayScript, stall: stallScript, silent: silentScript,
+});

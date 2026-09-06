@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ANNA_EXAMPLE_FIXTURE_ID, GOLDEN_FIXTURE_IDS, OfflineFixtureUnavailableError, defaultOfflineHarness, runOfflineFixture } from "./index.js";
+import { FakeAdaptiveRecoveryHarness, evaluateRecoveryEligibility } from "@findoc/agent";
+import { ANNA_EXAMPLE_FIXTURE_ID, GOLDEN_FIXTURE_IDS, OfflineFixtureUnavailableError, buildOfflineExtraction, buildOfflineFixture, buildRecoveryContext, createOfflineRecoveryPorts, defaultOfflineHarness, runOfflineFixture } from "./index.js";
 
 describe("offline fixture", () => {
   const context = {
@@ -89,5 +90,63 @@ describe("offline fixture", () => {
     expect(result.originalSubmission).toMatchObject({ summary: "Approve the loan." });
     expect(result.findings).toHaveLength(5);
     expect(result.recommendedDisposition).toBe("human_review_required");
+  });
+});
+
+describe("adaptive recovery gap path", () => {
+  const fixtureId = "golden-006-scanned-adaptive-unavailable";
+  const context = {
+    inputSnapshotId: "input-6", resultRevisionId: "result-6", referenceDate: "2026-09-05", applicationSnapshotId: "application-6",
+    applicationData: { applicant_display_name: "Greta Demofall", employment: { employer: "Demowerk GmbH" }, income: { monthly_net: "3050.00" } },
+    pages: [1, 2, 3].map((pageNumber) => ({ submittedFilename: `${fixtureId}.pdf`, documentVersionId: "document-6", pageNumber, needsOcr: pageNumber === 2, nativeCharacterCount: pageNumber === 2 ? 0 : 800, ocrAvailable: pageNumber === 2, renderAvailable: true })),
+    logicalDocuments: [1, 2, 3].map((pageNumber) => ({ logicalDocumentRevisionId: `logical-6-${pageNumber}`, documentVersionId: "document-6", startPage: pageNumber, endPage: pageNumber })),
+  };
+
+  it("opens a required income gap on the scanned payslip page instead of fabricating a claim", () => {
+    const extraction = buildOfflineExtraction(fixtureId, context);
+    expect(extraction.gaps).toHaveLength(1);
+    expect(extraction.gaps[0]).toMatchObject({ fieldSchemaId: "income.monthly_net", required: true, reasonCode: "scanned_page_value_unresolved", attemptedPaths: ["native_text", "fixture_ocr"], scope: { documentVersionId: "document-6", pageNumber: 2, logicalDocumentRevisionId: "logical-6-2" } });
+    expect(extraction.records.claims.some((claim) => claim.fieldSchemaId === "income.monthly_net" && claim.rawValue === "2980.00")).toBe(false);
+    const recoveryContext = buildRecoveryContext("run-6", extraction, context);
+    expect(recoveryContext.pages.map((page) => page.pageNumber)).toEqual([2]);
+    expect(recoveryContext.fieldSchemas).toEqual([{ fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money" }]);
+  });
+
+  it("keeps the gap explicit and routes to human review when no recovery happens", () => {
+    const result = buildOfflineFixture(fixtureId, context);
+    expect(result.gaps).toHaveLength(1);
+    expect(result.gapResolutions).toEqual([]);
+    expect(result.findings.find((finding) => finding.ruleId === "VAL_INCOME_CONSISTENCY_001")).toMatchObject({ status: "inconclusive", reasonCode: "income_input_incomparable" });
+    expect(result.recommendedDisposition).toBe("human_review_required");
+  });
+
+  it("resolves the gap through the fake recovery harness and reconciliation, then finds the income conflict", async () => {
+    const extraction = buildOfflineExtraction(fixtureId, context);
+    const recoveryContext = buildRecoveryContext("run-6", extraction, context);
+    const eligibility = evaluateRecoveryEligibility({ gaps: extraction.gaps, pages: recoveryContext.pages, registeredToolNames: ["extract_with_vlm", "submit_extraction_candidates"], budgetAvailable: true, fatalFailure: false }, "decision-6");
+    expect(eligibility.decision).toBe("eligible");
+    const outcome = await new FakeAdaptiveRecoveryHarness().recover(recoveryContext, createOfflineRecoveryPorts(fixtureId, context));
+    expect(outcome.candidates).toHaveLength(1);
+    expect(outcome.trace).toMatchObject({ mode: "adaptive_recovery", terminalReason: "gaps_resolved", boundGapIds: [extraction.gaps[0]!.gapId] });
+    const result = buildOfflineFixture(fixtureId, context, { eligibility, candidates: outcome.candidates, trace: outcome.trace });
+    expect(result.gapResolutions).toEqual([{ gapId: extraction.gaps[0]!.gapId, resolutionType: "claim", reference: expect.any(String) }]);
+    const claim = result.claims.find((item) => item.claimId === result.gapResolutions![0]!.reference);
+    expect(claim).toMatchObject({ fieldSchemaId: "income.monthly_net", rawValue: "2980.00" });
+    const candidate = result.candidates.find((item) => item.candidateId === claim?.supportingCandidateIds[0]);
+    expect(candidate).toMatchObject({ extractionMethod: "agent_vlm_extraction", qualityStatus: "accepted", source: { type: "logical_document", logicalDocumentRevisionId: "logical-6-2" } });
+    expect(result.evidence.find((item) => item.evidenceId === candidate?.evidenceIds[0])).toMatchObject({ evidenceType: "page_level", pageNumber: 2, extractionMethod: "agent_vlm_extraction" });
+    expect(result.findings.find((finding) => finding.ruleId === "VAL_INCOME_CONSISTENCY_001")).toMatchObject({ status: "failed", reasonCode: "income_conflict" });
+    expect(result.recommendedDisposition).toBe("human_review_required");
+    expect(result.eligibility).toBe(eligibility);
+    expect(result.recoverySession).toBe(outcome.trace);
+  });
+
+  it("ignores submitted candidates that fall outside the gap scope", () => {
+    const extraction = buildOfflineExtraction(fixtureId, context);
+    const gap = extraction.gaps[0]!;
+    const rogue = { gapId: gap.gapId, fieldSchemaId: gap.fieldSchemaId, fieldSchemaVersion: "1.0.0", valueType: "money" as const, rawValue: "9999.00", normalizedValue: { amount: "9999.00", currency: "EUR" }, page: { documentVersionId: "document-6", pageNumber: 3 }, region: { x: 0, y: 0, width: 1, height: 1 }, extractionMethod: "agent_vlm_extraction" as const, processorVersion: "x" };
+    const result = buildOfflineFixture(fixtureId, context, { eligibility: { decisionId: "d", policyVersion: "recovery-eligibility-1.0.0", gapIds: [gap.gapId], decision: "eligible", reasonCodes: ["eligible_required_gap"] }, candidates: [rogue] });
+    expect(result.gapResolutions).toEqual([]);
+    expect(result.claims.some((claim) => claim.rawValue === "9999.00")).toBe(false);
   });
 });

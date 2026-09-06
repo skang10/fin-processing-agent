@@ -1027,10 +1027,17 @@ function renderApiReport(report) {
 function renderAgentLog() {
   if (!apiAgentLog) return;
   const stepLabels = { processing: 'Processing', awaiting_human_review: 'Awaiting human review', review_completed: 'Review completed' };
+  var sessionSummary = function (label, session, extra) {
+    if (!session) return '';
+    return '<span>' + label + ' <strong>' + escapeHtml(session.terminal_reason.replace(/_/g, ' ')) + '</strong> (' + session.iterations + ' iterations, ' + session.tool_calls + ' tool calls' + (extra || '') + ')</span>';
+  };
   document.querySelector('.agent-log-meta').innerHTML =
     '<span>Model <strong>' + escapeHtml(apiAgentLog.model_label || 'Unavailable') + '</strong></span>' +
     '<span>Cost <strong>' + (apiAgentLog.estimated_cost ? '€' + escapeHtml(apiAgentLog.estimated_cost.amount) : 'Unavailable') + '</strong></span>' +
-    '<span>Current step <strong>' + escapeHtml(stepLabels[apiAgentLog.current_step] || apiAgentLog.current_step) + '</strong></span>';
+    '<span>Current step <strong>' + escapeHtml(stepLabels[apiAgentLog.current_step] || apiAgentLog.current_step) + '</strong></span>' +
+    (apiAgentLog.session ? '<span>Harness <strong>' + escapeHtml(apiAgentLog.session.harness_label) + '</strong></span>' : '') +
+    sessionSummary('Recovery session', apiAgentLog.recovery_session, apiAgentLog.recovery_session ? ', ' + apiAgentLog.recovery_session.gap_count + ' gap(s), ' + apiAgentLog.recovery_session.candidates_submitted + ' submitted' : '') +
+    sessionSummary('Report session', apiAgentLog.session, '');
   document.querySelector('.agent-run-events').innerHTML = apiAgentLog.events.length
     ? apiAgentLog.events.map(function (event) {
       const time = new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });

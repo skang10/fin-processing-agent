@@ -3,9 +3,10 @@ import pino from "pino";
 import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
 import { DocumentSandboxClient, classifySyntheticDemoPages, groupLogicalDocuments } from "@findoc/document-processing";
-import type { CaseReviewAgentHarness } from "@findoc/agent";
-import { FAKE_MODEL_SCRIPTS, PiCaseReviewAgentHarness } from "@findoc/agent-pi";
-import { buildOfflineFixture, defaultOfflineHarness, OfflineFixtureUnavailableError, runOfflineReport } from "@findoc/offline";
+import { randomUUID } from "node:crypto";
+import { FakeAdaptiveRecoveryHarness, evaluateRecoveryEligibility, type AdaptiveRecoveryHarness, type CaseReviewAgentHarness } from "@findoc/agent";
+import { FAKE_MODEL_SCRIPTS, PiAdaptiveRecoveryHarness, PiCaseReviewAgentHarness } from "@findoc/agent-pi";
+import { buildOfflineExtraction, buildOfflineFixture, buildRecoveryContext, createOfflineRecoveryPorts, defaultOfflineHarness, OfflineFixtureUnavailableError, runOfflineReport, type OfflineRecoveryInput } from "@findoc/offline";
 import { PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
 import { createMinioObjectStore, readObjectBytes, storeNativeTextArtifact, storeOcrArtifact, storePageRenderArtifact } from "@findoc/storage";
 import { CASE_PROCESSING_QUEUE, OutboxRelay } from "./outbox.js";
@@ -30,17 +31,31 @@ if (agentHarnessMode === "pi" && agentModel !== "fake") {
   process.env["PI_OFFLINE"] ??= "1";
 }
 const piHarnesses = new Map<string, PiCaseReviewAgentHarness>();
+let recoveryHarness: AdaptiveRecoveryHarness | undefined;
+
+/** Select the bounded adaptive-recovery harness (AGT section 3). The fake route replays the standard recovery script. */
+function selectRecoveryHarness(): AdaptiveRecoveryHarness {
+  recoveryHarness ??= agentHarnessMode === "fake"
+    ? new FakeAdaptiveRecoveryHarness()
+    : new PiAdaptiveRecoveryHarness({ model: liveModelRoute() ?? { route: "fake", scriptLabel: "standard" } });
+  return recoveryHarness;
+}
+
+function liveModelRoute(): { route: "live"; provider: string; modelId: string; apiKey: string } | undefined {
+  if (agentModel === "fake") return undefined;
+  const separator = agentModel.indexOf("/");
+  return { route: "live", provider: agentModel.slice(0, separator), modelId: agentModel.slice(separator + 1), apiKey: agentModelApiKey ?? "" };
+}
 
 /** Select the bounded Case Review Agent harness for one case (ADR-001). Only the demo fixture that must exercise report rejection gets the policy-violation script. */
 function selectAgentHarness(fixtureId: unknown): CaseReviewAgentHarness {
   if (agentHarnessMode === "fake") return defaultOfflineHarness(fixtureId);
-  if (agentModel !== "fake") {
-    const separator = agentModel.indexOf("/");
-    const key = "live";
-    const existing = piHarnesses.get(key);
+  const live = liveModelRoute();
+  if (live) {
+    const existing = piHarnesses.get("live");
     if (existing) return existing;
-    const harness = new PiCaseReviewAgentHarness({ model: { route: "live", provider: agentModel.slice(0, separator), modelId: agentModel.slice(separator + 1), apiKey: agentModelApiKey ?? "" } });
-    piHarnesses.set(key, harness);
+    const harness = new PiCaseReviewAgentHarness({ model: live });
+    piHarnesses.set("live", harness);
     return harness;
   }
   const scriptLabel = fixtureId === "golden-006-scanned-adaptive-unavailable" ? "policy_violation" : "standard";
@@ -149,7 +164,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   const applicationData = await coordinator.loadApplicationData(job.data.case_id, job.data.run_id);
   try {
     const sourceContext = await coordinator.loadOfflineSourceContext(job.data.case_id, job.data.run_id);
-    const deterministic = buildOfflineFixture(applicationData["demo_fixture_id"], {
+    const fixtureContext = {
       inputSnapshotId: sourceContext.inputRevisionId,
       resultRevisionId: job.data.run_id,
       referenceDate: "2026-09-05",
@@ -157,7 +172,25 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
       applicationData,
       pages: sourceContext.pages,
       logicalDocuments: sourceContext.logicalDocuments,
-    });
+    };
+    const extraction = buildOfflineExtraction(applicationData["demo_fixture_id"], fixtureContext);
+    let recovery: OfflineRecoveryInput | undefined;
+    if (extraction.gaps.length > 0) {
+      const recoveryContext = buildRecoveryContext(job.data.run_id, extraction, fixtureContext);
+      const eligibility = evaluateRecoveryEligibility({
+        gaps: extraction.gaps, pages: recoveryContext.pages, registeredToolNames: PiAdaptiveRecoveryHarness.registeredToolNames(),
+        budgetAvailable: true, fatalFailure: false,
+      }, randomUUID());
+      logger.info({ case_id: job.data.case_id, run_id: job.data.run_id, gap_count: extraction.gaps.length, decision: eligibility.decision, reason_codes: eligibility.reasonCodes, policy_version: eligibility.policyVersion }, "agent recovery eligibility evaluated");
+      if (eligibility.decision === "eligible") {
+        const outcome = await selectRecoveryHarness().recover(recoveryContext, createOfflineRecoveryPorts(applicationData["demo_fixture_id"], fixtureContext));
+        logger.info({ case_id: job.data.case_id, run_id: job.data.run_id, session_id: outcome.trace.sessionId, harness_id: outcome.trace.harnessId, terminal_reason: outcome.trace.terminalReason, iterations: outcome.trace.iterations, tool_calls: outcome.trace.toolCalls, candidates_submitted: outcome.candidates.length }, "agent recovery session completed");
+        recovery = { eligibility, candidates: outcome.candidates, trace: outcome.trace };
+      } else {
+        recovery = { eligibility, candidates: [] };
+      }
+    }
+    const deterministic = buildOfflineFixture(applicationData["demo_fixture_id"], fixtureContext, recovery);
     await coordinator.persistOfflineDeterministic(job.data.case_id, job.data.run_id, deterministic);
     const persistedResult = await coordinator.loadOfflineReportInput(job.data.case_id, job.data.run_id);
     const report = await runOfflineReport(persistedResult, selectAgentHarness(applicationData["demo_fixture_id"]), applicationData["demo_fixture_id"]);

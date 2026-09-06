@@ -28,7 +28,7 @@ import {
   ResolveIssueResultSchema,
   ReviewIssuesSchema,
 } from "@findoc/contracts";
-import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService, type IntakeDocument, type ObjectStore, type ReviewCommandService, type SourceArtifactIntake } from "@findoc/core";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService, type IntakeDocument, type ObjectStore, type ReviewCommandService, type SourceArtifactIntake, type AgentLogSessionView } from "@findoc/core";
 import { DocumentSizeLimitError, EmptyDocumentError, readObjectBytes, UnsupportedDocumentMediaError } from "@findoc/storage";
 
 class IntakeRequestError extends Error {}
@@ -234,9 +234,9 @@ export function buildApp(
       ...(log.modelLabel ? { model_label: log.modelLabel } : {}),
       ...(log.estimatedCost ? { estimated_cost: log.estimatedCost } : {}),
       current_step: log.currentStep,
-      ...(log.session ? { session: {
-        harness_label: log.session.harnessLabel, mode: log.session.mode, terminal_reason: log.session.terminalReason,
-        iterations: log.session.iterations, tool_calls: log.session.toolCalls, usage_available: log.session.usageAvailable,
+      ...(log.session ? { session: projectAgentSession(log.session) } : {}),
+      ...(log.recoverySession ? { recovery_session: {
+        ...projectAgentSession(log.recoverySession), gap_count: log.recoverySession.gapCount, candidates_submitted: log.recoverySession.candidatesSubmitted,
       } } : {}),
       events: log.events.map((event) => ({ timestamp: event.timestamp, activity: event.activity,
         ...(event.toolLabel ? { tool_label: event.toolLabel } : {}) })),
@@ -556,4 +556,11 @@ function readApplicationData(value: unknown): Readonly<Record<string, unknown>> 
     throw new IntakeRequestError("application_data must be a JSON object");
   }
   return value as Record<string, unknown>;
+}
+
+function projectAgentSession(session: AgentLogSessionView) {
+  return {
+    harness_label: session.harnessLabel, mode: session.mode, terminal_reason: session.terminalReason,
+    iterations: session.iterations, tool_calls: session.toolCalls, usage_available: session.usageAvailable,
+  };
 }

@@ -154,18 +154,27 @@ export const AgentTerminalReasonSchema = Type.Union([
   Type.Literal("cancelled_by_workflow"), Type.Literal("internal_error"),
 ]);
 
+const AgentLogSessionFields = {
+  harness_label: Type.String(),
+  mode: Type.Union([Type.Literal("case_review_report"), Type.Literal("adaptive_recovery")]),
+  terminal_reason: AgentTerminalReasonSchema,
+  iterations: Type.Integer({ minimum: 0 }),
+  tool_calls: Type.Integer({ minimum: 0 }),
+  usage_available: Type.Boolean(),
+};
+
+export const AgentLogSessionSchema = Type.Object(AgentLogSessionFields, { additionalProperties: false });
+
 export const AgentLogSchema = Type.Object({
   availability: Type.Union([Type.Literal("pending"), Type.Literal("ready"), Type.Literal("unavailable")]),
   model_label: Type.Optional(Type.String()),
   estimated_cost: Type.Optional(Type.Object({ amount: Type.String(), currency: Type.Literal("EUR") }, { additionalProperties: false })),
   current_step: Type.Union([Type.Literal("processing"), Type.Literal("awaiting_human_review"), Type.Literal("review_completed")]),
-  session: Type.Optional(Type.Object({
-    harness_label: Type.String(),
-    mode: Type.Union([Type.Literal("case_review_report"), Type.Literal("adaptive_recovery")]),
-    terminal_reason: AgentTerminalReasonSchema,
-    iterations: Type.Integer({ minimum: 0 }),
-    tool_calls: Type.Integer({ minimum: 0 }),
-    usage_available: Type.Boolean(),
+  session: Type.Optional(AgentLogSessionSchema),
+  recovery_session: Type.Optional(Type.Object({
+    ...AgentLogSessionFields,
+    gap_count: Type.Integer({ minimum: 0 }),
+    candidates_submitted: Type.Integer({ minimum: 0 }),
   }, { additionalProperties: false })),
   events: Type.Array(Type.Object({
     timestamp: Type.String(), activity: Type.String(), tool_label: Type.Optional(Type.String()),
