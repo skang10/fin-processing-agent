@@ -50,7 +50,7 @@ def field(c, x, y, label, value, width=235):
 
 def identity_page(c, case, page_no=1):
     name = case["application_data"]["applicant_display_name"]
-    page_frame(c, "Identity evidence", "Synthetic identity record for document-processing evaluation", page_no)
+    page_frame(c, "Identity evidence", "SYNTHETIC DEMO - Identity document | document-processing evaluation", page_no)
     c.setFillColor(PANEL); c.roundRect(36, H - 220, 150, 120, 8, stroke=0, fill=1)
     c.setFillColor(HexColor("#dce5ef")); c.circle(111, H - 145, 26, stroke=0, fill=1)
     text(c, 72, H - 200, "DEMO PORTRAIT", 8, MUTED, True)
@@ -68,7 +68,7 @@ def payslip_page(c, case, page_no=2, continuation=False):
     app = case["application_data"]
     employer = app["employment"]["employer"]
     income = app["income"]["monthly_net"]
-    page_frame(c, "Monthly payslip", f"{employer} - synthetic payroll evidence", page_no)
+    page_frame(c, "Monthly payslip", f"SYNTHETIC DEMO - Payslip | {employer}", page_no)
     field(c, 36, H - 105, "Employee", app["applicant_display_name"], 245)
     field(c, 310, H - 105, "Payroll period", "August 2026", 235)
     field(c, 36, H - 170, "Employer", employer, 509)
@@ -89,7 +89,7 @@ def payslip_page(c, case, page_no=2, continuation=False):
 def bank_page(c, case, page_no, counterparty=None, instruction=False, complex_table=False):
     app = case["application_data"]
     counterparty = counterparty or app["employment"]["employer"]
-    page_frame(c, "Account statement", "Nordblick Demo Bank - synthetic transaction record", page_no)
+    page_frame(c, "Account statement", "SYNTHETIC DEMO - Bank statement | Nordblick Demo Bank", page_no)
     field(c, 36, H - 105, "Account holder", app["applicant_display_name"], 245)
     field(c, 310, H - 105, "Masked IBAN", "DE** **** **** 3042", 235)
     headers = ["Date", "Description", "Reference", "Amount EUR"]
