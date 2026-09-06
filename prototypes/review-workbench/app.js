@@ -177,23 +177,44 @@ function show(id) {
   if (id === 'summary') renderSummary();
 }
 
-function render() {
+/**
+ * The issue the review panel is showing. A case can have no Agent-raised issue, and its document
+ * panel must still show that case's own pages rather than the prototype's built-in sample.
+ */
+function currentIssue() {
   const issue = issues[current];
+  if (issue) return issue;
+  const documentRecord = apiDocuments[0];
+  return {
+    doc: documentRecord ? documentRecord.submitted_filename : 'Submitted document',
+    page: 'Page 1' + (documentRecord ? ' of ' + documentRecord.page_count : ''),
+    pageNumber: 1, paper: 'boundary',
+  };
+}
+
+function render() {
+  const issue = currentIssue();
   const resolved = decisions.filter(function (decision) { return decision !== 'pending'; }).length;
   document.querySelector('#resolved-count').textContent = resolved + ' of ' + issues.length + ' reviewed';
   document.querySelector('[data-case-tab="issues"] span').textContent = String(issues.length);
-  document.querySelector('#previous').disabled = current === 0;
-  document.querySelector('#next').disabled = current === issues.length - 1;
-  document.querySelector('#issue-content').innerHTML = editing ? correctionForm(issue) : confirming ? confirmationForm(issue) : ignoring ? ignoreForm() : issueDetail(issue);
+  document.querySelector('#previous').disabled = current === 0 || issues.length === 0;
+  document.querySelector('#next').disabled = current >= issues.length - 1;
+  document.querySelector('#issue-content').innerHTML = issues.length === 0
+    ? '<p class="empty-state">No Agent-raised issues for this case. Its deterministic checked facts stay in the Agent report.</p>'
+    : editing ? correctionForm(issue) : confirming ? confirmationForm(issue) : ignoring ? ignoreForm() : issueDetail(issue);
   renderIssueFooter();
   renderSource(issue);
   renderIssueList();
   renderThumbnails(issue.pageNumber);
-  wireIssueActions();
+  if (issues.length) wireIssueActions();
 }
 
 function renderIssueFooter() {
   const footer = document.querySelector('#issue-footer-actions');
+  if (issues.length === 0) {
+    footer.innerHTML = '<div class="footer-outcome">No issues to review</div>';
+    return;
+  }
   if (editing || confirming || ignoring) {
     footer.innerHTML = '<div class="footer-outcome">' + (editing ? 'Editing issue' : confirming ? 'Confirming issue' : 'Ignoring issue') + '</div>';
     return;
@@ -330,11 +351,11 @@ function renderThumbnails(activePage) {
       const pageNumber = Number(button.querySelector('small').textContent);
       const documentRecord = sourceOverride?.document || apiDocuments[0];
       sourceOverride = {
-        name: documentRecord ? documentRecord.submitted_filename : issues[current].doc,
+        name: documentRecord ? documentRecord.submitted_filename : currentIssue().doc,
         page: 'Page ' + pageNumber + (documentRecord ? ' of ' + documentRecord.page_count : ''),
         pageNumber, document: documentRecord, kind: pagePaperKind(pageNumber),
       };
-      renderSource(issues[current]);
+      renderSource(currentIssue());
       renderThumbnails(pageNumber);
     });
   });
@@ -563,7 +584,7 @@ function wireIssueActions() {
       }
       sourceView = button.dataset.legacyEvidence === 'true' ? 'document' : 'application';
       sourceOverride = null;
-      renderSource(issues[current]);
+      renderSource(currentIssue());
       toast(button.dataset.legacyEvidence === 'true' ? 'Evidence highlighted on page' : 'Application field selected');
     });
   });
@@ -583,7 +604,7 @@ function openEvidenceReference(reference) {
     sourceView = 'application';
     sourceOverride = null;
     activeApplicationPointer = evidence.json_pointer;
-    renderSource(issues[current]);
+    renderSource(currentIssue());
     toast('Application field selected');
     return;
   }
@@ -596,7 +617,7 @@ function openEvidenceReference(reference) {
     page: 'Page ' + pageNumber + (documentRecord ? ' of ' + documentRecord.page_count : ''),
     pageNumber, document: documentRecord, kind: pagePaperKind(pageNumber),
   };
-  renderSource(issues[current]);
+  renderSource(currentIssue());
   renderThumbnails(pageNumber);
   const paper = document.querySelector('#paper');
   paper.classList.remove('evidence-pulse');
@@ -793,7 +814,7 @@ document.querySelector('#create-issue').addEventListener('click', function () {
 document.querySelector('#zoom-out').addEventListener('click', function () { updateZoom(-8); });
 document.querySelector('#zoom-in').addEventListener('click', function () { updateZoom(8); });
 document.querySelectorAll('[data-source-view]').forEach(function (button) {
-  button.addEventListener('click', function () { sourceView = button.dataset.sourceView; sourceOverride = null; renderSource(issues[current]); });
+  button.addEventListener('click', function () { sourceView = button.dataset.sourceView; sourceOverride = null; renderSource(currentIssue()); });
 });
 const panelResizer = document.querySelector('#panel-resizer');
 const reviewLayout = document.querySelector('.review-layout');
@@ -824,7 +845,7 @@ panelResizer.addEventListener('keydown', function (event) {
 function updateZoom(delta) {
   zoom = Math.max(68, Math.min(124, zoom + delta));
   document.querySelector('#zoom-label').textContent = zoom + '%';
-  const source = selectedDocumentSource(issues[current]);
+  const source = selectedDocumentSource(currentIssue());
   if (sourceView === 'document' && source.document?.content_url) {
     void renderDocumentPage(source.document, source.pageNumber, ++documentRenderSequence);
   } else {
@@ -1150,7 +1171,7 @@ async function loadCaseFromApi() {
     document.querySelectorAll('.case-action').forEach(function (button) { button.hidden = caseReadOnly; });
     document.querySelector('#case-agent-trigger strong').textContent = report.availability === 'ready' ? 'Generated review report' : 'Report unavailable';
     renderApiReport(report);
-    if (issues.length) render();
+    render();
     if (caseRecord.final_review_action) applyFinalOutcome(caseRecord.final_review_action);
     show('workspace');
     activateCaseTab('report');
