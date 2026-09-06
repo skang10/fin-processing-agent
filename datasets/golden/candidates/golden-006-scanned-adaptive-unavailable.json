@@ -20,12 +20,16 @@
     "report_unavailable",
     "runtime_support_pending"
   ],
+  "document_values": {
+    "bank_salary_credit": "3010.00",
+    "payslip_monthly_net": "2980.00"
+  },
   "documents": [
     {
       "media_type": "application/pdf",
       "page_count": 3,
       "path": "../documents/golden-006-scanned-adaptive-unavailable.pdf",
-      "sha256": "0748bad3389b942300eaec41aac65b00a24d1b3e5a4edcbdc18bab329bf92c32"
+      "sha256": "754746ed33420c37cbee916085894f81b0aa26c71653d8ce07a40cb24ed55e12"
     }
   ],
   "generator": {
