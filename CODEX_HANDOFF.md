@@ -7,7 +7,7 @@ This section is the operational starting point for the next implementation agent
 ### Repository and runtime state
 
 1. The repository is on `main`. The latest completed change implements the Agent-led extraction path.
-2. `pnpm check` (144 unit and contract tests), `pnpm test:integration` (23 Docker-backed tests), `pnpm dataset:validate`, `pnpm build`, the Review Web production build, and a Docker Compose run of the bundled demo case plus all six golden cases pass. Two explicit `openai/gpt-5.6-terra` acceptance attempts on `golden-001` cost USD 0.038185 and USD 0.042125. The second extracted all seven values correctly and all five rules passed, but its report used page identifiers as attention references; Agent 3.4.0 now rejects that at the tool boundary before termination and still needs a confirming live rerun.
+2. `pnpm check` (144 unit and contract tests), `pnpm test:integration` (23 Docker-backed tests), `pnpm dataset:validate`, `pnpm build`, the Review Web production build, and a Docker Compose run of the bundled demo case plus all six golden cases pass. Three explicit `openai/gpt-5.6-terra` acceptance attempts on `golden-001` drove two contract fixes. The confirming run cost USD 0.039304, extracted all seven values correctly, passed all five rules, produced no issues, and committed a ready verified report in 8 iterations and 13 tool calls. This accepts the native-text live route for one clear synthetic case, not multimodal, OCR, VLM, or corpus-level quality.
 3. The bounded Pi `case_review` session now leads the document review. The Worker still inspects, renders, and selectively OCRs every page before the session, but the system has no deterministic field parser, so every document value reaches the deterministic pipeline as an Agent candidate produced through a registered, scoped tool. `buildOfflineExtraction` and the fixture-seeded result builder are gone.
 4. A versioned declared field-requirement set (`document-field-requirements-1.0.0`, `packages/offline/src/case-assembly.ts`) declares seven document fields across the three required document types. A requirement becomes an explicit extraction gap only when the run actually contains a grouped logical document of that type. Nothing is derived from golden truth.
 5. `submit_extraction_candidates` accepts a value only when an authorized tool returned it for a page of the candidate's own logical document: exactly a model-extraction value, inside a returned recognition line, or inside the committed native text. The model never supplies a normalized value; `assembleCaseResult` normalizes money, dates, and names deterministically and owns reconciliation, claims, entity matching, the five registered rules, and the disposition.
@@ -66,18 +66,18 @@ Do not edit frozen truth. BL-005 and BL-009 record the two ways forward: confirm
 
 ### Immediate next task
 
-**Capture a new evaluation baseline for the Agent-led path, and only then request approval for one live-model acceptance run.**
+**Capture a new evaluation baseline for the Agent-led path, then extend live acceptance beyond the one clear native-text case.**
 
 1. Run `pnpm evaluate:capture` against the Agent-led path with the fake model and record the actual-run manifest.
 2. Score it against `v0.1.1` with `pnpm evaluate:offline` and record the two known divergences explicitly rather than editing frozen truth.
 3. Decide with the user whether to confirm a new dataset release or to regenerate `golden-003` (BL-009 item 4).
-4. Do not start a paid run without explicit approval. The live route is ready in the sense that nothing in the Agent-led path depends on the fake script — the tools, budgets, evidence checks, and durable re-entry are model-agnostic — but it has not been exercised with a live model since the change, and a live model must satisfy the same evidence rule: a submitted value must appear verbatim in what a tool returned for that page. Keep the `USD 0.25` per-case cap and add an explicit whole-run cap before running more than one case.
+4. Do not start another paid run without explicit approval. The clear native-text route has one accepted live result; a live model must still satisfy the same evidence rule that a submitted value appears verbatim in what a tool returned for that page. Keep the `USD 0.25` per-case cap and add an explicit whole-run cap before running more than one case.
 
 ### Global next steps
 
 After the immediate task, proceed in this order:
 
-1. **Accept a live model route for the Agent-led path** (`BL-002`, `BL-004` precondition): one budgeted case-review session, then verify usage and cost reconciliation. Durable re-entry must not reset usage.
+1. **Extend live-model acceptance** (`BL-002`, `BL-004` precondition) from the accepted clear native-text case to a bounded visual case and a case with a legitimate attention item; verify usage and cost reconciliation, and ensure durable re-entry does not reset usage.
 2. **Capture operational observations** required by `MLE-REQ-070` and `MLE-REQ-071`: latency, model calls, available token usage, estimated cost, and explicit unavailable values.
 3. **Accept the real PDF Inspector PP-OCRv6 runtime** (`BL-003`): pin offline assets, replace fixture OCR only in explicit real-runtime mode, and retire the fixture scanned-page adapter for cases the real runtime can read.
 4. **Establish the formal measured baseline** (`BL-006`) from compatible live-model and real-runtime evidence without claiming real-world OCR or banking performance.
@@ -85,7 +85,7 @@ After the immediate task, proceed in this order:
 6. **Expand from six to twenty golden cases**, prioritizing meaningful document variation over nearly identical templates.
 7. **Finish V1 hardening and demonstration evidence**: crop rendering, JPEG/PNG execution, OS resource and network isolation, observability evidence, browser acceptance coverage, README/demo limitations, and a reproducible Docker acceptance run.
 
-Real OCR and VLM recognition, live-model acceptance of the Agent-led path, crop rendering, and hardened operating-system and network isolation all remain pending.
+Real OCR and VLM recognition, multimodal and corpus-level live-model acceptance, crop rendering, and hardened operating-system and network isolation all remain pending.
 
 ## Project
 
