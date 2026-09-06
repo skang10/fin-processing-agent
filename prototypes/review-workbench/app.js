@@ -297,7 +297,7 @@ function renderIssueList() {
     const marker = decision === 'pending' ? String(index + 1).padStart(2, '0') : decision === 'dismissed' ? '×' : decision === 'edited' ? '✎' : '✓';
     return '<div class="issue-list-item ' + (index === current ? 'active' : '') + '"><button class="issue-open" data-index="' + index + '">' +
       '<span class="issue-state ' + decision + '">' + marker + '</span><span class="issue-list-title"><strong>' + escapeHtml(issue.title) + '</strong><small>' +
-      (issue.origin === 'human' ? 'Human created' : 'AI created') + '</small></span><em>' + state + '</em></button>' +
+      (issue.origin === 'human' ? 'Human created' : issue.origin === 'system' ? 'System detected' : 'AI created') + '</small></span><em>' + state + '</em></button>' +
       (caseReadOnly || decision === 'dismissed' ? '' : '<button class="issue-edit" data-edit-index="' + index + '" aria-label="' + (decision === 'confirmed' ? 'Edit requested change for ' : 'Edit ') + escapeHtml(issue.title) + '">' + (decision === 'confirmed' ? 'Edit request' : 'Edit') + '</button>') + '</div>';
   }).join('');
   document.querySelectorAll('.issue-open').forEach(function (button) {
@@ -1008,7 +1008,15 @@ function evidencePresentation(reference) {
 }
 
 function renderApiReport(report) {
-  document.querySelector('.report-copy').textContent = report.summary || 'Agent report unavailable.';
+  const unavailableReasons = {
+    policy_rejected: 'The submitted report did not pass policy verification.',
+    schema_rejected: 'The submitted report did not match the required format.',
+    reference_rejected: 'The submitted report contained invalid evidence references.',
+    timeout: 'Report generation timed out.', unavailable: 'Report generation was unavailable.',
+  };
+  document.querySelector('.report-copy').textContent = report.availability === 'unavailable'
+    ? 'Agent report unavailable. ' + (unavailableReasons[report.failure_reason] || 'Report verification failed.') + ' Deterministic review issues remain available.'
+    : (report.summary || 'Agent report unavailable.');
   document.querySelector('.report-links').innerHTML = issues.map(function (issue, index) { return { issue, index }; })
     .filter(function (entry) { return entry.issue.origin === 'agent'; }).map(function (entry) {
     const issue = entry.issue;
@@ -1027,24 +1035,63 @@ function renderApiReport(report) {
 function renderAgentLog() {
   if (!apiAgentLog) return;
   const stepLabels = { processing: 'Processing', awaiting_human_review: 'Awaiting human review', review_completed: 'Review completed' };
-  var sessionSummary = function (label, session, extra) {
-    if (!session) return '';
-    return '<span>' + label + ' <strong>' + escapeHtml(session.terminal_reason.replace(/_/g, ' ')) + '</strong> (' + session.iterations + ' iterations, ' + session.tool_calls + ' tool calls' + (extra || '') + ')</span>';
+  const activityLabels = {
+    'Started adaptive recovery session': 'Started targeted extraction',
+    'Listed bound extraction gaps': 'Found unresolved fields',
+    'Inspected page 2': 'Inspected payslip, page 2',
+    'Ran OCR on page 2': 'Ran OCR on payslip, page 2',
+    'Submitted 1 extraction candidate(s)': 'Submitted 1 recovered value',
+    'Started case review report session': 'Started report generation',
+    'Listed deterministic findings': 'Checked validation findings',
+    'Submitted a Case Review Brief': 'Submitted review report',
   };
+  const toolLabels = {
+    get_extraction_gaps: 'Get extraction gaps', inspect_page: 'Inspect page', run_ocr: 'Run OCR',
+    extract_with_vlm: 'Extract with VLM', submit_extraction_candidates: 'Submit candidates',
+    list_findings: 'List findings', get_finding_references: 'Get finding evidence',
+    submit_case_review_brief: 'Submit report',
+  };
+  const modelLabel = apiAgentLog.model_label && apiAgentLog.model_label.startsWith('findoc-fake/')
+    ? 'Deterministic demo model'
+    : (apiAgentLog.model_label || 'Unavailable');
   document.querySelector('.agent-log-meta').innerHTML =
-    '<span>Model <strong>' + escapeHtml(apiAgentLog.model_label || 'Unavailable') + '</strong></span>' +
-    '<span>Cost <strong>' + (apiAgentLog.estimated_cost ? '€' + escapeHtml(apiAgentLog.estimated_cost.amount) : 'Unavailable') + '</strong></span>' +
-    '<span>Current step <strong>' + escapeHtml(stepLabels[apiAgentLog.current_step] || apiAgentLog.current_step) + '</strong></span>' +
-    (apiAgentLog.session ? '<span>Harness <strong>' + escapeHtml(apiAgentLog.session.harness_label) + '</strong></span>' : '') +
-    sessionSummary('Recovery session', apiAgentLog.recovery_session, apiAgentLog.recovery_session ? ', ' + apiAgentLog.recovery_session.gap_count + ' gap(s), ' + apiAgentLog.recovery_session.candidates_submitted + ' submitted' : '') +
-    sessionSummary('Report session', apiAgentLog.session, '');
-  document.querySelector('.agent-run-events').innerHTML = apiAgentLog.events.length
-    ? apiAgentLog.events.map(function (event) {
-      const time = new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      return '<div><time>' + escapeHtml(time) + '</time><span>' + escapeHtml(event.activity) +
-        (event.tool_label ? '<small>Tool: ' + escapeHtml(event.tool_label) + '</small>' : '') + '</span></div>';
-    }).join('')
-    : '<div><span>Agent activity is not available yet.</span></div>';
+    '<div><span>Model</span><strong title="' + escapeHtml(apiAgentLog.model_label || '') + '">' + escapeHtml(modelLabel) + '</strong></div>' +
+    '<div><span>Cost</span><strong>' + (apiAgentLog.estimated_cost ? '€' + escapeHtml(apiAgentLog.estimated_cost.amount) : 'Unavailable') + '</strong></div>' +
+    '<div><span>Current step</span><strong>' + escapeHtml(stepLabels[apiAgentLog.current_step] || apiAgentLog.current_step) + '</strong></div>';
+
+  const reportStart = apiAgentLog.events.findIndex(function (event) { return event.activity === 'Started case review report session'; });
+  const recoveryEvents = reportStart < 0 ? apiAgentLog.events : apiAgentLog.events.slice(0, reportStart);
+  const reportEvents = reportStart < 0 ? [] : apiAgentLog.events.slice(reportStart);
+  const formatEvents = function (events) {
+    return events.map(function (event) {
+      const date = new Date(event.timestamp);
+      const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
+        '.' + String(date.getMilliseconds()).padStart(3, '0');
+      const activity = activityLabels[event.activity] || event.activity;
+      return '<div class="agent-log-event"><time>' + escapeHtml(time) + '</time><span><strong>' + escapeHtml(activity) + '</strong>' +
+        (event.tool_label ? '<small>Tool: ' + escapeHtml(toolLabels[event.tool_label] || event.tool_label) + '</small>' : '') + '</span></div>';
+    }).join('');
+  };
+  const sessionHeader = function (title, session) {
+    if (!session) return '';
+    const detail = session.terminal_reason === 'gaps_resolved' ? 'Recovery completed' :
+      session.terminal_reason === 'report_submitted' ? 'Report submitted' : session.terminal_reason.replaceAll('_', ' ');
+    return '<header><div><h3>' + title + '</h3><span>' + escapeHtml(detail) + '</span></div>' +
+      '<small>' + session.iterations + ' iterations, ' + session.tool_calls + ' tool calls</small></header>';
+  };
+  const reportOutcome = apiReport && apiReport.availability === 'unavailable'
+    ? '<div class="agent-log-outcome rejected"><span>Report rejected by verifier</span><small>' +
+      escapeHtml((apiReport.failure_reason || 'Verification failed').replaceAll('_', ' ')) + '</small></div>'
+    : apiReport && apiReport.availability === 'ready'
+      ? '<div class="agent-log-outcome ready"><span>Report ready</span></div>' : '';
+  const sections = [];
+  if (recoveryEvents.length || apiAgentLog.recovery_session) {
+    sections.push('<section class="agent-log-session">' + sessionHeader('Targeted extraction', apiAgentLog.recovery_session) + formatEvents(recoveryEvents) + '</section>');
+  }
+  if (reportEvents.length || apiAgentLog.session) {
+    sections.push('<section class="agent-log-session">' + sessionHeader('Report generation', apiAgentLog.session) + formatEvents(reportEvents) + reportOutcome + '</section>');
+  }
+  document.querySelector('.agent-run-events').innerHTML = sections.join('') || '<p class="agent-log-empty">Agent activity is not available yet.</p>';
 }
 
 function wireReportNavigation() {

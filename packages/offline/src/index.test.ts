@@ -75,7 +75,8 @@ describe("offline fixture", () => {
       expect(firstResult).toEqual(secondResult);
       const sessionShape = (session: typeof firstSession) => session && { terminalReason: session.terminalReason, steps: session.steps.map((step) => [step.toolName, step.outcome, step.argumentHash]) };
       expect(sessionShape(firstSession)).toEqual(sessionShape(secondSession));
-      expect(first.issues.map((issue) => issue.code)).toEqual(fixtureId === "golden-006-scanned-adaptive-unavailable" ? [] : expectedIssues);
+      expect(first.issues.map((issue) => issue.code)).toEqual(expectedIssues);
+      expect(first.issues.every((issue) => issue.origin === (fixtureId === "golden-006-scanned-adaptive-unavailable" ? "system" : "agent"))).toBe(true);
       expect(first.findings.filter((finding) => finding.status !== "passed" && finding.status !== "not_applicable").map((finding) => finding.ruleId)).toEqual(expectedIssues);
       expect(first.findings).toHaveLength(5);
       expect(first.reportAvailability).toBe(fixtureId === "golden-006-scanned-adaptive-unavailable" ? "unavailable" : "ready");
@@ -89,6 +90,11 @@ describe("offline fixture", () => {
     expect(result).toMatchObject({ reportAvailability: "unavailable", reportFailureReason: "policy_rejected", session: { terminalReason: "report_submitted", toolCalls: 1 } });
     expect(result.originalSubmission).toMatchObject({ summary: "Approve the loan." });
     expect(result.findings).toHaveLength(5);
+    expect(result.issues.map((issue) => [issue.origin, issue.code])).toEqual([
+      ["system", "VAL_DOC_COMPLETENESS_001"],
+      ["system", "VAL_EMPLOYER_CONSISTENCY_001"],
+      ["system", "VAL_INCOME_CONSISTENCY_001"],
+    ]);
     expect(result.recommendedDisposition).toBe("human_review_required");
   });
 });

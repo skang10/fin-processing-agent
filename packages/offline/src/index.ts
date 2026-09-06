@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { reconcileSingleAcceptedCandidate, type AgentEligibilityDecision, type AgentSessionTrace, type CandidateReconciliation, type ExtractionCandidate, type ExtractionGap, type GapResolution, type OfflineCaseResult, type OfflineClaimResult, type OfflineDeterministicResult, type OfflineEvidenceResult, type OfflineReportInput, type OfflineReportResult, type PersistedCandidateReconciliation } from "@findoc/core";
-import { FAKE_HARNESS_DESCRIPTOR, FakeCaseReviewAgentHarness, buildSyntheticSessionTrace, hashArguments, runVerifiedReport, type AdaptiveRecoveryContext, type CaseReviewAgentHarness, type RecoveryToolPorts, type SubmittedExtractionCandidate } from "@findoc/agent";
+import { FAKE_HARNESS_DESCRIPTOR, FakeCaseReviewAgentHarness, attentionItemsForFindings, buildSyntheticSessionTrace, hashArguments, runVerifiedReport, type AdaptiveRecoveryContext, type CaseReviewAgentHarness, type RecoveryToolPorts, type SubmittedExtractionCandidate } from "@findoc/agent";
 import { evaluateRuleSet, mapDisposition, type MatchResult, type ValidationInput } from "@findoc/validation";
 
 export const ANNA_EXAMPLE_FIXTURE_ID = "anna-example-v1";
@@ -181,7 +181,9 @@ export async function runOfflineReport(result: OfflineReportInput, harness?: Cas
     ...(report.trace.estimatedCost ? { estimatedCost: report.trace.estimatedCost.amount } : {}),
     session: report.trace,
     ...(report.originalSubmission !== undefined ? { originalSubmission: report.originalSubmission } : {}),
-    issues: report.verified ? report.brief.attention_items.map(issueFromAttentionItem) : [],
+    issues: report.verified
+      ? report.brief.attention_items.map((item) => ({ ...issueFromAttentionItem(item), origin: "agent" as const }))
+      : attentionItemsForFindings(result.findings).map((item) => ({ ...issueFromAttentionItem(item), origin: "system" as const })),
   };
 }
 

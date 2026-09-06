@@ -155,6 +155,7 @@ export interface AgentSessionTrace {
 }
 
 export interface OfflineIssueResult {
+  readonly origin: "agent" | "system";
   readonly code: string;
   readonly description: string;
   readonly recommendedAction: string;
@@ -462,7 +463,7 @@ export interface PageRenderArtifactView {
 
 export interface ReviewIssueView {
   readonly issueId: string;
-  readonly origin: "agent" | "human";
+  readonly origin: "agent" | "system" | "human";
   readonly code: string;
   readonly title?: string;
   readonly description: string;

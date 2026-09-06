@@ -260,7 +260,7 @@ export const DocumentPageProjectionSchema = Type.Object({
 
 export const ReviewIssueSchema = Type.Object({
   issue_id: Type.String({ format: "uuid" }),
-  origin: Type.Union([Type.Literal("agent"), Type.Literal("human")]),
+  origin: Type.Union([Type.Literal("agent"), Type.Literal("system"), Type.Literal("human")]),
   code: Type.String(),
   title: Type.Optional(Type.String()),
   description: Type.String(),

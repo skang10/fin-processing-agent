@@ -545,7 +545,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
         };
       })(),
       issueId: record.id,
-      origin: record.origin === "human" ? "human" : "agent",
+      origin: record.origin === "human" ? "human" : record.origin === "system" ? "system" : "agent",
       code: record.code,
       reviewState: record.reviewState === "confirmed" ? "confirmed" : record.reviewState === "ignored" ? "ignored" : "pending",
       version: record.version,
@@ -1170,7 +1170,7 @@ export class PostgresWorkflowCoordinator {
         .where(and(eq(resultRevisions.id, resultRevisionId), eq(resultRevisions.runId, runId))).limit(1);
       if (!revision) throw new Error("Agent report is not bound to a persisted result revision");
       const issues = report.issues.map((issue) => ({
-        id: randomUUID(), caseId, runId, origin: "agent", code: issue.code,
+        id: randomUUID(), caseId, runId, origin: issue.origin, code: issue.code,
         description: issue.description, recommendedAction: issue.recommendedAction, reviewState: "pending",
       }));
       if (issues.length > 0) await tx.insert(reviewIssues).values(issues);

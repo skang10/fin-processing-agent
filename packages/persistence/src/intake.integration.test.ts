@@ -270,7 +270,7 @@ describe("PostgresCaseCommandService", () => {
         candidates: [{ candidateId, status: "selected" as const }], selectedCandidateId: candidateId,
         reason: "one_accepted_candidate" as const, resultingClaimId: claimId,
       }],
-      issues: [{ code: "VAL_EMPLOYER_CONSISTENCY_001", description: "Employer differs.", recommendedAction: "Confirm the current employer." }],
+      issues: [{ origin: "agent" as const, code: "VAL_EMPLOYER_CONSISTENCY_001", description: "Employer differs.", recommendedAction: "Confirm the current employer." }],
     };
     await coordinator.markRunRunning(accepted.caseId, accepted.runId);
     await coordinator.persistOfflineDeterministic(accepted.caseId, accepted.runId, result);
