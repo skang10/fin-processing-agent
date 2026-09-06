@@ -493,18 +493,12 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       usageAvailable: (session.usage as { available?: boolean } | null)?.available === true,
     });
     const reportSession = sessions.find((session) => session.id === report.sessionId);
-    const recoverySession = [...sessions].reverse().find((session) => session.mode === "adaptive_recovery");
     return {
       availability: report.availability === "ready" ? "ready" : "unavailable",
       modelLabel: report.modelLabel,
       ...(report.estimatedCost !== null ? { estimatedCost: { amount: report.estimatedCost, currency: "EUR" } } : {}),
       currentStep,
       ...(reportSession ? { session: view(reportSession) } : {}),
-      ...(recoverySession ? { recoverySession: {
-        ...view(recoverySession),
-        gapCount: ((recoverySession.boundGapIds as unknown[] | null) ?? []).length,
-        candidatesSubmitted: steps.filter((step) => step.sessionId === recoverySession.id && step.toolName === "submit_extraction_candidates" && step.outcome === "succeeded").length,
-      } } : {}),
       events: [
         ...sessions.flatMap((session) => [
           { timestamp: session.startedAt.toISOString(), activity: `Started ${session.mode.replace(/_/g, " ")} session` },
@@ -1044,7 +1038,7 @@ export class PostgresWorkflowCoordinator {
       );
 
       const completedAt = new Date();
-      const stages = ["inspect", "extract", ...(result.recoverySession ? ["agent_recovery"] : []), "validate"];
+      const stages = ["inspect", "extract", "validate"];
       await tx.insert(stageExecutions).values(stages.map((stageType, sequence) => ({
         id: randomUUID(), runId, stageType, sequence: sequence + 1, status: "succeeded", completedAt,
       })));
@@ -1114,7 +1108,6 @@ export class PostgresWorkflowCoordinator {
           decision: result.eligibility.decision, reasonCodes: result.eligibility.reasonCodes,
         });
       }
-      if (result.recoverySession) await insertAgentSession(tx, caseId, runId, null, result.recoverySession);
       await tx.insert(validationFindings).values(result.findings.map((item) => ({
         id: randomUUID(), resultRevisionId: result.resultRevisionId,
         ruleId: item.ruleId, ruleVersion: item.ruleVersion, ruleSetId: item.ruleSetId,
@@ -1304,6 +1297,7 @@ async function insertAgentSession(tx: Transaction, caseId: string, runId: string
   if (session.steps.length > 0) {
     await tx.insert(agentSteps).values(session.steps.map((step) => ({
       id: randomUUID(), sessionId: session.sessionId, sequence: step.sequence,
+      phase: step.phase ?? "planning",
       toolName: step.toolName, toolVersion: step.toolVersion ?? null, argumentHash: step.argumentHash,
       outcome: step.outcome, summary: step.summary, budgetState: step.budgetState,
       startedAt: new Date(step.startedAt), completedAt: new Date(step.completedAt),

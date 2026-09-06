@@ -1,0 +1,1 @@
+ALTER TABLE "agent_steps" ADD COLUMN "phase" text DEFAULT 'planning' NOT NULL;

@@ -235,9 +235,6 @@ export function buildApp(
       ...(log.estimatedCost ? { estimated_cost: log.estimatedCost } : {}),
       current_step: log.currentStep,
       ...(log.session ? { session: projectAgentSession(log.session) } : {}),
-      ...(log.recoverySession ? { recovery_session: {
-        ...projectAgentSession(log.recoverySession), gap_count: log.recoverySession.gapCount, candidates_submitted: log.recoverySession.candidatesSubmitted,
-      } } : {}),
       events: log.events.map((event) => ({ timestamp: event.timestamp, activity: event.activity,
         ...(event.toolLabel ? { tool_label: event.toolLabel } : {}) })),
     };

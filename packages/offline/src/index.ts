@@ -16,7 +16,7 @@ export interface OfflineFixtureContext {
 
 /** Outcome of an optional adaptive-recovery attempt supplied by the Worker before validation. */
 export interface OfflineRecoveryInput {
-  readonly eligibility: AgentEligibilityDecision;
+  readonly eligibility?: AgentEligibilityDecision;
   readonly candidates: readonly SubmittedExtractionCandidate[];
   readonly trace?: AgentSessionTrace;
 }
@@ -111,6 +111,8 @@ export function createOfflineRecoveryPorts(fixtureId: unknown, context: OfflineF
     }),
     renderPageRegion: async (reference, region) => ({ artifactReference: `render:${reference.documentVersionId}:${reference.pageNumber}:${region.x},${region.y},${region.width},${region.height}`, width: 300, height: 60 }),
     classifyPage: async (reference) => ({ candidates: [{ type: isPayslip(reference) ? "payslip" : reference.pageNumber === definition.identityPage ? "identity_document" : "bank_statement", rawConfidence: 0.99 }], method: "synthetic-demo-heading", version: "1.0.0" }),
+    detectDocumentBoundaries: async (reference) => ({ startsNewDocument: reference.pageNumber === 1, method: "synthetic-demo-heading", version: "1.0.0", rawConfidence: 0.99 }),
+    extractLocalTable: async (reference) => ({ available: isPayslip(reference), rowCount: 0 }),
     extractWithVlm: async (request) => ({
       modelLabel: "fake-vlm-gateway", promptVersion: "income-monthly-net-extract-1.0.0",
       ...(isPayslip(request.page) && request.fieldSchemaId === INCOME_FIELD_SCHEMA.fieldSchemaId
@@ -132,8 +134,7 @@ export function buildOfflineFixture(fixtureId: unknown, context: OfflineFixtureC
     resultRevisionId: context.resultRevisionId, findings, recommendedDisposition: mapDisposition(input, findings),
     evidence: records.evidence, candidates: records.candidates, reconciliations: records.reconciliations, claims: records.claims,
     gaps: extraction.gaps, gapResolutions: resolutions,
-    ...(recovery ? { eligibility: recovery.eligibility } : {}),
-    ...(recovery?.trace ? { recoverySession: recovery.trace } : {}),
+    ...(recovery?.eligibility ? { eligibility: recovery.eligibility } : {}),
   };
 }
 

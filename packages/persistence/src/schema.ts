@@ -452,6 +452,7 @@ export const agentSteps = pgTable("agent_steps", {
   id: uuid("id").primaryKey(),
   sessionId: uuid("session_id").notNull().references(() => agentSessions.id),
   sequence: integer("sequence").notNull(),
+  phase: text("phase").notNull().default("planning"),
   toolName: text("tool_name").notNull(),
   toolVersion: text("tool_version"),
   argumentHash: text("argument_hash").notNull(),

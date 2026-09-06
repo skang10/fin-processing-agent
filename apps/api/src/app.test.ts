@@ -43,8 +43,7 @@ describe("case intake", () => {
     getAgentLog: vi.fn(async () => ({
       availability: "ready" as const, modelLabel: "fake-pi-harness-v1",
       estimatedCost: { amount: "0.0000", currency: "EUR" as const }, currentStep: "awaiting_human_review" as const,
-      session: { harnessLabel: "pi-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review_report" as const, terminalReason: "report_submitted" as const, iterations: 3, toolCalls: 3, usageAvailable: true },
-      recoverySession: { harnessLabel: "pi-adaptive-recovery-harness (pi-coding-agent@0.85.1)", mode: "adaptive_recovery" as const, terminalReason: "gaps_resolved" as const, iterations: 5, toolCalls: 5, usageAvailable: true, gapCount: 1, candidatesSubmitted: 1 },
+      session: { harnessLabel: "pi-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review" as const, terminalReason: "report_submitted" as const, iterations: 3, toolCalls: 3, usageAvailable: true },
       events: [
         { timestamp: "2026-09-01T10:04:00.000Z", activity: "Listed deterministic findings", toolLabel: "list_findings" },
         { timestamp: "2026-09-01T10:05:00.000Z", activity: "Generated review report" },
@@ -164,8 +163,7 @@ describe("case intake", () => {
     expect(response.json()).toEqual({
       availability: "ready", model_label: "fake-pi-harness-v1",
       estimated_cost: { amount: "0.0000", currency: "EUR" }, current_step: "awaiting_human_review",
-      session: { harness_label: "pi-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review_report", terminal_reason: "report_submitted", iterations: 3, tool_calls: 3, usage_available: true },
-      recovery_session: { harness_label: "pi-adaptive-recovery-harness (pi-coding-agent@0.85.1)", mode: "adaptive_recovery", terminal_reason: "gaps_resolved", iterations: 5, tool_calls: 5, usage_available: true, gap_count: 1, candidates_submitted: 1 },
+      session: { harness_label: "pi-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review", terminal_reason: "report_submitted", iterations: 3, tool_calls: 3, usage_available: true },
       events: [
         { timestamp: "2026-09-01T10:04:00.000Z", activity: "Listed deterministic findings", tool_label: "list_findings" },
         { timestamp: "2026-09-01T10:05:00.000Z", activity: "Generated review report" },

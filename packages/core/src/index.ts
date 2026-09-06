@@ -51,10 +51,10 @@ export interface SourceArtifactIntake {
   discard(artifact: StoredSourceArtifact): Promise<void>;
 }
 
-export type AgentSessionMode = "case_review_report" | "adaptive_recovery";
+export type AgentSessionMode = "case_review";
 
 export type AgentTerminalReason =
-  | "gaps_resolved" | "report_submitted" | "report_not_submitted" | "no_progress" | "conflicting_candidates"
+  | "report_submitted" | "report_not_submitted" | "no_progress" | "conflicting_candidates"
   | "iteration_budget_exhausted" | "tool_budget_exhausted" | "model_budget_exhausted" | "token_budget_exhausted"
   | "cost_budget_exhausted" | "timeout" | "tool_failure" | "model_unavailable" | "schema_failure"
   | "cancelled_by_workflow" | "internal_error";
@@ -112,6 +112,7 @@ export interface AgentEligibilityDecision {
 
 export interface AgentStepTrace {
   readonly sequence: number;
+  readonly phase?: "planning" | "document_inspection" | "extraction" | "reconciliation" | "validation" | "report_submission" | "terminal";
   readonly toolName: string;
   readonly toolVersion?: string;
   readonly argumentHash: string;
@@ -185,7 +186,6 @@ export interface OfflineDeterministicResult extends OfflineReportInput {
   readonly gaps?: readonly ExtractionGap[];
   readonly gapResolutions?: readonly GapResolution[];
   readonly eligibility?: AgentEligibilityDecision;
-  readonly recoverySession?: AgentSessionTrace;
 }
 
 export interface OfflineReportResult {
@@ -389,7 +389,6 @@ export interface AgentLogView {
   readonly estimatedCost?: { readonly amount: string; readonly currency: "EUR" };
   readonly currentStep: "processing" | "awaiting_human_review" | "review_completed";
   readonly session?: AgentLogSessionView;
-  readonly recoverySession?: AgentLogSessionView & { readonly gapCount: number; readonly candidatesSubmitted: number };
   readonly events: readonly { readonly timestamp: string; readonly activity: string; readonly toolLabel?: string }[];
 }
 

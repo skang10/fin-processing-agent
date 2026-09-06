@@ -25,6 +25,8 @@ function ports(calls: string[] = []): RecoveryToolPorts {
     runOcr: async (page) => { calls.push(`ocr:${page.pageNumber}`); return { engine: "fake-fixture-ocr", engineVersion: "1.0.0", modelAssetVersion: "fixture", reusedCommittedOutput: true, lines: [{ text: "Nettoeinkommen", region: { x: 0.1, y: 0.42, width: 0.3, height: 0.04 }, rawConfidence: 0.98 }, { text: "2980.00", region, rawConfidence: 0.97 }] }; },
     renderPageRegion: async (page) => { calls.push(`render:${page.pageNumber}`); return { artifactReference: `render:${page.documentVersionId}:${page.pageNumber}`, width: 300, height: 60 }; },
     classifyPage: async () => ({ candidates: [{ type: "payslip", rawConfidence: 0.99 }], method: "synthetic-demo-heading", version: "1.0.0" }),
+    detectDocumentBoundaries: async (page) => ({ startsNewDocument: page.pageNumber === 1, method: "fake", version: "1.0.0" }),
+    extractLocalTable: async () => ({ available: false, rowCount: 0 }),
     extractWithVlm: async (request) => { calls.push(`vlm:${request.page.pageNumber}:${request.fieldSchemaId}`); return { modelLabel: "fake-vlm-gateway", promptVersion: "income-extract-1.0.0", value: { rawValue: "2980.00", normalizedValue: { amount: "2980.00", currency: "EUR" }, region, rawConfidence: 0.91 }, usage: { inputTokens: 10, outputTokens: 5 } }; },
   };
 }
@@ -36,10 +38,10 @@ function harness(script: keyof typeof FAKE_RECOVERY_SCRIPTS, budget: Partial<typ
 const stepView = (trace: { steps: readonly { toolName: string; outcome: string }[] }) => trace.steps.map((step) => `${step.toolName}:${step.outcome}`);
 
 describe("PiAdaptiveRecoveryHarness", () => {
-  it("exposes exactly the eight registered recovery tools", async () => {
+  it("exposes only the registered document-recovery tools", async () => {
     const outcome = await harness("standard").recover(context(), ports());
     expect(outcome.trace.offeredTools).toEqual([...ADAPTIVE_RECOVERY_TOOL_NAMES]);
-    expect(outcome.trace.offeredTools).toHaveLength(8);
+    expect(outcome.trace.offeredTools).toHaveLength(10);
     for (const name of ["bash", "read", "edit", "write", "grep", "find", "ls"]) expect(outcome.trace.offeredTools).not.toContain(name);
   });
 
@@ -54,7 +56,7 @@ describe("PiAdaptiveRecoveryHarness", () => {
       page: { documentVersionId: DOCUMENT, pageNumber: 2 }, region: { x: 0.55, y: 0.42, width: 0.2, height: 0.04 },
       extractionMethod: "agent_vlm_extraction", processorVersion: "fake-vlm-gateway/income-extract-1.0.0",
     }]);
-    expect(outcome.trace).toMatchObject({ mode: "adaptive_recovery", terminalReason: "gaps_resolved", iterations: 5, toolCalls: 5, boundGapIds: ["gap-income"] });
+    expect(outcome.trace).toMatchObject({ mode: "case_review", terminalReason: "report_not_submitted", iterations: 5, toolCalls: 5, boundGapIds: ["gap-income"] });
   });
 
   it("rejects out-of-scope pages and values without tool evidence, then still recovers", async () => {
@@ -64,6 +66,8 @@ describe("PiAdaptiveRecoveryHarness", () => {
       "get_extraction_gaps:succeeded",
       "get_native_text:authorization_rejected",
       "submit_extraction_candidates:authorization_rejected",
+      "inspect_page:succeeded",
+      "run_ocr:succeeded",
       "extract_with_vlm:succeeded",
       "submit_extraction_candidates:succeeded",
     ]);

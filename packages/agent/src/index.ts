@@ -36,6 +36,26 @@ export interface CaseReviewAgentHarness {
   generate(context: CaseReviewContext): Promise<CaseReviewSessionOutcome>;
 }
 
+/** Deterministic component callbacks available through registered tools in one Agent-led review. */
+export interface CaseReviewProcessingPorts extends RecoveryToolPorts {
+  requestReconciliation(candidates: readonly SubmittedExtractionCandidate[]): Promise<{ readonly reference: string }>;
+  requestValidation(): Promise<CaseReviewContext>;
+}
+
+export interface AgentLedCaseReviewContext extends AdaptiveRecoveryContext {
+  readonly fixtureLabel?: string;
+}
+
+export interface AgentLedCaseReviewOutcome extends CaseReviewSessionOutcome {
+  readonly candidates: readonly SubmittedExtractionCandidate[];
+  readonly result?: CaseReviewContext;
+}
+
+export interface AgentLedCaseReviewHarness {
+  readonly descriptor: CaseReviewHarnessDescriptor;
+  review(context: AgentLedCaseReviewContext, ports: CaseReviewProcessingPorts): Promise<AgentLedCaseReviewOutcome>;
+}
+
 export type ReportVerificationFailure = "schema_rejected" | "reference_rejected" | "policy_rejected" | "timeout" | "unavailable";
 export type ReportVerificationResult =
   | { readonly verified: true; readonly brief: CaseReviewBriefCandidate }
@@ -54,9 +74,9 @@ export class AgentReportExecutionError extends Error {
 /** Configuration-controlled report-session budget envelope (AGT-REQ-057). */
 export const AGENT_BUDGET_CONFIGURATION_VERSION = "agent-budget-1.0.0";
 export const DEFAULT_AGENT_BUDGET: AgentBudgetEnvelope = Object.freeze({
-  maxIterations: 6,
-  maxToolCalls: 8,
-  maxModelCalls: 6,
+  maxIterations: 14,
+  maxToolCalls: 18,
+  maxModelCalls: 14,
   maxInputTokens: 60_000,
   maxOutputTokens: 8_000,
   maxWallClockMs: 60_000,
@@ -96,7 +116,7 @@ export function buildSyntheticSessionTrace(options: FakeTraceOptions): AgentSess
   });
   return {
     sessionId: uuidFrom(`${options.descriptor.harnessId}:${startedAt}:${steps.length}`),
-    mode: "case_review_report",
+    mode: "case_review",
     harnessId: options.descriptor.harnessId,
     harnessVersion: options.descriptor.harnessVersion,
     modelLabel: options.descriptor.modelLabel,
@@ -262,6 +282,8 @@ export interface RecoveryToolPorts {
   runOcr(page: PageReference): Promise<{ readonly engine: string; readonly engineVersion: string; readonly modelAssetVersion: string; readonly lines: readonly { readonly text: string; readonly region: NormalizedRegion; readonly rawConfidence: number }[]; readonly reusedCommittedOutput: boolean }>;
   renderPageRegion(page: PageReference, region: NormalizedRegion): Promise<{ readonly artifactReference: string; readonly width: number; readonly height: number }>;
   classifyPage(page: PageReference): Promise<{ readonly candidates: readonly { readonly type: string; readonly rawConfidence: number }[]; readonly method: string; readonly version: string }>;
+  detectDocumentBoundaries(page: PageReference): Promise<{ readonly startsNewDocument: boolean; readonly method: string; readonly version: string; readonly rawConfidence?: number }>;
+  extractLocalTable(page: PageReference): Promise<{ readonly available: boolean; readonly rowCount: number; readonly artifactReference?: string }>;
   extractWithVlm(request: { readonly page: PageReference; readonly fieldSchemaId: string; readonly region?: NormalizedRegion }): Promise<{ readonly modelLabel: string; readonly promptVersion: string; readonly value?: { readonly rawValue: string; readonly normalizedValue: unknown; readonly region: NormalizedRegion; readonly rawConfidence: number }; readonly usage?: { readonly inputTokens: number; readonly outputTokens: number } }>;
 }
 
@@ -344,7 +366,7 @@ export class FakeAdaptiveRecoveryHarness implements AdaptiveRecoveryHarness {
       steps.push({ toolName: "submit_extraction_candidates", toolVersion: "1.0.0", argumentHash: hashArguments({ gapId: gap.gapId, rawValue: result.value.rawValue }), outcome: "succeeded", summary: "Submitted 1 extraction candidate(s)" });
     }
     const resolved = context.gaps.filter((gap) => gap.required).every((gap) => candidates.some((candidate) => candidate.gapId === gap.gapId));
-    const trace = buildSyntheticSessionTrace({ descriptor: this.descriptor, steps, terminalReason: resolved && candidates.length > 0 ? "gaps_resolved" : "no_progress" });
-    return { candidates, trace: { ...trace, mode: "adaptive_recovery", boundGapIds: context.gaps.map((gap) => gap.gapId) } };
+    const trace = buildSyntheticSessionTrace({ descriptor: this.descriptor, steps, terminalReason: resolved && candidates.length > 0 ? "report_not_submitted" : "no_progress" });
+    return { candidates, trace: { ...trace, mode: "case_review", boundGapIds: context.gaps.map((gap) => gap.gapId) } };
   }
 }

@@ -155,6 +155,13 @@
       "when": 1788702913631,
       "tag": "0021_skinny_blonde_phantom",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788708516877,
+      "tag": "0022_bizarre_obadiah_stane",
+      "breakpoints": true
     }
   ]
 }

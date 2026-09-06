@@ -219,7 +219,7 @@ export class SessionControlPlane<TScope, TState> {
 
   private record(toolCallId: string, toolName: string, args: unknown, outcome: AgentStepOutcome, summary: string, toolVersion?: string): void {
     const step: AgentStepTrace = {
-      sequence: this.steps.length + 1, toolName, ...(toolVersion ? { toolVersion } : {}),
+      sequence: this.steps.length + 1, phase: phaseForTool(toolName), toolName, ...(toolVersion ? { toolVersion } : {}),
       argumentHash: hashArguments(args ?? null), outcome, summary,
       startedAt: this.startedAt.get(toolCallId) ?? new Date().toISOString(), completedAt: new Date().toISOString(),
       budgetState: { iterationsUsed: this.iterations, toolCallsUsed: this.toolCalls },
@@ -227,6 +227,15 @@ export class SessionControlPlane<TScope, TState> {
     this.steps.push(step);
     this.emit(step);
   }
+}
+
+function phaseForTool(toolName: string): NonNullable<AgentStepTrace["phase"]> {
+  if (toolName === "request_reconciliation") return "reconciliation";
+  if (toolName === "request_validation" || toolName === "get_current_result") return "validation";
+  if (toolName === "submit_case_review_brief") return "report_submission";
+  if (["run_ocr", "extract_with_vlm", "submit_extraction_candidates", "extract_local_table"].includes(toolName)) return "extraction";
+  if (["inspect_page", "get_native_text", "render_page_region", "classify_page", "detect_document_boundaries"].includes(toolName)) return "document_inspection";
+  return "planning";
 }
 
 export interface BoundedSessionSpec<TScope, TState> {

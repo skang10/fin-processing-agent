@@ -147,7 +147,7 @@ export const AgentReportSchema = Type.Object({
 });
 
 export const AgentTerminalReasonSchema = Type.Union([
-  Type.Literal("gaps_resolved"), Type.Literal("report_submitted"), Type.Literal("report_not_submitted"), Type.Literal("no_progress"),
+  Type.Literal("report_submitted"), Type.Literal("report_not_submitted"), Type.Literal("no_progress"),
   Type.Literal("conflicting_candidates"), Type.Literal("iteration_budget_exhausted"), Type.Literal("tool_budget_exhausted"),
   Type.Literal("model_budget_exhausted"), Type.Literal("token_budget_exhausted"), Type.Literal("cost_budget_exhausted"),
   Type.Literal("timeout"), Type.Literal("tool_failure"), Type.Literal("model_unavailable"), Type.Literal("schema_failure"),
@@ -156,7 +156,7 @@ export const AgentTerminalReasonSchema = Type.Union([
 
 const AgentLogSessionFields = {
   harness_label: Type.String(),
-  mode: Type.Union([Type.Literal("case_review_report"), Type.Literal("adaptive_recovery")]),
+  mode: Type.Literal("case_review"),
   terminal_reason: AgentTerminalReasonSchema,
   iterations: Type.Integer({ minimum: 0 }),
   tool_calls: Type.Integer({ minimum: 0 }),
@@ -171,11 +171,6 @@ export const AgentLogSchema = Type.Object({
   estimated_cost: Type.Optional(Type.Object({ amount: Type.String(), currency: Type.Literal("EUR") }, { additionalProperties: false })),
   current_step: Type.Union([Type.Literal("processing"), Type.Literal("awaiting_human_review"), Type.Literal("review_completed")]),
   session: Type.Optional(AgentLogSessionSchema),
-  recovery_session: Type.Optional(Type.Object({
-    ...AgentLogSessionFields,
-    gap_count: Type.Integer({ minimum: 0 }),
-    candidates_submitted: Type.Integer({ minimum: 0 }),
-  }, { additionalProperties: false })),
   events: Type.Array(Type.Object({
     timestamp: Type.String(), activity: Type.String(), tool_label: Type.Optional(Type.String()),
   }, { additionalProperties: false })),

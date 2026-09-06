@@ -133,7 +133,7 @@ describe("adaptive recovery gap path", () => {
     expect(eligibility.decision).toBe("eligible");
     const outcome = await new FakeAdaptiveRecoveryHarness().recover(recoveryContext, createOfflineRecoveryPorts(fixtureId, context));
     expect(outcome.candidates).toHaveLength(1);
-    expect(outcome.trace).toMatchObject({ mode: "adaptive_recovery", terminalReason: "gaps_resolved", boundGapIds: [extraction.gaps[0]!.gapId] });
+    expect(outcome.trace).toMatchObject({ mode: "case_review", terminalReason: "report_not_submitted", boundGapIds: [extraction.gaps[0]!.gapId] });
     const result = buildOfflineFixture(fixtureId, context, { eligibility, candidates: outcome.candidates, trace: outcome.trace });
     expect(result.gapResolutions).toEqual([{ gapId: extraction.gaps[0]!.gapId, resolutionType: "claim", reference: expect.any(String) }]);
     const claim = result.claims.find((item) => item.claimId === result.gapResolutions![0]!.reference);
@@ -144,7 +144,6 @@ describe("adaptive recovery gap path", () => {
     expect(result.findings.find((finding) => finding.ruleId === "VAL_INCOME_CONSISTENCY_001")).toMatchObject({ status: "failed", reasonCode: "income_conflict" });
     expect(result.recommendedDisposition).toBe("human_review_required");
     expect(result.eligibility).toBe(eligibility);
-    expect(result.recoverySession).toBe(outcome.trace);
   });
 
   it("ignores submitted candidates that fall outside the gap scope", () => {

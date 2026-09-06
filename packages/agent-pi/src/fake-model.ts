@@ -202,12 +202,60 @@ export const overreachingRecoveryScript: FakeModelScript = (turn, context) => {
   const page = { document_version_id: gap.scope.document_version_id, page_number: gap.scope.page_number };
   if (turn === 2) return { kind: "tool_calls", calls: [{ name: "get_native_text", args: { document_version_id: "other-document", page_number: 1 } }] };
   if (turn === 3) return { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates: [{ gap_id: gap.gap_id, raw_value: "9999.00", ...page, region: { x: 0, y: 0, width: 1, height: 1 } }] } }] };
-  if (turn === 4) return { kind: "tool_calls", calls: [{ name: "extract_with_vlm", args: { ...page, field_schema_id: gap.field_schema_id } }] };
+  if (turn === 4) return { kind: "tool_calls", calls: [{ name: "inspect_page", args: page }] };
+  if (turn === 5) return { kind: "tool_calls", calls: [{ name: "run_ocr", args: page }] };
+  if (turn === 6) return { kind: "tool_calls", calls: [{ name: "extract_with_vlm", args: { ...page, field_schema_id: gap.field_schema_id } }] };
   const vlm = readToolResult<{ value: { raw_value: string; region: { x: number; y: number; width: number; height: number } } | null }>(context, "extract_with_vlm");
-  if (turn === 5 && vlm?.value) return { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates: [{ gap_id: gap.gap_id, raw_value: vlm.value.raw_value, ...page, region: vlm.value.region }] } }] };
+  if (turn === 7 && vlm?.value) return { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates: [{ gap_id: gap.gap_id, raw_value: vlm.value.raw_value, ...page, region: vlm.value.region }] } }] };
   return { kind: "text", text: "Recovery finished." };
 };
 
 export const FAKE_RECOVERY_SCRIPTS: Readonly<Record<string, FakeModelScript>> = Object.freeze({
   standard: standardRecoveryScript, overreaching: overreachingRecoveryScript, runaway: runawayScript, stall: stallScript, silent: silentScript,
 });
+
+interface CurrentResult {
+  result_revision_id: string;
+  findings: { rule_id: string; rule_version?: string; status: string; reason_code: string }[];
+}
+
+/** One deterministic fake-model policy for the complete Agent-led case review session. */
+export const standardCaseReviewScript: FakeModelScript = (_turn, context) => {
+  const gapsResult = readToolResult<{ gaps: ListedGap[]; pages: { document_version_id: string; page_number: number; needs_ocr: boolean }[] }>(context, "get_extraction_gaps");
+  if (!gapsResult) return { kind: "tool_calls", calls: [{ name: "get_extraction_gaps", args: {} }] };
+  const gap = gapsResult.gaps[0];
+  const reviewPage = gap?.scope ?? gapsResult.pages[0];
+  if (reviewPage && !readToolResult(context, "inspect_page")) {
+    return { kind: "tool_calls", calls: [{ name: "inspect_page", args: { document_version_id: reviewPage.document_version_id, page_number: reviewPage.page_number } }] };
+  }
+  if (!gap && reviewPage && !readToolResult(context, "get_native_text")) {
+    return { kind: "tool_calls", calls: [{ name: "get_native_text", args: { document_version_id: reviewPage.document_version_id, page_number: reviewPage.page_number } }] };
+  }
+  if (gap && !readToolResult(context, "run_ocr")) {
+    return { kind: "tool_calls", calls: [{ name: "run_ocr", args: { document_version_id: gap.scope.document_version_id, page_number: gap.scope.page_number } }] };
+  }
+  if (gap && !readToolResult(context, "extract_with_vlm")) {
+    return { kind: "tool_calls", calls: [{ name: "extract_with_vlm", args: { document_version_id: gap.scope.document_version_id, page_number: gap.scope.page_number, field_schema_id: gap.field_schema_id } }] };
+  }
+  if (gap && !readToolResult(context, "submit_extraction_candidates")) {
+    const vlm = readToolResult<{ value: { raw_value: string; region: { x: number; y: number; width: number; height: number } } | null }>(context, "extract_with_vlm");
+    if (vlm?.value) return { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates: [{ gap_id: gap.gap_id, raw_value: vlm.value.raw_value, document_version_id: gap.scope.document_version_id, page_number: gap.scope.page_number, region: vlm.value.region }] } }] };
+  }
+  if (!readToolResult(context, "request_reconciliation")) return { kind: "tool_calls", calls: [{ name: "request_reconciliation", args: {} }] };
+  if (!readToolResult(context, "request_validation")) return { kind: "tool_calls", calls: [{ name: "request_validation", args: {} }] };
+  const result = readToolResult<CurrentResult>(context, "get_current_result");
+  if (!result) return { kind: "tool_calls", calls: [{ name: "get_current_result", args: {} }] };
+  const findings: ReportFindingView[] = result.findings.map((finding) => ({ ruleId: finding.rule_id, ...(finding.rule_version ? { ruleVersion: finding.rule_version } : {}), status: finding.status, reasonCode: finding.reason_code }));
+  const items = attentionItemsForFindings(findings);
+  return { kind: "tool_calls", calls: [{ name: "submit_case_review_brief", args: { brief: { schema_version: "1.0.0", result_revision_id: result.result_revision_id, report_status: "ready", summary: `Document processing completed with ${items.length} items requiring human review.`, attention_items: items } } }] };
+};
+
+export const policyViolationCaseReviewScript: FakeModelScript = (turn, context) => {
+  const next = standardCaseReviewScript(turn, context);
+  if (next.kind === "tool_calls" && next.calls[0]?.name === "submit_case_review_brief") {
+    const call = next.calls[0];
+    const brief = call.args["brief"] as Record<string, unknown>;
+    return { kind: "tool_calls", calls: [{ ...call, args: { brief: { ...brief, summary: "Approve the loan." } } }] };
+  }
+  return next;
+};
