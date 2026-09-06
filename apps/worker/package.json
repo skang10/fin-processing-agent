@@ -20,6 +20,8 @@
     "pino": "10.3.1"
   },
   "devDependencies": {
+    "@testcontainers/postgresql": "12.1.0",
+    "drizzle-orm": "0.45.2",
     "tsx": "4.23.13"
   }
 }
