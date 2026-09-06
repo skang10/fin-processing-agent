@@ -49,6 +49,7 @@ await new Promise<void>((resolve) => healthServer.listen(
 
 await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   if (!job) return;
+  try {
   if (!isCaseProcessingJob(job.data)) throw new Error("Invalid case-processing job payload");
   logger.info({ case_id: job.data.case_id, run_id: job.data.run_id }, "case processing claimed");
   await coordinator.markRunRunning(job.data.case_id, job.data.run_id);
@@ -78,11 +79,11 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
         pages.push({
           ...page,
           nativeCharacterCount: page.nativeMarkdown.length,
-          nativeTextArtifact: {
+          ...(page.nativeMarkdown.length > 0 ? { nativeTextArtifact: {
             ...await storeNativeTextArtifact(page.nativeMarkdown, objectStore,
               `derived/${job.data.case_id}/${document.documentVersionId}/native-text/page-${page.pageNumber}`),
             caseId: job.data.case_id,
-          },
+          } } : {}),
           renderArtifact: {
             ...await storePageRenderArtifact(rendered.bytes, rendered, objectStore,
               `derived/${job.data.case_id}/${document.documentVersionId}/render/page-${page.pageNumber}`),
@@ -136,6 +137,10 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
     return;
   }
   logger.info({ case_id: job.data.case_id, run_id: job.data.run_id }, "offline case processing completed");
+  } catch (error) {
+    logger.error({ error, job_id: job.id }, "case processing attempt failed");
+    throw error;
+  }
 });
 
 const relayTimer = setInterval(() => {
