@@ -162,6 +162,13 @@
       "when": 1788708516877,
       "tag": "0022_bizarre_obadiah_stane",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788711811434,
+      "tag": "0023_vengeful_dorian_gray",
+      "breakpoints": true
     }
   ]
 }

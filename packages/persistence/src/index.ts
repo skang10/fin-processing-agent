@@ -2,8 +2,15 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogSessionView, type AgentLogView, type AgentSessionMode, type AgentSessionTrace, type AgentTerminalReason, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type PageRenderArtifactView, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type SourceDocumentArtifactView, type StoredDerivedArtifact, type StoredOcrArtifact, type StoredPageRenderArtifact } from "@findoc/core";
-import { agentEligibilityDecisions, agentReports, agentSessions, agentSteps, applicationSnapshots, extractionGaps, gapResolutions, artifacts, boundaryPredictions, candidateEvidenceLinks, cases, caseStateTransitions, claimCandidateLinks, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, extractionCandidates, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, logicalDocumentPages, logicalDocumentRevisions, outboxEvents, pageClassifications, pageOcrOutputs, pages, physicalDocuments, processingRuns, processingRunTransitions, reconciliationCandidateLinks, reconciliationDecisions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError, EMPTY_AGENT_CONSUMED_BUDGET,
+  addConsumedBudget, evaluateAgentSessionCompatibility,
+  type AcceptedCase, type AgentAttemptStartReason, type AgentCommittedToolResult, type AgentConsumedBudget,
+  type AgentLogSessionView, type AgentLogView, type AgentProducedReference, type AgentRecoverySnapshot,
+  type AgentSessionConfiguration, type AgentSessionLifecyclePort, type AgentSessionMode, type AgentSessionStart,
+  type AgentSessionTerminalResult, type AgentSessionTrace, type AgentStepOutcome, type AgentStepPhase,
+  type AgentStepTrace, type AgentTerminalReason, type BeginAgentSessionInput, type CommitAgentStepInput,
+  type CommitAgentStepResult, type TerminalizeAgentSessionInput, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type PageRenderArtifactView, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type SourceDocumentArtifactView, type StoredDerivedArtifact, type StoredOcrArtifact, type StoredPageRenderArtifact } from "@findoc/core";
+import { agentEligibilityDecisions, agentReports, agentSessionAttempts, agentSessions, agentSteps, agentToolInvocations, applicationSnapshots, extractionGaps, gapResolutions, artifacts, boundaryPredictions, candidateEvidenceLinks, cases, caseStateTransitions, claimCandidateLinks, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, extractionCandidates, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, logicalDocumentPages, logicalDocumentRevisions, outboxEvents, pageClassifications, pageOcrOutputs, pages, physicalDocuments, processingRuns, processingRunTransitions, reconciliationCandidateLinks, reconciliationDecisions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
@@ -493,7 +500,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     const view = (session: typeof sessions[number]): AgentLogSessionView => ({
       harnessLabel: `${session.harnessId} (${session.harnessVersion})`,
       mode: session.mode as AgentSessionMode,
-      terminalReason: session.terminalReason as AgentTerminalReason,
+      terminalReason: (session.terminalReason ?? "internal_error") as AgentTerminalReason,
       iterations: session.iterations, toolCalls: session.toolCalls,
       usageAvailable: (session.usage as { available?: boolean } | null)?.available === true,
     });
@@ -508,7 +515,9 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
         ...sessions.flatMap((session) => [
           { timestamp: session.startedAt.toISOString(), activity: `Started ${session.mode.replace(/_/g, " ")} session` },
           ...steps.filter((step) => step.sessionId === session.id).map((step) => ({ timestamp: step.completedAt.toISOString(), activity: step.summary, toolLabel: step.toolName })),
-          { timestamp: session.completedAt.toISOString(), activity: `Session ended: ${session.terminalReason.replace(/_/g, " ")}` },
+          ...(session.completedAt && session.terminalReason
+            ? [{ timestamp: session.completedAt.toISOString(), activity: `Session ended: ${session.terminalReason.replace(/_/g, " ")}` }]
+            : []),
         ]),
         ...resolvedGaps.map((gap) => ({
           timestamp: gap.createdAt.toISOString(),
@@ -1289,8 +1298,16 @@ function validateOfflineProvenance(
 
 type Transaction = Parameters<Parameters<ReturnType<typeof drizzle>["transaction"]>[0]>[0];
 
-/** Durable Agent session and step records (DAT-REQ-131, DAT-REQ-132). */
+/**
+ * Durable Agent session and step records (DAT-REQ-131, DAT-REQ-132) for harnesses that do not
+ * persist incrementally. A session already committed by the durable lifecycle is only linked.
+ */
 async function insertAgentSession(tx: Transaction, caseId: string, runId: string, resultRevisionId: string | null, session: AgentSessionTrace): Promise<void> {
+  const [existing] = await tx.select({ id: agentSessions.id }).from(agentSessions).where(eq(agentSessions.id, session.sessionId)).limit(1);
+  if (existing) {
+    await tx.update(agentSessions).set({ resultRevisionId }).where(eq(agentSessions.id, session.sessionId));
+    return;
+  }
   await tx.insert(agentSessions).values({
     id: session.sessionId, caseId, runId, resultRevisionId, mode: session.mode,
     harnessId: session.harnessId, harnessVersion: session.harnessVersion,
@@ -1474,3 +1491,224 @@ export interface InspectionRecord {
 }
 
 export * from "./schema.js";
+
+// ---------------------------------------------------------------------------
+// Durable Agent session lifecycle (AGT-REQ-072 to AGT-REQ-079)
+// ---------------------------------------------------------------------------
+
+const COST_MICRO_SCALE = 1_000_000;
+type SessionRow = typeof agentSessions.$inferSelect;
+
+function configurationOf(session: SessionRow): AgentSessionConfiguration {
+  return {
+    mode: session.mode as AgentSessionMode,
+    harnessId: session.harnessId, harnessVersion: session.harnessVersion,
+    modelLabel: session.modelLabel, modelRoute: session.modelRoute === "live" ? "live" : "fake",
+    promptVersion: session.promptVersion, promptHash: session.promptHash,
+    configurationVersion: session.configurationVersion, toolRegistryVersion: session.toolRegistryVersion,
+    contextManifestVersion: session.contextManifestVersion ?? "unversioned",
+    offeredTools: session.offeredTools as string[],
+    budget: session.budget as AgentSessionConfiguration["budget"],
+  };
+}
+
+function consumedOf(session: SessionRow): AgentConsumedBudget {
+  return {
+    iterations: session.iterations, toolCalls: session.toolCalls, modelCalls: session.modelCalls,
+    vlmCalls: session.vlmCalls, ocrPages: session.ocrPages,
+    inputTokens: session.inputTokens, outputTokens: session.outputTokens,
+    costUsd: session.costMicroUsd / COST_MICRO_SCALE, usageAvailable: session.usageAvailable,
+  };
+}
+
+function budgetIncrements(delta: Partial<AgentConsumedBudget>) {
+  return {
+    iterations: sql`${agentSessions.iterations} + ${delta.iterations ?? 0}`,
+    toolCalls: sql`${agentSessions.toolCalls} + ${delta.toolCalls ?? 0}`,
+    modelCalls: sql`${agentSessions.modelCalls} + ${delta.modelCalls ?? 0}`,
+    vlmCalls: sql`${agentSessions.vlmCalls} + ${delta.vlmCalls ?? 0}`,
+    ocrPages: sql`${agentSessions.ocrPages} + ${delta.ocrPages ?? 0}`,
+    inputTokens: sql`${agentSessions.inputTokens} + ${delta.inputTokens ?? 0}`,
+    outputTokens: sql`${agentSessions.outputTokens} + ${delta.outputTokens ?? 0}`,
+    costMicroUsd: sql`${agentSessions.costMicroUsd} + ${Math.round((delta.costUsd ?? 0) * COST_MICRO_SCALE)}`,
+    ...(delta.usageAvailable === false ? { usageAvailable: false } : {}),
+  };
+}
+
+function stepTraceOf(step: typeof agentSteps.$inferSelect): AgentStepTrace {
+  return {
+    sequence: step.sequence, phase: step.phase as AgentStepPhase, toolName: step.toolName,
+    ...(step.toolVersion ? { toolVersion: step.toolVersion } : {}),
+    argumentHash: step.argumentHash, outcome: step.outcome as AgentStepOutcome, summary: step.summary,
+    startedAt: step.startedAt.toISOString(), completedAt: step.completedAt.toISOString(),
+    budgetState: step.budgetState as AgentStepTrace["budgetState"],
+  };
+}
+
+function committedResultOf(invocation: typeof agentToolInvocations.$inferSelect): AgentCommittedToolResult {
+  return {
+    invocationId: invocation.id, idempotencyKey: invocation.idempotencyKey,
+    toolName: invocation.toolName, toolVersion: invocation.toolVersion,
+    outcome: invocation.outcome as AgentStepOutcome,
+    outputSchemaVersion: invocation.outputSchemaVersion, outputHash: invocation.outputHash,
+    ...(invocation.safeOutput === null ? {} : { safeOutput: invocation.safeOutput }),
+    producedReferences: invocation.producedReferences as AgentProducedReference[],
+    authorizedInputVersions: invocation.authorizedInputVersions as Record<string, string>,
+    terminatesSession: invocation.terminatesSession,
+  };
+}
+
+async function snapshotOf(tx: Transaction | ReturnType<typeof drizzle>, session: SessionRow): Promise<AgentRecoverySnapshot> {
+  const [steps, invocations, attempts] = await Promise.all([
+    tx.select().from(agentSteps).where(eq(agentSteps.sessionId, session.id)).orderBy(asc(agentSteps.sequence)),
+    tx.select().from(agentToolInvocations).where(eq(agentToolInvocations.sessionId, session.id)).orderBy(asc(agentToolInvocations.startedAt)),
+    tx.select({ value: count() }).from(agentSessionAttempts).where(eq(agentSessionAttempts.sessionId, session.id)),
+  ]);
+  return {
+    sessionId: session.id, caseId: session.caseId, runId: session.runId,
+    status: session.terminalReason ? "terminal" : "running",
+    ...(session.terminalReason ? { terminalReason: session.terminalReason as AgentTerminalReason } : {}),
+    configuration: configurationOf(session), consumed: consumedOf(session),
+    attempts: Number(attempts[0]?.value ?? 0), lastSequence: steps.at(-1)?.sequence ?? 0,
+    steps: steps.map(stepTraceOf), committedToolResults: invocations.map(committedResultOf),
+    startedAt: session.startedAt.toISOString(),
+  };
+}
+
+/**
+ * PostgreSQL owner of Agent session identity, attempts, steps, tool invocation results, and
+ * cumulative budgets. Duplicate delivery resolves through database uniqueness and a run-scoped
+ * advisory lock rather than process-local state (AGT-REQ-079, DAT-REQ-199).
+ */
+export class PostgresAgentSessionLifecycle implements AgentSessionLifecyclePort {
+  constructor(private readonly db: ReturnType<typeof drizzle>) {}
+
+  async beginSession(input: BeginAgentSessionInput): Promise<AgentSessionStart> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${input.runId}, 1))`);
+      const [found] = await tx.select().from(agentSessions)
+        .where(and(eq(agentSessions.runId, input.runId), eq(agentSessions.mode, input.configuration.mode))).limit(1);
+      let session = found;
+      if (session) {
+        const compatibility = evaluateAgentSessionCompatibility(configurationOf(session), input.configuration);
+        if (!compatibility.compatible) throw new AgentSessionIncompatibleError(compatibility.reasonCodes);
+        if (session.terminalReason) throw new AgentSessionTerminalError(session.terminalReason as AgentTerminalReason);
+      } else {
+        const configuration = input.configuration;
+        const [created] = await tx.insert(agentSessions).values({
+          id: randomUUID(), caseId: input.caseId, runId: input.runId, resultRevisionId: null,
+          mode: configuration.mode, harnessId: configuration.harnessId, harnessVersion: configuration.harnessVersion,
+          modelLabel: configuration.modelLabel, modelRoute: configuration.modelRoute,
+          promptVersion: configuration.promptVersion, promptHash: configuration.promptHash,
+          configurationVersion: configuration.configurationVersion, toolRegistryVersion: configuration.toolRegistryVersion,
+          contextManifestVersion: configuration.contextManifestVersion,
+          offeredTools: configuration.offeredTools, budget: configuration.budget,
+          iterations: 0, toolCalls: 0, usage: { available: true, modelCalls: 0, inputTokens: 0, outputTokens: 0 },
+          terminalReason: null, startedAt: new Date(input.startedAt), completedAt: null,
+        }).returning();
+        if (!created) throw new Error("Agent session could not be created");
+        session = created;
+      }
+      const snapshot = await snapshotOf(tx, session);
+      const attemptNumber = snapshot.attempts + 1;
+      const startReason: AgentAttemptStartReason = attemptNumber === 1 ? "initial" : "recovery";
+      await tx.update(agentSessionAttempts)
+        .set({ status: "abandoned", completedAt: new Date(input.startedAt) })
+        .where(and(eq(agentSessionAttempts.sessionId, session.id), eq(agentSessionAttempts.status, "running")));
+      const attemptId = randomUUID();
+      await tx.insert(agentSessionAttempts).values({
+        id: attemptId, sessionId: session.id, attemptNumber, startReason, status: "running",
+        startedAt: new Date(input.startedAt), completedAt: null, terminalReason: null,
+      });
+      await tx.update(agentSessions).set({ currentAttempt: attemptNumber }).where(eq(agentSessions.id, session.id));
+      return { sessionId: session.id, attemptId, attemptNumber, startReason, resumed: attemptNumber > 1, snapshot };
+    });
+  }
+
+  async commitStep(input: CommitAgentStepInput): Promise<CommitAgentStepResult> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${input.sessionId}, 2))`);
+      const [session] = await tx.select().from(agentSessions).where(eq(agentSessions.id, input.sessionId)).limit(1);
+      if (!session) throw new CaseNotFoundError();
+      if (session.terminalReason) throw new AgentSessionTerminalError(session.terminalReason as AgentTerminalReason);
+      const [existing] = await tx.select().from(agentSteps)
+        .where(and(eq(agentSteps.sessionId, input.sessionId), eq(agentSteps.sequence, input.sequence))).limit(1);
+      if (existing) {
+        if (existing.toolName !== input.toolName || existing.argumentHash !== input.argumentHash || existing.outcome !== input.outcome) {
+          throw new AgentStepConflictError(input.sessionId, input.sequence);
+        }
+        return {
+          stepId: existing.id, sequence: existing.sequence,
+          ...(existing.toolInvocationId ? { invocationId: existing.toolInvocationId } : {}),
+          alreadyCommitted: true, consumed: consumedOf(session),
+        };
+      }
+      let invocationId = input.reusedInvocationId;
+      if (input.invocation) {
+        const [committed] = await tx.select({ id: agentToolInvocations.id }).from(agentToolInvocations)
+          .where(and(eq(agentToolInvocations.sessionId, input.sessionId), eq(agentToolInvocations.idempotencyKey, input.invocation.idempotencyKey))).limit(1);
+        if (committed) invocationId = committed.id;
+        else {
+          invocationId = randomUUID();
+          await tx.insert(agentToolInvocations).values({
+            id: invocationId, sessionId: input.sessionId, idempotencyKey: input.invocation.idempotencyKey,
+            toolName: input.toolName, toolVersion: input.toolVersion ?? "unknown", outcome: input.outcome,
+            outputSchemaVersion: input.invocation.outputSchemaVersion, outputHash: input.invocation.outputHash,
+            safeOutput: input.invocation.safeOutput === undefined ? null : input.invocation.safeOutput,
+            producedReferences: input.invocation.producedReferences,
+            authorizedInputVersions: input.invocation.authorizedInputVersions,
+            terminatesSession: input.invocation.terminatesSession,
+            startedAt: new Date(input.startedAt), completedAt: new Date(input.completedAt),
+          });
+        }
+      }
+      const stepId = randomUUID();
+      await tx.insert(agentSteps).values({
+        id: stepId, sessionId: input.sessionId, attemptId: input.attemptId, sequence: input.sequence,
+        phase: input.phase, toolName: input.toolName, toolVersion: input.toolVersion ?? null,
+        argumentHash: input.argumentHash, outcome: input.outcome, summary: input.summary,
+        budgetState: input.budgetState, toolInvocationId: invocationId ?? null,
+        reusedInvocationId: input.reusedInvocationId ?? null,
+        integrityCheck: input.integrityCheck ?? null,
+        producedReferences: input.invocation?.producedReferences ?? [],
+        startedAt: new Date(input.startedAt), completedAt: new Date(input.completedAt),
+      });
+      const [updated] = await tx.update(agentSessions).set(budgetIncrements(input.budgetDelta))
+        .where(eq(agentSessions.id, input.sessionId)).returning();
+      if (!updated) throw new Error("Agent session budget could not be updated");
+      return {
+        stepId, sequence: input.sequence, ...(invocationId ? { invocationId } : {}),
+        alreadyCommitted: false, consumed: consumedOf(updated),
+      };
+    });
+  }
+
+  async terminalizeSession(input: TerminalizeAgentSessionInput): Promise<AgentSessionTerminalResult> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${input.sessionId}, 2))`);
+      const [session] = await tx.select().from(agentSessions).where(eq(agentSessions.id, input.sessionId)).limit(1);
+      if (!session) throw new CaseNotFoundError();
+      await tx.update(agentSessionAttempts)
+        .set({ status: "terminal", terminalReason: input.terminalReason, completedAt: new Date(input.completedAt) })
+        .where(eq(agentSessionAttempts.id, input.attemptId));
+      if (session.terminalReason) {
+        return { applied: false, terminalReason: session.terminalReason as AgentTerminalReason, consumed: consumedOf(session) };
+      }
+      const consumed = addConsumedBudget(consumedOf(session), input.budgetDelta);
+      const [updated] = await tx.update(agentSessions).set({
+        ...budgetIncrements(input.budgetDelta),
+        terminalReason: input.terminalReason, completedAt: new Date(input.completedAt),
+        offeredTools: input.offeredTools,
+        usage: { available: consumed.usageAvailable, modelCalls: consumed.modelCalls, inputTokens: consumed.inputTokens, outputTokens: consumed.outputTokens },
+      }).where(eq(agentSessions.id, input.sessionId)).returning();
+      if (!updated) throw new Error("Agent session could not be terminalized");
+      return { applied: true, terminalReason: input.terminalReason, consumed: consumedOf(updated) };
+    });
+  }
+
+  async loadSnapshot(runId: string): Promise<AgentRecoverySnapshot | undefined> {
+    const [session] = await this.db.select().from(agentSessions)
+      .where(eq(agentSessions.runId, runId)).orderBy(asc(agentSessions.createdAt)).limit(1);
+    return session ? snapshotOf(this.db, session) : undefined;
+  }
+}

@@ -420,6 +420,10 @@ export const agentEligibilityDecisions = pgTable("agent_eligibility_decisions", 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index("agent_eligibility_run_idx").on(table.runId)]);
 
+/**
+ * One authoritative case-review session per processing run (DAT-REQ-199). A session is running
+ * while `terminal_reason` is null; cumulative counters survive recovery (AGT-REQ-136).
+ */
 export const agentSessions = pgTable("agent_sessions", {
   id: uuid("id").primaryKey(),
   caseId: uuid("case_id").notNull().references(() => cases.id),
@@ -434,23 +438,67 @@ export const agentSessions = pgTable("agent_sessions", {
   promptHash: text("prompt_hash").notNull(),
   configurationVersion: text("configuration_version").notNull(),
   toolRegistryVersion: text("tool_registry_version").notNull(),
+  contextManifestVersion: text("context_manifest_version"),
   offeredTools: jsonb("offered_tools").notNull(),
   budget: jsonb("budget").notNull(),
   iterations: integer("iterations").notNull(),
   toolCalls: integer("tool_calls").notNull(),
+  modelCalls: integer("model_calls").notNull().default(0),
+  vlmCalls: integer("vlm_calls").notNull().default(0),
+  ocrPages: integer("ocr_pages").notNull().default(0),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  costMicroUsd: integer("cost_micro_usd").notNull().default(0),
+  usageAvailable: boolean("usage_available").notNull().default(true),
+  currentAttempt: integer("current_attempt").notNull().default(1),
   usage: jsonb("usage").notNull(),
   estimatedCost: text("estimated_cost"),
-  terminalReason: text("terminal_reason").notNull(),
+  terminalReason: text("terminal_reason"),
   boundGapIds: jsonb("bound_gap_ids"),
   submittedCandidateIds: jsonb("submitted_candidate_ids"),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
-  completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [index("agent_session_run_idx").on(table.runId), index("agent_session_case_idx").on(table.caseId)]);
+}, (table) => [
+  index("agent_session_run_idx").on(table.runId),
+  index("agent_session_case_idx").on(table.caseId),
+  uniqueIndex("agent_session_run_mode_uq").on(table.runId, table.mode),
+]);
+
+/** Linked execution attempts for one authoritative session; recovery never forks the identity (AGT-REQ-077). */
+export const agentSessionAttempts = pgTable("agent_session_attempts", {
+  id: uuid("id").primaryKey(),
+  sessionId: uuid("session_id").notNull().references(() => agentSessions.id),
+  attemptNumber: integer("attempt_number").notNull(),
+  startReason: text("start_reason").notNull(),
+  status: text("status").notNull(),
+  terminalReason: text("terminal_reason"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [uniqueIndex("agent_attempt_number_uq").on(table.sessionId, table.attemptNumber)]);
+
+/** Immutable tool invocation results keyed by canonical idempotency key (DAT-REQ-201). */
+export const agentToolInvocations = pgTable("agent_tool_invocations", {
+  id: uuid("id").primaryKey(),
+  sessionId: uuid("session_id").notNull().references(() => agentSessions.id),
+  idempotencyKey: text("idempotency_key").notNull(),
+  toolName: text("tool_name").notNull(),
+  toolVersion: text("tool_version").notNull(),
+  outcome: text("outcome").notNull(),
+  outputSchemaVersion: text("output_schema_version").notNull(),
+  outputHash: text("output_hash").notNull(),
+  safeOutput: jsonb("safe_output"),
+  producedReferences: jsonb("produced_references").notNull(),
+  authorizedInputVersions: jsonb("authorized_input_versions").notNull(),
+  terminatesSession: boolean("terminates_session").notNull().default(false),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+}, (table) => [uniqueIndex("agent_tool_invocation_key_uq").on(table.sessionId, table.idempotencyKey)]);
 
 export const agentSteps = pgTable("agent_steps", {
   id: uuid("id").primaryKey(),
   sessionId: uuid("session_id").notNull().references(() => agentSessions.id),
+  attemptId: uuid("attempt_id").references(() => agentSessionAttempts.id),
   sequence: integer("sequence").notNull(),
   phase: text("phase").notNull().default("planning"),
   toolName: text("tool_name").notNull(),
@@ -459,6 +507,10 @@ export const agentSteps = pgTable("agent_steps", {
   outcome: text("outcome").notNull(),
   summary: text("summary").notNull(),
   budgetState: jsonb("budget_state").notNull(),
+  toolInvocationId: uuid("tool_invocation_id").references(() => agentToolInvocations.id),
+  reusedInvocationId: uuid("reused_invocation_id").references(() => agentToolInvocations.id),
+  integrityCheck: text("integrity_check"),
+  producedReferences: jsonb("produced_references").notNull().default([]),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
   completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
 }, (table) => [uniqueIndex("agent_step_sequence_uq").on(table.sessionId, table.sequence)]);
