@@ -13,6 +13,8 @@ import {
   artifacts,
   cases,
   caseStateTransitions,
+  candidateEvidenceLinks,
+  claimCandidateLinks,
   claimEvidenceLinks,
   claimRecords,
   createDatabase,
@@ -25,6 +27,7 @@ import {
   documentVersions,
   documentInspections,
   evidenceRecords,
+  extractionCandidates,
   outboxEvents,
   pageOcrOutputs,
   pageClassifications,
@@ -32,6 +35,8 @@ import {
   processingRunTransitions,
   physicalDocuments,
   pages,
+  reconciliationCandidateLinks,
+  reconciliationDecisions,
   recommendedDispositions,
   resultRevisions,
   reviewIssues,
@@ -181,6 +186,11 @@ describe("PostgresCaseCommandService", () => {
     const resultRevisionId = "4c816f67-5f2f-4e21-8c17-7eb1e5383999";
     const evidenceId = "4c816f67-5f2f-4e21-8c17-7eb1e5383998";
     const claimId = "4c816f67-5f2f-4e21-8c17-7eb1e5383997";
+    const candidateId = "4c816f67-5f2f-4e21-8c17-7eb1e5383996";
+    const reconciliationId = "4c816f67-5f2f-4e21-8c17-7eb1e5383995";
+    const [logicalDocument] = await connection.db.select({ id: logicalDocumentRevisions.id })
+      .from(logicalDocumentRevisions).where(eq(logicalDocumentRevisions.runId, accepted.runId)).limit(1);
+    if (!logicalDocument) throw new Error("Expected persisted logical document");
     const ruleIds = [
       "VAL_DOC_COMPLETENESS_001", "VAL_NAME_CONSISTENCY_001", "VAL_EMPLOYER_CONSISTENCY_001",
       "VAL_INCOME_CONSISTENCY_001", "VAL_ID_EXPIRY_001",
@@ -201,10 +211,22 @@ describe("PostgresCaseCommandService", () => {
         documentVersionId: document.documentVersionId, pageNumber: 1,
         extractionMethod: "offline_fixture" as const, processorVersion: "fixture-v1",
       }],
+      candidates: [{
+        candidateId, fieldSchemaId: "fixture.field", fieldSchemaVersion: "1.0.0", valueType: "string" as const,
+        rawValue: "fixture", normalizedValue: "fixture", extractionMethod: "offline_fixture",
+        processorVersion: "fixture-v1", evidenceIds: [evidenceId], qualityStatus: "accepted" as const,
+        source: { type: "logical_document" as const, logicalDocumentRevisionId: logicalDocument.id },
+      }],
       claims: [{
         claimId, fieldSchemaId: "fixture.field", valueType: "string" as const,
         rawValue: "fixture", normalizedValue: "fixture", normalizationVersion: "fixture-v1",
-        evidenceIds: [evidenceId],
+        evidenceIds: [evidenceId], supportingCandidateIds: [candidateId],
+      }],
+      reconciliations: [{
+        reconciliationId, fieldSchemaId: "fixture.field", method: "single_accepted_candidate" as const,
+        version: "1.0.0" as const, status: "selected" as const,
+        candidates: [{ candidateId, status: "selected" as const }], selectedCandidateId: candidateId,
+        reason: "one_accepted_candidate" as const, resultingClaimId: claimId,
       }],
       issues: [{ code: "VAL_EMPLOYER_CONSISTENCY_001", description: "Employer differs.", recommendedAction: "Confirm the current employer." }],
     };
@@ -218,7 +240,7 @@ describe("PostgresCaseCommandService", () => {
 
     const queries = new PostgresCaseQueryService(connection.db);
     const status = await queries.get(accepted.caseId);
-    const [[stageCount], [issueCount], [reportCount], [resultCount], [findingCount], [dispositionCount], [evidenceCount], [claimCount], [claimEvidenceCount]] = await Promise.all([
+    const [[stageCount], [issueCount], [reportCount], [resultCount], [findingCount], [dispositionCount], [evidenceCount], [claimCount], [claimEvidenceCount], [candidateCount], [candidateEvidenceCount], [claimCandidateCount], [reconciliationCount], [reconciliationCandidateCount]] = await Promise.all([
       connection.db.select({ value: count() }).from(stageExecutions),
       connection.db.select({ value: count() }).from(reviewIssues),
       connection.db.select({ value: count() }).from(agentReports),
@@ -228,11 +250,18 @@ describe("PostgresCaseCommandService", () => {
       connection.db.select({ value: count() }).from(evidenceRecords),
       connection.db.select({ value: count() }).from(claimRecords),
       connection.db.select({ value: count() }).from(claimEvidenceLinks),
+      connection.db.select({ value: count() }).from(extractionCandidates),
+      connection.db.select({ value: count() }).from(candidateEvidenceLinks),
+      connection.db.select({ value: count() }).from(claimCandidateLinks),
+      connection.db.select({ value: count() }).from(reconciliationDecisions),
+      connection.db.select({ value: count() }).from(reconciliationCandidateLinks),
     ]);
     expect(status).toMatchObject({ lifecycle: "ready_for_review", progress: "human_review", version: 2 });
     expect([stageCount?.value, issueCount?.value, reportCount?.value]).toEqual([4, 1, 1]);
     expect([resultCount?.value, findingCount?.value, dispositionCount?.value]).toEqual([1, 5, 1]);
     expect([evidenceCount?.value, claimCount?.value, claimEvidenceCount?.value]).toEqual([1, 1, 1]);
+    expect([candidateCount?.value, candidateEvidenceCount?.value, claimCandidateCount?.value]).toEqual([1, 1, 1]);
+    expect([reconciliationCount?.value, reconciliationCandidateCount?.value]).toEqual([1, 1]);
     await expect(queries.getEvidence(accepted.caseId, evidenceId)).resolves.toMatchObject({
       evidenceType: "page_level", documentVersionId: document.documentVersionId, pageNumber: 1,
     });

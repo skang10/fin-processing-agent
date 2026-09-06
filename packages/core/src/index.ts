@@ -76,6 +76,8 @@ export interface OfflineReportInput {
 export interface OfflineDeterministicResult extends OfflineReportInput {
   readonly evidence: readonly OfflineEvidenceResult[];
   readonly claims: readonly OfflineClaimResult[];
+  readonly candidates?: readonly ExtractionCandidate[];
+  readonly reconciliations?: readonly PersistedCandidateReconciliation[];
 }
 
 export interface OfflineReportResult {
@@ -108,6 +110,12 @@ export interface OfflineClaimResult {
   readonly normalizedValue: unknown;
   readonly normalizationVersion: string;
   readonly evidenceIds: readonly string[];
+  readonly supportingCandidateIds?: readonly string[];
+}
+
+export interface PersistedCandidateReconciliation extends CandidateReconciliation {
+  readonly reconciliationId: string;
+  readonly resultingClaimId?: string;
 }
 
 export interface ExtractionCandidate {

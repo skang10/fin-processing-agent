@@ -134,6 +134,13 @@
       "when": 1788660387908,
       "tag": "0018_fantastic_daimon_hellstrom",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788660991712,
+      "tag": "0019_yielding_logan",
+      "breakpoints": true
     }
   ]
 }

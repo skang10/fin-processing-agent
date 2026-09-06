@@ -1,4 +1,5 @@
-import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 export const cases = pgTable("cases", {
   id: uuid("id").primaryKey(),
@@ -203,6 +204,37 @@ export const evidenceRecords = pgTable("evidence_records", {
   processorVersion: text("processor_version").notNull(),
 }, (table) => [index("evidence_run_idx").on(table.runId)]);
 
+export const extractionCandidates = pgTable("extraction_candidates", {
+  id: uuid("id").primaryKey(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id),
+  fieldSchemaId: text("field_schema_id").notNull(),
+  fieldSchemaVersion: text("field_schema_version").notNull(),
+  valueType: text("value_type").notNull(),
+  rawValue: text("raw_value").notNull(),
+  normalizedValue: jsonb("normalized_value").notNull(),
+  extractionMethod: text("extraction_method").notNull(),
+  processorVersion: text("processor_version").notNull(),
+  qualityStatus: text("quality_status").notNull(),
+  applicationSnapshotId: uuid("application_snapshot_id").references(() => applicationSnapshots.id),
+  jsonPointer: text("json_pointer"),
+  logicalDocumentRevisionId: uuid("logical_document_revision_id").references(() => logicalDocumentRevisions.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("candidate_run_idx").on(table.runId),
+  check("candidate_source_ck", sql`(
+    ${table.applicationSnapshotId} is not null and ${table.jsonPointer} is not null and ${table.logicalDocumentRevisionId} is null
+  ) or (
+    ${table.applicationSnapshotId} is null and ${table.jsonPointer} is null and ${table.logicalDocumentRevisionId} is not null
+  )`),
+]);
+
+export const candidateEvidenceLinks = pgTable("candidate_evidence_links", {
+  id: uuid("id").primaryKey(),
+  candidateId: uuid("candidate_id").notNull().references(() => extractionCandidates.id),
+  evidenceId: uuid("evidence_id").notNull().references(() => evidenceRecords.id),
+  relationship: text("relationship").notNull(),
+}, (table) => [uniqueIndex("candidate_evidence_uq").on(table.candidateId, table.evidenceId)]);
+
 export const claimRecords = pgTable("claim_records", {
   id: uuid("id").primaryKey(),
   runId: uuid("run_id").notNull().references(() => processingRuns.id),
@@ -219,6 +251,33 @@ export const claimEvidenceLinks = pgTable("claim_evidence_links", {
   evidenceId: uuid("evidence_id").notNull().references(() => evidenceRecords.id),
   relationship: text("relationship").notNull(),
 }, (table) => [uniqueIndex("claim_evidence_uq").on(table.claimId, table.evidenceId)]);
+
+export const reconciliationDecisions = pgTable("reconciliation_decisions", {
+  id: uuid("id").primaryKey(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id),
+  fieldSchemaId: text("field_schema_id").notNull(),
+  method: text("method").notNull(),
+  methodVersion: text("method_version").notNull(),
+  status: text("status").notNull(),
+  reason: text("reason").notNull(),
+  selectedCandidateId: uuid("selected_candidate_id").references(() => extractionCandidates.id),
+  resultingClaimId: uuid("resulting_claim_id").references(() => claimRecords.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("reconciliation_run_idx").on(table.runId)]);
+
+export const reconciliationCandidateLinks = pgTable("reconciliation_candidate_links", {
+  id: uuid("id").primaryKey(),
+  reconciliationId: uuid("reconciliation_id").notNull().references(() => reconciliationDecisions.id),
+  candidateId: uuid("candidate_id").notNull().references(() => extractionCandidates.id),
+  status: text("status").notNull(),
+}, (table) => [uniqueIndex("reconciliation_candidate_uq").on(table.reconciliationId, table.candidateId)]);
+
+export const claimCandidateLinks = pgTable("claim_candidate_links", {
+  id: uuid("id").primaryKey(),
+  claimId: uuid("claim_id").notNull().references(() => claimRecords.id),
+  candidateId: uuid("candidate_id").notNull().references(() => extractionCandidates.id),
+  relationship: text("relationship").notNull(),
+}, (table) => [uniqueIndex("claim_candidate_uq").on(table.claimId, table.candidateId)]);
 
 export const validationFindings = pgTable("validation_findings", {
   id: uuid("id").primaryKey(),

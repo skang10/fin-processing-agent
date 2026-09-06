@@ -3,7 +3,7 @@ import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type PageRenderArtifactView, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type SourceDocumentArtifactView, type StoredDerivedArtifact, type StoredOcrArtifact, type StoredPageRenderArtifact } from "@findoc/core";
-import { agentReports, applicationSnapshots, artifacts, boundaryPredictions, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, logicalDocumentPages, logicalDocumentRevisions, outboxEvents, pageClassifications, pageOcrOutputs, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
+import { agentReports, applicationSnapshots, artifacts, boundaryPredictions, candidateEvidenceLinks, cases, caseStateTransitions, claimCandidateLinks, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, extractionCandidates, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, logicalDocumentPages, logicalDocumentRevisions, outboxEvents, pageClassifications, pageOcrOutputs, pages, physicalDocuments, processingRuns, processingRunTransitions, reconciliationCandidateLinks, reconciliationDecisions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
@@ -994,7 +994,15 @@ export class PostgresWorkflowCoordinator {
       const allowedPages = await tx.select({ documentVersionId: pages.documentVersionId, pageNumber: pages.pageNumber })
         .from(pages).innerJoin(documentInspections, eq(pages.documentInspectionId, documentInspections.id))
         .where(eq(documentInspections.runId, runId));
-      validateOfflineProvenance(result, run.applicationSnapshotId, run.applicationContent, new Set(allowedPages.map((page) => `${page.documentVersionId}:${page.pageNumber}`)));
+      const allowedLogicalDocuments = await tx.select({ id: logicalDocumentRevisions.id })
+        .from(logicalDocumentRevisions).where(eq(logicalDocumentRevisions.runId, runId));
+      validateOfflineProvenance(
+        result,
+        run.applicationSnapshotId,
+        run.applicationContent,
+        new Set(allowedPages.map((page) => `${page.documentVersionId}:${page.pageNumber}`)),
+        new Set(allowedLogicalDocuments.map((document) => document.id)),
+      );
 
       const completedAt = new Date();
       const stages = ["inspect", "extract", "validate"];
@@ -1012,6 +1020,19 @@ export class PostgresWorkflowCoordinator {
         documentVersionId: item.documentVersionId, pageNumber: item.pageNumber,
         extractionMethod: item.extractionMethod, processorVersion: item.processorVersion,
       })));
+      if (result.candidates?.length) {
+        await tx.insert(extractionCandidates).values(result.candidates.map((item) => ({
+          id: item.candidateId, runId, fieldSchemaId: item.fieldSchemaId, fieldSchemaVersion: item.fieldSchemaVersion,
+          valueType: item.valueType, rawValue: item.rawValue, normalizedValue: item.normalizedValue,
+          extractionMethod: item.extractionMethod, processorVersion: item.processorVersion, qualityStatus: item.qualityStatus,
+          applicationSnapshotId: item.source.type === "structured_input" ? item.source.applicationSnapshotId : null,
+          jsonPointer: item.source.type === "structured_input" ? item.source.jsonPointer : null,
+          logicalDocumentRevisionId: item.source.type === "logical_document" ? item.source.logicalDocumentRevisionId : null,
+        })));
+        await tx.insert(candidateEvidenceLinks).values(result.candidates.flatMap((candidate) => candidate.evidenceIds.map((evidenceId) => ({
+          id: randomUUID(), candidateId: candidate.candidateId, evidenceId, relationship: "direct_support",
+        }))));
+      }
       await tx.insert(claimRecords).values(result.claims.map((item) => ({
         id: item.claimId, runId, fieldSchemaId: item.fieldSchemaId, valueType: item.valueType,
         rawValue: item.rawValue, normalizedValue: item.normalizedValue,
@@ -1020,6 +1041,20 @@ export class PostgresWorkflowCoordinator {
       await tx.insert(claimEvidenceLinks).values(result.claims.flatMap((claim) => claim.evidenceIds.map((evidenceId) => ({
         id: randomUUID(), claimId: claim.claimId, evidenceId, relationship: "direct_support",
       }))));
+      const claimCandidateRows = result.claims.flatMap((claim) => (claim.supportingCandidateIds ?? []).map((candidateId) => ({
+        id: randomUUID(), claimId: claim.claimId, candidateId, relationship: "selected_source",
+      })));
+      if (claimCandidateRows.length) await tx.insert(claimCandidateLinks).values(claimCandidateRows);
+      if (result.reconciliations?.length) {
+        await tx.insert(reconciliationDecisions).values(result.reconciliations.map((item) => ({
+          id: item.reconciliationId, runId, fieldSchemaId: item.fieldSchemaId, method: item.method,
+          methodVersion: item.version, status: item.status, reason: item.reason,
+          selectedCandidateId: item.selectedCandidateId, resultingClaimId: item.resultingClaimId,
+        })));
+        await tx.insert(reconciliationCandidateLinks).values(result.reconciliations.flatMap((item) => item.candidates.map((candidate) => ({
+          id: randomUUID(), reconciliationId: item.reconciliationId, candidateId: candidate.candidateId, status: candidate.status,
+        }))));
+      }
       await tx.insert(validationFindings).values(result.findings.map((item) => ({
         id: randomUUID(), resultRevisionId: result.resultRevisionId,
         ruleId: item.ruleId, ruleVersion: item.ruleVersion, ruleSetId: item.ruleSetId,
@@ -1128,7 +1163,13 @@ export class PostgresWorkflowCoordinator {
   }
 }
 
-function validateOfflineProvenance(result: OfflineDeterministicResult, applicationSnapshotId: string, applicationContent: unknown, allowedPages: ReadonlySet<string>): void {
+function validateOfflineProvenance(
+  result: OfflineDeterministicResult,
+  applicationSnapshotId: string,
+  applicationContent: unknown,
+  allowedPages: ReadonlySet<string>,
+  allowedLogicalDocuments: ReadonlySet<string>,
+): void {
   const evidenceIds = new Set(result.evidence.map((item) => item.evidenceId));
   const claimIds = new Set(result.claims.map((item) => item.claimId));
   if (evidenceIds.size !== result.evidence.length || claimIds.size !== result.claims.length) throw new Error("Duplicate offline provenance identity");
@@ -1141,6 +1182,24 @@ function validateOfflineProvenance(result: OfflineDeterministicResult, applicati
     if (page && !allowedPages.has(`${evidence.documentVersionId}:${evidence.pageNumber}`)) throw new Error("Offline page evidence is outside the run input");
   }
   if (result.claims.some((claim) => claim.evidenceIds.length === 0 || claim.evidenceIds.some((id) => !evidenceIds.has(id)))) throw new Error("Offline claim evidence is invalid");
+  const candidateIds = new Set(result.candidates?.map((item) => item.candidateId) ?? []);
+  if (candidateIds.size !== (result.candidates?.length ?? 0)) throw new Error("Duplicate extraction candidate identity");
+  for (const candidate of result.candidates ?? []) {
+    if (candidate.evidenceIds.length === 0 || candidate.evidenceIds.some((id) => !evidenceIds.has(id))) throw new Error("Extraction candidate evidence is invalid");
+    if (candidate.source.type === "structured_input") {
+      if (candidate.source.applicationSnapshotId !== applicationSnapshotId || !jsonPointerExists(applicationContent, candidate.source.jsonPointer)) {
+        throw new Error("Structured-input candidate is outside the run input");
+      }
+    } else if (!allowedLogicalDocuments.has(candidate.source.logicalDocumentRevisionId)) {
+      throw new Error("Document candidate is outside the run logical documents");
+    }
+  }
+  if (result.claims.some((claim) => (claim.supportingCandidateIds ?? []).some((id) => !candidateIds.has(id)))) throw new Error("Claim candidate lineage is invalid");
+  for (const reconciliation of result.reconciliations ?? []) {
+    if (reconciliation.candidates.length === 0 || reconciliation.candidates.some((item) => !candidateIds.has(item.candidateId))) throw new Error("Reconciliation candidate lineage is invalid");
+    if (reconciliation.selectedCandidateId && !candidateIds.has(reconciliation.selectedCandidateId)) throw new Error("Reconciliation selection is invalid");
+    if (reconciliation.resultingClaimId && !claimIds.has(reconciliation.resultingClaimId)) throw new Error("Reconciliation claim lineage is invalid");
+  }
   if (result.findings.some((item) => item.materialInputRefs.length === 0 || item.materialInputRefs.some((id) => !evidenceIds.has(id) && !claimIds.has(id)))) {
     throw new Error("Offline finding reference is invalid");
   }
