@@ -105,6 +105,18 @@ export const pages = pgTable("pages", {
   rendererVersion: text("renderer_version"),
 }, (table) => [uniqueIndex("page_inspection_number_uq").on(table.documentInspectionId, table.pageNumber)]);
 
+export const pageOcrOutputs = pgTable("page_ocr_outputs", {
+  id: uuid("id").primaryKey(),
+  pageId: uuid("page_id").notNull().references(() => pages.id),
+  artifactId: uuid("artifact_id").notNull().references(() => artifacts.id),
+  engine: text("engine").notNull(),
+  engineVersion: text("engine_version").notNull(),
+  modelAssetVersion: text("model_asset_version").notNull(),
+  languages: jsonb("languages").notNull(),
+  coordinateSpace: text("coordinate_space").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("page_ocr_output_page_uq").on(table.pageId)]);
+
 export const processingRuns = pgTable("processing_runs", {
   id: uuid("id").primaryKey(),
   caseId: uuid("case_id").notNull().references(() => cases.id),

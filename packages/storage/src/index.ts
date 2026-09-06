@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { Client } from "minio";
-import type { ArtifactMediaType, ObjectStore, StoredDerivedArtifact, StoredPageRenderArtifact, StoredSourceArtifact, SupportedMediaType } from "@findoc/core";
+import type { ArtifactMediaType, ObjectStore, StoredDerivedArtifact, StoredOcrArtifact, StoredPageRenderArtifact, StoredSourceArtifact, SupportedMediaType } from "@findoc/core";
 
 export class UnsupportedDocumentMediaError extends Error {}
 export class DocumentSizeLimitError extends Error {}
@@ -154,6 +154,19 @@ export async function storePageRenderArtifact(
   const objectKey = `${keyPrefix}/${sha256}`;
   await store.put(objectKey, (async function* () { yield bytes; })(), "image/png");
   return { objectKey, sha256, byteSize: bytes.byteLength, mediaType: "image/png", ...metadata };
+}
+
+export async function storeOcrArtifact(
+  result: object,
+  metadata: Pick<StoredOcrArtifact, "engine" | "engineVersion" | "modelAssetVersion" | "languages">,
+  store: ObjectStore,
+  keyPrefix: string,
+): Promise<StoredOcrArtifact> {
+  const bytes = Buffer.from(JSON.stringify(result));
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const objectKey = `${keyPrefix}/${sha256}`;
+  await store.put(objectKey, (async function* () { yield bytes; })(), "application/json");
+  return { objectKey, sha256, byteSize: bytes.byteLength, mediaType: "application/json", ...metadata };
 }
 
 export async function readObjectBytes(store: ObjectStore, objectKey: string, maximumBytes: number): Promise<Buffer> {

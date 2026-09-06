@@ -5,7 +5,7 @@ import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
 import { DocumentSandboxClient } from "@findoc/document-processing";
 import { buildOfflineFixture, OfflineFixtureUnavailableError, runOfflineReport } from "@findoc/offline";
 import { PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
-import { createMinioObjectStore, readObjectBytes, storeNativeTextArtifact, storePageRenderArtifact } from "@findoc/storage";
+import { createMinioObjectStore, readObjectBytes, storeNativeTextArtifact, storeOcrArtifact, storePageRenderArtifact } from "@findoc/storage";
 import { CASE_PROCESSING_QUEUE, OutboxRelay } from "./outbox.js";
 
 const logger = pino({ name: "worker" });
@@ -67,6 +67,8 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
       for (const page of inspection.pages) {
         const rendered = sandboxResult.renders.find((candidate) => candidate.pageNumber === page.pageNumber);
         if (!rendered) throw new Error("Document sandbox omitted a page render");
+        const ocrOutput = sandboxResult.ocrOutputs.find((candidate) => candidate.pageNumber === page.pageNumber);
+        if (page.needsOcr !== Boolean(ocrOutput)) throw new Error("Document sandbox OCR routing output is inconsistent");
         pages.push({
           ...page,
           nativeCharacterCount: page.nativeMarkdown.length,
@@ -80,6 +82,13 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
               `derived/${job.data.case_id}/${document.documentVersionId}/render/page-${page.pageNumber}`),
             caseId: job.data.case_id,
           },
+          ...(ocrOutput ? { ocrArtifact: {
+            ...await storeOcrArtifact(ocrOutput.result, {
+              engine: ocrOutput.result.engine, engineVersion: ocrOutput.result.engineVersion,
+              modelAssetVersion: ocrOutput.result.modelAssetVersion, languages: ocrOutput.result.languages,
+            }, objectStore, `derived/${job.data.case_id}/${document.documentVersionId}/ocr/page-${page.pageNumber}`),
+            caseId: job.data.case_id, coordinateSpace: ocrOutput.result.coordinateSpace,
+          } } : {}),
         });
       }
       await coordinator.persistInspection(job.data.run_id, document, {

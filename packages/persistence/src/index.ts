@@ -2,8 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type PageRenderArtifactView, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type SourceDocumentArtifactView, type StoredDerivedArtifact, type StoredPageRenderArtifact } from "@findoc/core";
-import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type PageRenderArtifactView, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type SourceDocumentArtifactView, type StoredDerivedArtifact, type StoredOcrArtifact, type StoredPageRenderArtifact } from "@findoc/core";
+import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pageOcrOutputs, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
@@ -884,6 +884,11 @@ export class PostgresWorkflowCoordinator {
           sha256: page.renderArtifact.sha256, byteSize: page.renderArtifact.byteSize,
           detectedMediaType: page.renderArtifact.mediaType, artifactKind: "page_render",
         }] : []),
+        ...(page.ocrArtifact ? [{
+          id: randomUUID(), caseId: page.ocrArtifact.caseId, objectKey: page.ocrArtifact.objectKey,
+          sha256: page.ocrArtifact.sha256, byteSize: page.ocrArtifact.byteSize,
+          detectedMediaType: page.ocrArtifact.mediaType, artifactKind: "ocr_output",
+        }] : []),
       ]);
       const artifactIds = new Map<string, string>();
       if (derivedArtifacts.length > 0) {
@@ -891,10 +896,10 @@ export class PostgresWorkflowCoordinator {
         const persistedArtifacts = await tx.select({ id: artifacts.id, objectKey: artifacts.objectKey }).from(artifacts)
           .where(inArray(artifacts.objectKey, derivedArtifacts.map((artifact) => artifact.objectKey)));
         for (const artifact of persistedArtifacts) artifactIds.set(artifact.objectKey, artifact.id);
-        if (artifactIds.size !== derivedArtifacts.length) throw new Error("Native-text artifact metadata could not be resolved");
+        if (artifactIds.size !== derivedArtifacts.length) throw new Error("Derived artifact metadata could not be resolved");
       }
-      await tx.insert(pages).values(inspection.pages.map((page) => ({
-        id: randomUUID(), documentInspectionId: inspectionId,
+      const pageRows = inspection.pages.map((page) => ({
+        id: randomUUID(), source: page, documentInspectionId: inspectionId,
         documentVersionId: document.documentVersionId, pageNumber: page.pageNumber,
         needsOcr: page.needsOcr, ocrReason: page.ocrReason,
         hasTable: page.hasTable, hasColumns: page.hasColumns,
@@ -903,7 +908,15 @@ export class PostgresWorkflowCoordinator {
         renderArtifactId: page.renderArtifact ? artifactIds.get(page.renderArtifact.objectKey) : null,
         renderWidth: page.renderArtifact?.width ?? null, renderHeight: page.renderArtifact?.height ?? null,
         renderDpi: page.renderArtifact?.targetDpi ?? null, rendererVersion: page.renderArtifact?.rendererVersion ?? null,
-      })));
+      }));
+      await tx.insert(pages).values(pageRows.map(({ source: _source, ...row }) => row));
+      const ocrRows = pageRows.flatMap(({ id: pageId, source: page }) => page.ocrArtifact ? [{
+        id: randomUUID(), pageId, artifactId: artifactIds.get(page.ocrArtifact.objectKey)!,
+        engine: page.ocrArtifact.engine, engineVersion: page.ocrArtifact.engineVersion,
+        modelAssetVersion: page.ocrArtifact.modelAssetVersion, languages: [...page.ocrArtifact.languages],
+        coordinateSpace: page.ocrArtifact.coordinateSpace,
+      }] : []);
+      if (ocrRows.length > 0) await tx.insert(pageOcrOutputs).values(ocrRows);
       await tx.update(documentVersions).set({ readabilityState: "inspected" })
         .where(eq(documentVersions.id, document.documentVersionId));
     });
@@ -1241,6 +1254,7 @@ export interface InspectionRecord {
     nativeCharacterCount: number;
     nativeTextArtifact?: StoredDerivedArtifact & { readonly caseId: string };
     renderArtifact?: StoredPageRenderArtifact & { readonly caseId: string };
+    ocrArtifact?: StoredOcrArtifact & { readonly caseId: string; readonly coordinateSpace: "render_pixels_top_left" };
   }[];
 }
 

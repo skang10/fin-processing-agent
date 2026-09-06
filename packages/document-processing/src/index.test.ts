@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import { PdfType } from "@firecrawl/pdf-inspector";
-import { DocumentSandboxClient, PdfInspectorAdapter, PdfiumPageRenderer, type PdfInspectorEngine } from "./index.js";
+import { DocumentSandboxClient, FakeOcrEngine, PdfInspectorAdapter, PdfiumPageRenderer, runSelectiveOcr, type OcrEngine, type PdfInspectorEngine } from "./index.js";
 
 describe("PdfInspectorAdapter", () => {
   it("translates zero-based native pages into project-owned one-based pages", async () => {
@@ -57,5 +57,34 @@ describe("DocumentSandboxClient", () => {
     } finally {
       delete process.env.FINDOC_SANDBOX_SECRET_TEST;
     }
+  });
+});
+
+describe("FakeOcrEngine", () => {
+  it("returns explicit synthetic provenance and render-pixel geometry", async () => {
+    const result = await new FakeOcrEngine().recognize({
+      pageNumber: 2, languages: ["de", "en"], image: { bytes: Buffer.from("png"), width: 100, height: 200, targetDpi: 144 },
+    });
+    expect(result).toMatchObject({ engine: "deterministic-fake-ocr", modelAssetVersion: "synthetic-fixture-v1" });
+    expect(result.spans[0]?.bbox).toEqual([0, 0, 100, 200]);
+    expect(result.sourceTransform).toEqual({
+      sourceCoordinateSpace: "pdf_points_top_left", scaleX: 0.5, scaleY: 0.5, translateX: 0, translateY: 0,
+    });
+  });
+
+  it("runs only for pages explicitly routed to OCR", async () => {
+    const calls: number[] = [];
+    const engine: OcrEngine = { recognize: async (request) => {
+      calls.push(request.pageNumber);
+      return new FakeOcrEngine().recognize(request);
+    } };
+    const outputs = await runSelectiveOcr([
+      { pageNumber: 1, needsOcr: false }, { pageNumber: 2, needsOcr: true },
+    ], [
+      { pageNumber: 1, bytes: Buffer.from("png"), width: 10, height: 10, targetDpi: 110 },
+      { pageNumber: 2, bytes: Buffer.from("png"), width: 10, height: 10, targetDpi: 110 },
+    ], engine);
+    expect(calls).toEqual([2]);
+    expect(outputs.map((output) => output.pageNumber)).toEqual([2]);
   });
 });

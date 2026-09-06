@@ -2,7 +2,7 @@ export type CaseId = string;
 export type RunId = string;
 
 export type SupportedMediaType = "application/pdf" | "image/jpeg" | "image/png";
-export type ArtifactMediaType = SupportedMediaType | "text/markdown";
+export type ArtifactMediaType = SupportedMediaType | "text/markdown" | "application/json";
 
 export interface ObjectStore {
   put(objectKey: string, content: AsyncIterable<Uint8Array>, mediaType: ArtifactMediaType): Promise<void>;
@@ -33,6 +33,17 @@ export interface StoredPageRenderArtifact {
   readonly height: number;
   readonly targetDpi: number;
   readonly rendererVersion: string;
+}
+
+export interface StoredOcrArtifact {
+  readonly objectKey: string;
+  readonly sha256: string;
+  readonly byteSize: number;
+  readonly mediaType: "application/json";
+  readonly engine: string;
+  readonly engineVersion: string;
+  readonly modelAssetVersion: string;
+  readonly languages: readonly string[];
 }
 
 export interface SourceArtifactIntake {

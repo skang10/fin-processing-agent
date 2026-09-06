@@ -34,6 +34,84 @@ export interface PageRenderer {
   render(source: Buffer, request: PageRenderRequest): Promise<PageRenderResult>;
 }
 
+export interface OcrRequest {
+  readonly pageNumber: number;
+  readonly languages: readonly ("de" | "en")[];
+  readonly image: { readonly bytes: Buffer; readonly width: number; readonly height: number; readonly targetDpi: number };
+}
+
+export interface OcrSpan {
+  readonly text: string;
+  readonly bbox: readonly [number, number, number, number];
+  readonly confidence: { readonly value: number; readonly scale: "zero_to_one"; readonly producer: string };
+}
+
+export interface OcrResult {
+  readonly rawText: string;
+  readonly spans: readonly OcrSpan[];
+  readonly languages: readonly ("de" | "en")[];
+  readonly engine: string;
+  readonly engineVersion: string;
+  readonly modelAssetVersion: string;
+  readonly coordinateSpace: "render_pixels_top_left";
+  readonly sourceTransform: {
+    readonly sourceCoordinateSpace: "pdf_points_top_left";
+    readonly scaleX: number;
+    readonly scaleY: number;
+    readonly translateX: 0;
+    readonly translateY: 0;
+  };
+}
+
+export interface OcrEngine {
+  recognize(request: OcrRequest): Promise<OcrResult>;
+}
+
+export class FakeOcrEngine implements OcrEngine {
+  async recognize(request: OcrRequest): Promise<OcrResult> {
+    if (!Number.isInteger(request.pageNumber) || request.pageNumber < 1 || request.image.bytes.byteLength === 0 ||
+        request.image.width < 1 || request.image.height < 1 || request.image.targetDpi < 72 || request.languages.length === 0) {
+      throw new Error("Fake OCR request is invalid");
+    }
+    const rawText = `Synthetic OCR candidate for page ${request.pageNumber}`;
+    return {
+      rawText,
+      spans: [{
+        text: rawText, bbox: [0, 0, request.image.width, request.image.height],
+        confidence: { value: 1, scale: "zero_to_one", producer: "deterministic-fake-ocr" },
+      }],
+      languages: [...request.languages], engine: "deterministic-fake-ocr", engineVersion: "1.0.0",
+      modelAssetVersion: "synthetic-fixture-v1", coordinateSpace: "render_pixels_top_left",
+      sourceTransform: {
+        sourceCoordinateSpace: "pdf_points_top_left",
+        scaleX: 72 / request.image.targetDpi,
+        scaleY: 72 / request.image.targetDpi,
+        translateX: 0,
+        translateY: 0,
+      },
+    };
+  }
+}
+
+export async function runSelectiveOcr(
+  pages: readonly Pick<InspectedPage, "pageNumber" | "needsOcr">[],
+  renders: readonly { readonly pageNumber: number; readonly bytes: Buffer; readonly width: number; readonly height: number; readonly targetDpi: number }[],
+  engine: OcrEngine,
+  languages: readonly ("de" | "en")[] = ["de", "en"],
+): Promise<readonly { pageNumber: number; result: OcrResult }[]> {
+  const outputs = [];
+  for (const page of pages) {
+    if (!page.needsOcr) continue;
+    const render = renders.find((candidate) => candidate.pageNumber === page.pageNumber);
+    if (!render) throw new Error("OCR-routed page has no render");
+    outputs.push({ pageNumber: page.pageNumber, result: await engine.recognize({
+      pageNumber: page.pageNumber, languages,
+      image: { bytes: render.bytes, width: render.width, height: render.height, targetDpi: render.targetDpi },
+    }) });
+  }
+  return outputs;
+}
+
 export class PdfiumPageRenderer implements PageRenderer {
   async render(source: Buffer, request: PageRenderRequest): Promise<PageRenderResult> {
     validateRenderRequest(request);

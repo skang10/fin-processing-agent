@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, realpath, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
-import { PdfInspectorAdapter, PdfiumPageRenderer } from "./index.js";
+import { FakeOcrEngine, PdfInspectorAdapter, PdfiumPageRenderer, runSelectiveOcr } from "./index.js";
 
 const raw = await readStdin(64_000);
 const request = parseRequest(raw);
@@ -12,6 +12,7 @@ const inspection = await new PdfInspectorAdapter().inspect(source);
 if (inspection.pageCount > request.limits.maximum_pages) throw new Error("Sandbox page limit exceeded");
 const renderer = new PdfiumPageRenderer();
 const renders = [];
+const renderedPages = [];
 for (const page of inspection.pages) {
   const rendered = await renderer.render(source, {
     sourceSha256: request.source_sha256, pageNumber: page.pageNumber, targetDpi: request.limits.target_dpi,
@@ -21,8 +22,19 @@ for (const page of inspection.pages) {
   await writeFile(path, rendered.bytes, { mode: 0o600 });
   renders.push({ page_number: page.pageNumber, path, width: rendered.width, height: rendered.height,
     target_dpi: rendered.targetDpi, renderer_version: rendered.rendererVersion });
+  renderedPages.push({
+    pageNumber: page.pageNumber, bytes: rendered.bytes, width: rendered.width, height: rendered.height,
+    targetDpi: rendered.targetDpi,
+  });
 }
-process.stdout.write(JSON.stringify({ schema_version: "1.0.0", inspection, renders }));
+const recognized = await runSelectiveOcr(inspection.pages, renderedPages, new FakeOcrEngine());
+const ocrOutputs = [];
+for (const output of recognized) {
+  const ocrPath = `page-${output.pageNumber}-ocr.json`;
+  await writeFile(ocrPath, JSON.stringify(output.result), { mode: 0o600 });
+  ocrOutputs.push({ page_number: output.pageNumber, path: ocrPath });
+}
+process.stdout.write(JSON.stringify({ schema_version: "1.0.0", inspection, renders, ocr_outputs: ocrOutputs }));
 
 async function readStdin(maximumBytes: number): Promise<string> {
   const chunks: Buffer[] = [];

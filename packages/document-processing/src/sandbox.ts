@@ -3,11 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import type { PdfInspection } from "./index.js";
+import type { OcrResult, PdfInspection } from "./index.js";
 
 export interface DocumentSandboxResult {
   readonly inspection: PdfInspection;
   readonly renders: readonly { pageNumber: number; bytes: Buffer; width: number; height: number; targetDpi: number; rendererVersion: string }[];
+  readonly ocrOutputs: readonly { pageNumber: number; result: OcrResult }[];
 }
 
 export interface DocumentSandboxLimits {
@@ -31,6 +32,7 @@ export class DocumentSandboxError extends Error {
 interface SandboxResponse {
   readonly inspection: PdfInspection;
   readonly renders: { page_number: number; path: string; width: number; height: number; target_dpi: number; renderer_version: string }[];
+  readonly ocr_outputs: { page_number: number; path: string }[];
 }
 
 export class DocumentSandboxClient {
@@ -54,7 +56,11 @@ export class DocumentSandboxClient {
         pageNumber: render.page_number, bytes: await readFile(resolveTaskPath(taskDirectory, render.path)),
         width: render.width, height: render.height, targetDpi: render.target_dpi, rendererVersion: render.renderer_version,
       })));
-      return { inspection: parsed.inspection, renders };
+      const ocrOutputs = await Promise.all(parsed.ocr_outputs.map(async (output) => ({
+        pageNumber: output.page_number,
+        result: parseOcrResult(await readFile(resolveOcrPath(taskDirectory, output.path), "utf8")),
+      })));
+      return { inspection: parsed.inspection, renders, ocrOutputs };
     } catch (error) {
       if (error instanceof DocumentSandboxError) throw error;
       throw new DocumentSandboxError("invalid_response", false, "Document sandbox returned invalid output");
@@ -62,6 +68,29 @@ export class DocumentSandboxClient {
       await rm(taskDirectory, { recursive: true, force: true });
     }
   }
+}
+
+function parseOcrResult(value: string): OcrResult {
+  const parsed: unknown = JSON.parse(value);
+  if (!parsed || typeof parsed !== "object" || !("rawText" in parsed) || typeof parsed.rawText !== "string" ||
+      !("spans" in parsed) || !Array.isArray(parsed.spans) || !("languages" in parsed) || !Array.isArray(parsed.languages) ||
+      !("engine" in parsed) || typeof parsed.engine !== "string" || !("engineVersion" in parsed) || typeof parsed.engineVersion !== "string" ||
+      !("modelAssetVersion" in parsed) || typeof parsed.modelAssetVersion !== "string" ||
+      !("coordinateSpace" in parsed) || parsed.coordinateSpace !== "render_pixels_top_left" ||
+      !("sourceTransform" in parsed) || !parsed.sourceTransform || typeof parsed.sourceTransform !== "object") {
+    throw new Error("Sandbox returned an invalid OCR result");
+  }
+  const result = parsed as OcrResult;
+  const transform = result.sourceTransform;
+  if (transform.sourceCoordinateSpace !== "pdf_points_top_left" || !Number.isFinite(transform.scaleX) || transform.scaleX <= 0 ||
+      !Number.isFinite(transform.scaleY) || transform.scaleY <= 0 || transform.translateX !== 0 || transform.translateY !== 0 ||
+      result.languages.some((language) => language !== "de" && language !== "en") || result.spans.some((span) =>
+    typeof span.text !== "string" || !Array.isArray(span.bbox) || span.bbox.length !== 4 || span.bbox.some((coordinate) => !Number.isFinite(coordinate)) ||
+    !span.confidence || span.confidence.scale !== "zero_to_one" || !Number.isFinite(span.confidence.value) ||
+    span.confidence.value < 0 || span.confidence.value > 1 || typeof span.confidence.producer !== "string")) {
+    throw new Error("Sandbox returned invalid OCR spans");
+  }
+  return result;
 }
 
 function validateLimits(limits: DocumentSandboxLimits): void {
@@ -98,10 +127,16 @@ function resolveTaskPath(taskDirectory: string, relativePath: string): string {
   return join(taskDirectory, relativePath);
 }
 
+function resolveOcrPath(taskDirectory: string, relativePath: string): string {
+  if (!/^page-[1-9][0-9]*-ocr\.json$/.test(relativePath)) throw new Error("Sandbox returned an invalid OCR path");
+  return join(taskDirectory, relativePath);
+}
+
 function parseResponse(value: string, maximumPages: number): SandboxResponse {
   const parsed: unknown = JSON.parse(value);
   if (!parsed || typeof parsed !== "object" || !("schema_version" in parsed) || parsed.schema_version !== "1.0.0" ||
-      !("inspection" in parsed) || !("renders" in parsed) || !Array.isArray(parsed.renders) || parsed.renders.length > maximumPages) {
+      !("inspection" in parsed) || !("renders" in parsed) || !Array.isArray(parsed.renders) || parsed.renders.length > maximumPages ||
+      !("ocr_outputs" in parsed) || !Array.isArray(parsed.ocr_outputs)) {
     throw new Error("Document sandbox returned an invalid response");
   }
   const response = parsed as SandboxResponse;
@@ -110,7 +145,10 @@ function parseResponse(value: string, maximumPages: number): SandboxResponse {
       response.renders.length !== response.inspection.pageCount || response.renders.some((render, index) =>
         render.page_number !== index + 1 || !/^page-[1-9][0-9]*\.png$/.test(render.path) ||
         !Number.isSafeInteger(render.width) || render.width < 1 || !Number.isSafeInteger(render.height) || render.height < 1 ||
-        typeof render.target_dpi !== "number" || typeof render.renderer_version !== "string" || !render.renderer_version)) {
+        typeof render.target_dpi !== "number" || typeof render.renderer_version !== "string" || !render.renderer_version) ||
+      response.ocr_outputs.length > response.inspection.pages.filter((page) => page.needsOcr).length ||
+      response.ocr_outputs.some((output) => !response.inspection.pages.some((page) => page.pageNumber === output.page_number && page.needsOcr) ||
+        !/^page-[1-9][0-9]*-ocr\.json$/.test(output.path))) {
     throw new Error("Document sandbox returned invalid page output");
   }
   return response;

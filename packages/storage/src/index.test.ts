@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ObjectStore } from "@findoc/core";
-import { DocumentSizeLimitError, MinioObjectStore, UnsupportedDocumentMediaError, storeNativeTextArtifact, storePageRenderArtifact, storeSourceArtifact } from "./index.js";
+import { DocumentSizeLimitError, MinioObjectStore, UnsupportedDocumentMediaError, storeNativeTextArtifact, storeOcrArtifact, storePageRenderArtifact, storeSourceArtifact } from "./index.js";
 
 async function* chunks(...values: Uint8Array[]) { yield* values; }
 
@@ -89,5 +89,18 @@ describe("page-render storage", () => {
     expect(result.objectKey).toBe(`derived/render/page-1/${result.sha256}`);
     expect(result).toMatchObject({ mediaType: "image/png", width: 100, height: 200, targetDpi: 110 });
     expect(mediaType).toBe("image/png");
+  });
+});
+
+describe("OCR artifact storage", () => {
+  it("stores structured OCR output with explicit engine provenance", async () => {
+    const store: ObjectStore = {
+      async put(_key, content, type) { expect(type).toBe("application/json"); for await (const _ of content) void _; },
+      async remove() {}, async get() { return chunks(); },
+    };
+    const result = await storeOcrArtifact({ rawText: "synthetic" }, {
+      engine: "fake", engineVersion: "1", modelAssetVersion: "fixture", languages: ["de", "en"],
+    }, store, "derived/ocr/page-1");
+    expect(result).toMatchObject({ mediaType: "application/json", engine: "fake", languages: ["de", "en"] });
   });
 });

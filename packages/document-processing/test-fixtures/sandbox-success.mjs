@@ -11,4 +11,5 @@ process.stdout.write(JSON.stringify({
     pages: [{ pageNumber: 1, nativeMarkdown: "fixture", needsOcr: false, hasTable: false, hasColumns: false }],
   },
   renders: [{ page_number: 1, path: "page-1.png", width: 10, height: 20, target_dpi: 110, renderer_version: "fixture" }],
+  ocr_outputs: [],
 }));

@@ -23,6 +23,7 @@ import {
   documentInspections,
   evidenceRecords,
   outboxEvents,
+  pageOcrOutputs,
   processingRuns,
   processingRunTransitions,
   physicalDocuments,
@@ -117,7 +118,7 @@ describe("PostgresCaseCommandService", () => {
       processor: "firecrawl/pdf-inspector", processorVersion: "1.17.0",
       pdfType: "text_based", routingSignal: 0.99, isComplex: false,
       pages: [{
-        pageNumber: 1, needsOcr: false, hasTable: false, hasColumns: false, nativeCharacterCount: 42,
+        pageNumber: 1, needsOcr: true, ocrReason: "low_native_text", hasTable: false, hasColumns: false, nativeCharacterCount: 42,
         nativeTextArtifact: {
           caseId: accepted.caseId, objectKey: "derived/native/page-1", sha256: "b".repeat(64),
           byteSize: 16, mediaType: "text/markdown",
@@ -127,6 +128,11 @@ describe("PostgresCaseCommandService", () => {
           byteSize: 8, mediaType: "image/png", width: 935, height: 1210,
           targetDpi: 110, rendererVersion: "@hyzyla/pdfium-2.1.13",
         },
+        ocrArtifact: {
+          caseId: accepted.caseId, objectKey: "derived/ocr/page-1", sha256: "d".repeat(64), byteSize: 128,
+          mediaType: "application/json", engine: "deterministic-fake-ocr", engineVersion: "1.0.0",
+          modelAssetVersion: "synthetic-fixture-v1", languages: ["de", "en"], coordinateSpace: "render_pixels_top_left",
+        },
       }],
     });
     await coordinator.persistInspection(accepted.runId, document, {
@@ -135,11 +141,12 @@ describe("PostgresCaseCommandService", () => {
       pages: [{ pageNumber: 1, needsOcr: false, hasTable: false, hasColumns: false, nativeCharacterCount: 42 }],
     });
     expect(await coordinator.loadUninspectedDocuments(accepted.caseId, accepted.runId)).toEqual([]);
-    const [[inspectionCount], [pageCount]] = await Promise.all([
+    const [[inspectionCount], [pageCount], [ocrCount]] = await Promise.all([
       connection.db.select({ value: count() }).from(documentInspections),
       connection.db.select({ value: count() }).from(pages),
+      connection.db.select({ value: count() }).from(pageOcrOutputs),
     ]);
-    expect([inspectionCount?.value, pageCount?.value]).toEqual([1, 1]);
+    expect([inspectionCount?.value, pageCount?.value, ocrCount?.value]).toEqual([1, 1, 1]);
     await expect(queriesBeforeProcessing.getDocumentPage(accepted.caseId, document.documentVersionId, 1)).resolves.toMatchObject({
       pageNumber: 1, nativeCharacterCount: 42, nativeTextAvailable: true, renderAvailable: true,
     });
