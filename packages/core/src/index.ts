@@ -179,6 +179,14 @@ export interface AgentReportView {
   readonly checkedFacts: readonly { statement: string; sourceType: "deterministic_check"; status: "passed"; references: readonly string[] }[];
 }
 
+export interface AgentLogView {
+  readonly availability: "pending" | "ready" | "unavailable";
+  readonly modelLabel?: string;
+  readonly estimatedCost?: { readonly amount: string; readonly currency: "EUR" };
+  readonly currentStep: "processing" | "awaiting_human_review" | "review_completed";
+  readonly events: readonly { readonly timestamp: string; readonly activity: string; readonly toolLabel?: string }[];
+}
+
 export type EvidenceView =
   | {
       readonly evidenceId: string;
@@ -280,6 +288,7 @@ export interface DownstreamHandoffView {
 
 export interface CaseReviewQueryService {
   getAgentReport(caseId: CaseId): Promise<AgentReportView>;
+  getAgentLog(caseId: CaseId): Promise<AgentLogView>;
   getIssues(caseId: CaseId): Promise<readonly ReviewIssueView[]>;
   getEvidence(caseId: CaseId, evidenceId: string): Promise<EvidenceView>;
   listEvidence(caseId: CaseId): Promise<readonly EvidenceView[]>;

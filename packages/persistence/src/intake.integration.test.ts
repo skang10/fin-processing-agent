@@ -193,6 +193,11 @@ describe("PostgresCaseCommandService", () => {
     const report = await queries.getAgentReport(accepted.caseId);
     expect(report.checkedFacts).toHaveLength(4);
     expect(report.checkedFacts[0]?.references[0]).toContain(`/evidence/${evidenceId}`);
+    await expect(queries.getAgentLog(accepted.caseId)).resolves.toMatchObject({
+      availability: "ready", modelLabel: "fake-pi-harness-v1", estimatedCost: { amount: "0.0000", currency: "EUR" },
+      currentStep: "awaiting_human_review",
+      events: [{ activity: "Checked 4 facts" }, { activity: "Created 1 review issues" }, { activity: "Generated review report" }],
+    });
     await expect(queries.getFindings(accepted.caseId)).resolves.toHaveLength(5);
     const [transitionCount] = await connection.db.select({ value: count() }).from(caseStateTransitions);
     expect(transitionCount?.value).toBe(2);
@@ -295,6 +300,7 @@ describe("PostgresCaseCommandService", () => {
         evidenceReferences: [expect.stringContaining(`/evidence/`)] }],
       findings: expect.arrayContaining([expect.objectContaining({ ruleId: "VAL_EMPLOYER_CONSISTENCY_001" })]),
     });
+    await expect(queries.getAgentLog(reviewFixture.caseId)).resolves.toMatchObject({ currentStep: "review_completed" });
   });
 
   it("routes an unprocessable run to one durable processing exception", async () => {

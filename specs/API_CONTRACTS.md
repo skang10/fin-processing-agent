@@ -2,7 +2,7 @@
 
 Document ID: `API`
 
-Version: 1.2.0
+Version: 1.3.0
 
 Status: Approved
 
@@ -140,7 +140,7 @@ GET  /api/v1/cases/{case_id}/events
 
 `API-REQ-035` `GET /cases` must provide the Review Queue projection: case identifier, applicant display name, concise review summary, issue count, reviewer workflow status, waiting-since time, lifecycle, and version.
 
-`API-REQ-036` `GET /cases/{case_id}` must return the current authorized case projection containing case identity, applicant display data, lifecycle, compact progress, current result availability, and links to separately loadable report, issues, application data, documents, final review, and downstream handoff.
+`API-REQ-036` `GET /cases/{case_id}` must return the current authorized case projection containing case identity, applicant display data, lifecycle, compact progress, current result availability, and links to separately loadable report, issues, application data, documents, final review, case Agent log, and downstream handoff.
 
 `API-REQ-037` `POST /cases/{case_id}/runs` must create a new immutable processing run only when its declared input and version preconditions are valid, and must return `202 Accepted` without executing long-running work in the request handler.
 
@@ -332,6 +332,7 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.3.0 | 2026-09-06 | Approved | Added the case Agent-log link to the case resource projection. |
 | 1.2.0 | 2026-09-06 | Approved | Added the read-only downstream handoff projection for cases cleared after document review. |
 | 1.1.4 | 2026-09-06 | Approved | Selected confirmed issues for the applicant message by default while preserving reviewer opt-out. |
 | 1.1.3 | 2026-09-06 | Approved | Made the internal reviewer note optional when ignoring an issue. |

@@ -19,6 +19,7 @@ describe('loadCaseBundle', () => {
     const payloads = [
       { case_id: 'case-1' }, { availability: 'ready', checked_facts: [] }, { findings: [{ rule_id: 'rule-1', references: [] }] },
       { issues: [{ issue_id: 'issue-1' }] }, { groups: [] }, { documents: [{ document_id: 'document-1' }] }, { evidence: [] },
+      { availability: 'ready', events: [] },
     ];
     const fetcher = vi.fn(async () => ({ ok: true, json: async () => payloads.shift() }));
 
@@ -26,12 +27,14 @@ describe('loadCaseBundle', () => {
       caseRecord: { case_id: 'case-1' }, report: { availability: 'ready' },
       findings: [{ rule_id: 'rule-1' }], issues: [{ issue_id: 'issue-1' }],
       documents: [{ document_id: 'document-1' }],
+      agentLog: { availability: 'ready', events: [] },
     });
     expect(fetcher.mock.calls.map(function (call) { return call[0]; })).toEqual([
       '/api/v1/cases/case%2Fid', '/api/v1/cases/case%2Fid/agent-report',
       '/api/v1/cases/case%2Fid/findings', '/api/v1/cases/case%2Fid/issues',
       '/api/v1/cases/case%2Fid/application-data', '/api/v1/cases/case%2Fid/documents',
       '/api/v1/cases/case%2Fid/evidence',
+      '/api/v1/cases/case%2Fid/agent-log',
     ]);
   });
 
@@ -43,13 +46,14 @@ describe('loadCaseBundle', () => {
       { findings: [{ rule_id: 'rule-1', references: [evidencePath] }] },
       { issues: [] }, { groups: [] }, { documents: [] },
       { evidence: [{ evidence_id: 'evidence-1', evidence_type: 'page_level', page_number: 1 }] },
+      { availability: 'ready', events: [] },
     ];
     const fetcher = vi.fn(async () => ({ ok: true, json: async () => payloads.shift() }));
 
     const bundle = await loadCaseBundle('case-1', fetcher);
 
     expect(bundle.evidenceByReference[evidencePath]).toMatchObject({ page_number: 1 });
-    expect(fetcher).toHaveBeenCalledTimes(7);
+    expect(fetcher).toHaveBeenCalledTimes(8);
     expect(fetcher).not.toHaveBeenCalledWith('https://example.invalid/evidence');
   });
 

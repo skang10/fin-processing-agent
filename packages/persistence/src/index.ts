@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type QueueCaseView, type ReviewCommandService, type ReviewIssueView } from "@findoc/core";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type QueueCaseView, type ReviewCommandService, type ReviewIssueView } from "@findoc/core";
 import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
@@ -462,6 +462,33 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       summary: report.summary,
       issueLinks: report.issueLinks as string[],
       checkedFacts: report.checkedFacts as AgentReportView["checkedFacts"],
+    };
+  }
+
+  async getAgentLog(caseId: string): Promise<AgentLogView> {
+    const [caseRecord] = await this.db.select({ lifecycle: cases.lifecycle }).from(cases).where(eq(cases.id, caseId)).limit(1);
+    if (!caseRecord) throw new CaseNotFoundError();
+    const [report] = await this.db.select({
+      availability: agentReports.availability, modelLabel: agentReports.modelLabel,
+      estimatedCost: agentReports.estimatedCost, checkedFacts: agentReports.checkedFacts,
+      issueLinks: agentReports.issueLinks, createdAt: agentReports.createdAt,
+    }).from(agentReports).where(eq(agentReports.caseId, caseId)).orderBy(sql`${agentReports.createdAt} desc`).limit(1);
+    const currentStep = caseRecord.lifecycle === "processing" ? "processing" as const
+      : caseRecord.lifecycle === "review_complete" ? "review_completed" as const : "awaiting_human_review" as const;
+    if (!report) return { availability: "pending", currentStep, events: [] };
+    const timestamp = report.createdAt.toISOString();
+    const factCount = (report.checkedFacts as unknown[]).length;
+    const issueCount = (report.issueLinks as unknown[]).length;
+    return {
+      availability: report.availability === "ready" ? "ready" : "unavailable",
+      modelLabel: report.modelLabel,
+      estimatedCost: { amount: report.estimatedCost, currency: "EUR" },
+      currentStep,
+      events: [
+        { timestamp, activity: `Checked ${factCount} facts` },
+        { timestamp, activity: `Created ${issueCount} review issues` },
+        { timestamp, activity: report.availability === "ready" ? "Generated review report" : "Report verification failed" },
+      ],
     };
   }
 

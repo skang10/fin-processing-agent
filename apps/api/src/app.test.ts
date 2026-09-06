@@ -39,6 +39,11 @@ describe("case intake", () => {
         references: ["/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/evidence/4c816f67-5f2f-4e21-8c17-7eb1e5383999"],
       }],
     })),
+    getAgentLog: vi.fn(async () => ({
+      availability: "ready" as const, modelLabel: "fake-pi-harness-v1",
+      estimatedCost: { amount: "0.0000", currency: "EUR" as const }, currentStep: "awaiting_human_review" as const,
+      events: [{ timestamp: "2026-09-01T10:05:00.000Z", activity: "Generated review report" }],
+    })),
     getIssues: vi.fn(async () => [{
       issueId: "4c816f67-5f2f-4e21-8c17-7eb1e53838be",
       origin: "agent" as const,
@@ -134,6 +139,20 @@ describe("case intake", () => {
       final_review: { action: "clear_for_downstream", reviewer_id: "reviewer_1" },
       claims: [{ field_schema_id: "employment.employer", evidence_references: [expect.stringContaining("/evidence/")] }],
       findings: [{ rule_id: "VAL_NAME_CONSISTENCY_001" }],
+    });
+    await app.close();
+  });
+
+  it("returns the bounded reviewer-safe case Agent log", async () => {
+    const app = buildApp({ accept: vi.fn() }, caseQueries);
+    const response = await app.inject({
+      method: "GET", url: "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/agent-log",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      availability: "ready", model_label: "fake-pi-harness-v1",
+      estimated_cost: { amount: "0.0000", currency: "EUR" }, current_step: "awaiting_human_review",
+      events: [{ timestamp: "2026-09-01T10:05:00.000Z", activity: "Generated review report" }],
     });
     await app.close();
   });

@@ -1,6 +1,6 @@
 export async function loadCaseBundle(caseId, fetcher = fetch) {
   const base = '/api/v1/cases/' + encodeURIComponent(caseId);
-  const paths = ['', '/agent-report', '/findings', '/issues', '/application-data', '/documents', '/evidence'];
+  const paths = ['', '/agent-report', '/findings', '/issues', '/application-data', '/documents', '/evidence', '/agent-log'];
   const responses = await Promise.all(paths.map(function (path) { return fetcher(base + path); }));
   if (responses.some(function (response) { return !response.ok; })) {
     throw new Error('Case data could not be loaded');
@@ -14,7 +14,7 @@ export async function loadCaseBundle(caseId, fetcher = fetch) {
   return {
     caseRecord: payloads[0], report, findings,
     issues: payloads[3].issues, applicationData: payloads[4], documents: payloads[5].documents,
-    evidenceByReference,
+    evidenceByReference, agentLog: payloads[7],
   };
 }
 

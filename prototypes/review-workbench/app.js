@@ -5,6 +5,7 @@ let cases = [
   { name: 'Emil Probe', id: 'FD-2026-0038', summary: 'Income document needs confirmation', status: 'in-progress', statusLabel: 'In progress', issues: 1, waiting: '9 min' },
   { name: 'Klara Test', id: 'FD-2026-0035', summary: 'Uploaded documents need separation', status: 'ready', statusLabel: 'Ready for review', issues: 2, waiting: '34 min' }
 ];
+let apiAgentLog = null;
 
 let issues = [
   {
@@ -695,7 +696,7 @@ document.querySelector('#queue-nav').addEventListener('click', function () { voi
 document.querySelector('#changes-nav').addEventListener('click', function () { void refreshQueue('changes_requested'); });
 document.querySelector('#completed-nav').addEventListener('click', function () { void refreshQueue('completed'); });
 const caseAgentRun = document.querySelector('#case-agent-run');
-document.querySelector('#case-agent-trigger').addEventListener('click', function () { caseAgentRun.showModal(); });
+document.querySelector('#case-agent-trigger').addEventListener('click', function () { renderAgentLog(); caseAgentRun.showModal(); });
 document.querySelector('#close-agent-run').addEventListener('click', function () { caseAgentRun.close(); });
 document.querySelector('#back').addEventListener('click', function () { void refreshQueue(activeQueueView); });
 document.querySelector('#previous').addEventListener('click', function () { if (current > 0) { current -= 1; editing = false; confirming = false; render(); } });
@@ -952,6 +953,22 @@ function renderApiReport(report) {
   wireReportNavigation();
 }
 
+function renderAgentLog() {
+  if (!apiAgentLog) return;
+  const stepLabels = { processing: 'Processing', awaiting_human_review: 'Awaiting human review', review_completed: 'Review completed' };
+  document.querySelector('.agent-log-meta').innerHTML =
+    '<span>Model <strong>' + escapeHtml(apiAgentLog.model_label || 'Unavailable') + '</strong></span>' +
+    '<span>Cost <strong>' + (apiAgentLog.estimated_cost ? '€' + escapeHtml(apiAgentLog.estimated_cost.amount) : 'Unavailable') + '</strong></span>' +
+    '<span>Current step <strong>' + escapeHtml(stepLabels[apiAgentLog.current_step] || apiAgentLog.current_step) + '</strong></span>';
+  document.querySelector('.agent-run-events').innerHTML = apiAgentLog.events.length
+    ? apiAgentLog.events.map(function (event) {
+      const time = new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      return '<div><time>' + escapeHtml(time) + '</time><span>' + escapeHtml(event.activity) +
+        (event.tool_label ? '<small>Tool: ' + escapeHtml(event.tool_label) + '</small>' : '') + '</span></div>';
+    }).join('')
+    : '<div><span>Agent activity is not available yet.</span></div>';
+}
+
 function wireReportNavigation() {
   document.querySelectorAll('[data-report-issue]').forEach(function (button) {
     button.addEventListener('click', function () {
@@ -981,6 +998,7 @@ async function loadCaseFromApi() {
     apiApplicationData = bundle.applicationData;
     apiDocuments = bundle.documents;
     apiEvidenceByReference = bundle.evidenceByReference;
+    apiAgentLog = bundle.agentLog;
     issues = issueRecords.map(function (record, index) {
       return issuePresentation(record, findings.find(function (finding) { return finding.rule_id === record.code; }), index);
     });

@@ -44,6 +44,7 @@ export const CaseProjectionSchema = Type.Object({
     issues: Type.String(),
     final_review: Type.String(),
     downstream_handoff: Type.String(),
+    agent_log: Type.String(),
   }),
 });
 
@@ -142,6 +143,16 @@ export const AgentReportSchema = Type.Object({
     references: Type.Array(Type.String()),
   })),
 });
+
+export const AgentLogSchema = Type.Object({
+  availability: Type.Union([Type.Literal("pending"), Type.Literal("ready"), Type.Literal("unavailable")]),
+  model_label: Type.Optional(Type.String()),
+  estimated_cost: Type.Optional(Type.Object({ amount: Type.String(), currency: Type.Literal("EUR") }, { additionalProperties: false })),
+  current_step: Type.Union([Type.Literal("processing"), Type.Literal("awaiting_human_review"), Type.Literal("review_completed")]),
+  events: Type.Array(Type.Object({
+    timestamp: Type.String(), activity: Type.String(), tool_label: Type.Optional(Type.String()),
+  }, { additionalProperties: false })),
+}, { additionalProperties: false });
 
 const EvidenceBase = {
   evidence_id: Type.String({ format: "uuid" }),

@@ -10,6 +10,7 @@ import {
   CaseQueueSchema,
   CaseProjectionSchema,
   AgentReportSchema,
+  AgentLogSchema,
   EvidenceListProjectionSchema, EvidenceProjectionSchema,
   FindingsProjectionSchema,
   ApplicationDataProjectionSchema,
@@ -177,6 +178,7 @@ export function buildApp(
         issues: `${base}/issues`,
         final_review: `${base}/final-review`,
         downstream_handoff: `${base}/downstream-handoff`,
+        agent_log: `${base}/agent-log`,
       },
     };
   });
@@ -216,6 +218,21 @@ export function buildApp(
         status: fact.status,
         references: [...fact.references],
       })),
+    };
+  });
+
+  app.get("/api/v1/cases/:case_id/agent-log", {
+    schema: { response: { 200: AgentLogSchema, 404: ProblemDetailsSchema } },
+  }, async (request) => {
+    const { case_id: caseId } = request.params as { case_id: string };
+    const log = await caseQueries.getAgentLog(caseId);
+    return {
+      availability: log.availability,
+      ...(log.modelLabel ? { model_label: log.modelLabel } : {}),
+      ...(log.estimatedCost ? { estimated_cost: log.estimatedCost } : {}),
+      current_step: log.currentStep,
+      events: log.events.map((event) => ({ timestamp: event.timestamp, activity: event.activity,
+        ...(event.toolLabel ? { tool_label: event.toolLabel } : {}) })),
     };
   });
 
