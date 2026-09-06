@@ -2,7 +2,7 @@
 
 Document ID: `AGT`
 
-Version: 2.1.1
+Version: 3.0.0
 
 Status: Approved
 
@@ -10,7 +10,7 @@ Last updated: 2026-09-06
 
 ## 1. Purpose
 
-This specification defines the bounded Pi-based Case Review Agent that pre-screens every processable case, produces a Case Review Brief, and may recover explicit extraction gaps through an optional Adaptive Extraction mode.
+This specification defines the bounded Pi-based Case Review Agent that pre-screens every processable case. Within one durable case-review session, the Agent may select registered PDF Inspector and extraction tools, request deterministic reconciliation and validation, and submit a Case Review Brief.
 
 The Agent acts like a junior document-review employee: it assembles evidence-grounded observations and suggests registered reviewer actions. It is not the workflow engine, a general coding agent, a validator, a disposition authority, or a banking decision-maker.
 
@@ -18,7 +18,7 @@ The Agent acts like a junior document-review employee: it assembles evidence-gro
 
 This document owns:
 
-1. Per-case report scheduling, adaptive-recovery eligibility, context, lifecycle, stopping, and escalation.
+1. Per-case Agent scheduling, context, lifecycle, durable re-entry, stopping, and escalation.
 2. Agent tool registration, authorization, validation, and execution semantics.
 3. Execution budgets and no-progress controls.
 4. Pi harness restrictions and isolation.
@@ -44,78 +44,64 @@ Normative dependencies are:
 
 ```mermaid
 flowchart LR
-    A[Fixed extraction] --> B{Explicit eligible gap?}
-    B -- no --> C[Continue reconciliation]
-    B -- yes --> D[Workflow starts Agent session]
-    D --> E[Bounded inspect or extract step]
-    E --> F{Useful schema-valid candidate?}
-    F -- yes --> G[Submit candidate to reconciliation]
-    F -- no --> H{Budget and progress remain?}
-    H -- yes --> E
-    H -- no --> I[Persist terminal reason]
-    G --> J{Required gap resolved?}
-    J -- yes --> C
-    J -- no --> H
-    I --> K[Human review or workflow fallback]
+    A[Deterministic intake and file preflight] --> B[Workflow starts one bounded case-review session]
+    B --> C[Agent selects registered inspection and extraction tools]
+    C --> D[Agent submits candidates]
+    D --> E[Agent requests deterministic reconciliation and validation]
+    E --> F[Agent consumes committed result]
+    F --> G[Agent submits Case Review Brief]
+    G --> H[Deterministic Report Verifier]
+    H --> I[Human review]
 ```
 
 `AGT-REQ-005` The Workflow Coordinator, not the Agent, must decide whether and when an Agent session is scheduled.
 
-`AGT-REQ-006` An Agent session must declare `adaptive_recovery` or `case_review_report` mode. Recovery requires one or more persisted eligible gaps; report mode requires one processable result revision after deterministic validation and disposition.
+`AGT-REQ-006` One `case_review` Agent session must cover the bounded pre-screening lifecycle for one processing run. `adaptive_recovery` and `case_review_report` are deprecated as independently scheduled session modes; their work becomes phases within the case-review session.
 
-`AGT-REQ-007` Fixed native, OCR, local-table, and configured non-Agent extraction paths applicable to a gap must complete or explicitly fail before that gap becomes Agent-eligible.
+`AGT-REQ-007` Deterministic intake, immutable source persistence, file-type and safety checks, page-count discovery, and the minimum prerequisites declared by the tool policy must complete before the Agent starts. Native extraction, OCR, local-table extraction, and VLM extraction are Agent-selectable tool operations and need not run as a fixed sequence.
 
-`AGT-REQ-008` Agent eligibility must be determined by versioned workflow policy over structured gap properties, not by free-form model judgment.
+`AGT-REQ-008` Case-review scheduling and tool eligibility must be determined by versioned workflow and tool policy over trusted state, not by free-form model judgment.
 
-`AGT-REQ-009` The Agent must not run for a gap that is already resolved, ineligible, assigned to a different run, or outside the configured document and field scope.
+`AGT-REQ-009` The Agent must not operate on a case, run, document, page, region, field, candidate, or result outside its configured session scope.
 
 `AGT-REQ-010` Agent completion must return structured session outcome to the Workflow Coordinator; it must not transition workflow or case state directly.
 
 ### 3.1 Agent-in-the-Loop contract
 
-The Case Review Agent is an Agent-in-the-Loop scheduled by the Workflow Coordinator. It may run an eligible Adaptive Extraction session during processing and must attempt a report session after deterministic disposition; it does not continuously observe cases or decide independently to join a workflow.
+The Case Review Agent is an Agent-in-the-Loop scheduled once by the Workflow Coordinator for each processable run. It does not continuously observe cases or decide independently to join a workflow. The Agent chooses a bounded review path; the control plane authorizes every operation and durable deterministic components commit domain results.
 
 ```mermaid
 sequenceDiagram
     participant W as Workflow Coordinator
-    participant E as Extraction/Reconciliation
     participant C as Agent Control Plane
     participant P as Pi Harness
     participant T as Tool Executor
     participant H as Human Review
 
-    E->>W: Persist unresolved Extraction Gap
-    W->>C: Evaluate eligibility from trusted state
-    alt eligible and budgets available
-        C->>C: Build bounded context and tool view
-        C->>P: Start scoped Agent session
-        loop until resolved or terminal stop
-            P->>C: Request registered tool
-            C->>T: Authorize, reserve budget, execute
-            T-->>C: Schema-validated result
-            C-->>P: Bounded result context
-        end
-        C->>E: Persist candidate references and outcome
-        E->>E: Deterministic reconciliation
-    else ineligible, fatal, duplicate, or no budget
-        C-->>W: Structured non-start reason
+    W->>C: Start case review after preflight
+    C->>C: Build bounded context and tool view
+    C->>P: Start or re-enter scoped session
+    loop until brief submitted or terminal stop
+        P->>C: Request registered tool
+        C->>T: Authorize, reserve budget, execute or reuse
+        T-->>C: Persisted schema-validated result
+        C-->>P: Bounded result reference
     end
-    opt gap remains unresolved
-        W->>H: Route to Human-in-the-Loop
-    end
+    C-->>W: Structured session outcome
+    W->>H: Present verified report or explicit unavailable state
 ```
 
-`AGT-REQ-104` Agent-in-the-Loop eligibility must require all of the following: a persisted unresolved gap; completed or explicitly failed applicable fixed extraction paths; current case and run scope; an enabled workflow-policy rule; at least one potentially relevant registered tool; available budgets; and no fatal intake or security failure.
+`AGT-REQ-104` Agent-in-the-Loop eligibility must require all of the following: a processable current case and run; completed deterministic intake and minimum file preflight; an enabled workflow-policy rule; at least one relevant registered tool; available budgets; and no fatal intake or security failure.
 
-`AGT-REQ-105` Eligibility evaluation must produce a persisted decision containing policy version, evaluated gap state, decision, and stable reason codes.
+`AGT-REQ-105` Eligibility evaluation must produce a persisted decision containing policy version, evaluated preflight and run state, decision, and stable reason codes.
 
-`AGT-REQ-106` The Agent must not trigger for a cross-document validation conflict, sufficient accepted candidate, unsupported or corrupt input, prohibited business action, unrelated-document need, completed equivalent recovery attempt without new inputs, or unavailable required budget.
+`AGT-REQ-106` The Agent must not start for unsupported or corrupt input, a prohibited business action, an already completed equivalent case-review attempt without new material inputs, or unavailable required budget. Cross-document conflicts and sufficient accepted candidates remain valid review inputs and must not independently suppress the required case-review attempt.
 
-`AGT-REQ-107` A newly created gap must not trigger the Agent merely because it exists; the Workflow Coordinator must observe committed prerequisite stages and evaluate the eligibility policy.
+`AGT-REQ-107` A newly created gap must not schedule a separate Agent session merely because it exists; it becomes trusted state available to the active case-review session or deterministic fallback routing.
 
-`AGT-REQ-108` A change to gap inputs, document revision, applicable tool version, or recovery policy may permit a new eligibility decision; elapsed time alone must not.
+`AGT-REQ-108` A change to case inputs, document revision, applicable tool version, or case-review policy may permit a new eligibility decision; elapsed time alone must not.
 
-`AGT-REQ-109` A non-start decision must leave the gap explicit and return control to deterministic workflow routing.
+`AGT-REQ-109` A non-start decision must preserve available processing state and return control to deterministic workflow routing, which must expose a reviewable failure or terminal technical failure according to owning policy.
 
 ## 4. Session Scope and Context
 
@@ -123,7 +109,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    A[Persisted gap and run state] --> B[Context Selector]
+    A[Persisted case and run state] --> B[Context Selector]
     C[Field schemas and policy] --> B
     D[Authorized evidence index] --> B
     B --> E[Context Validator]
@@ -136,15 +122,15 @@ flowchart LR
 
 The trusted Agent Control Plane owns context selection. Pi consumes the resulting view but cannot query arbitrary case state or mutate the context manifest.
 
-`AGT-REQ-011` A session must bind exactly one case, one processing run, one stage attempt, one mode, one harness configuration version, one tool-registry version, and one budget envelope; it must additionally bind gaps in recovery mode or a result revision in report mode.
+`AGT-REQ-011` A session must bind exactly one case, one processing run, one stage attempt, the `case_review` mode, one harness configuration version, one tool-registry version, and one budget envelope.
 
-`AGT-REQ-012` All gaps in a recovery session must concern the same bounded logical document or explicitly approved contiguous page window.
+`AGT-REQ-012` The session may inspect multiple documents in its bound case, but each content-bearing tool call must target one authorized document, page, bounded contiguous page window, or region as declared by that tool contract.
 
-`AGT-REQ-013` A session must receive only the minimum context required for its declared mode.
+`AGT-REQ-013` A session must initially receive only the minimum inventory and trusted control context required to plan its review; document content must be retrieved incrementally through scoped tools.
 
 `AGT-REQ-014` Allowed context may include field schemas, gap descriptions, selected page metadata, bounded native or OCR text, existing candidate summaries, evidence metadata, and safe processing diagnostics.
 
-`AGT-REQ-015` A session must not receive a complete case package, unrestricted application data, disposition-policy internals, credentials, or internal system configuration. Report mode may receive bounded persisted claim, evidence-index, gap, finding, and recommended-disposition projections for its bound result revision.
+`AGT-REQ-015` A session must not receive complete document bytes, unrestricted application data, disposition-policy internals, credentials, or internal system configuration. It may receive bounded persisted claim, evidence-index, gap, finding, and recommended-disposition projections produced during its bound run.
 
 `AGT-REQ-016` Full document bytes and page images must be accessed only through scoped tools; they must not be embedded wholesale in the Agent instruction context.
 
@@ -152,7 +138,7 @@ The trusted Agent Control Plane owns context selection. Pi consumes the resultin
 
 `AGT-REQ-018` Document text in context must be delimited and represented as untrusted data.
 
-`AGT-REQ-019` Session construction must be deterministic for the same eligible gaps, committed inputs, configuration, and context-selection version, excluding trace and time metadata.
+`AGT-REQ-019` Session construction must be deterministic for the same committed case inputs, configuration, and context-selection version, excluding trace and time metadata.
 
 ### 4.2 Context manifests and updates
 
@@ -198,18 +184,26 @@ The trusted Agent Control Plane owns context selection. Pi consumes the resultin
 
 ## 6. Tool Registry
 
-The initial registered tool names are:
+The V1 registered tool catalog is:
 
 ```text
 inspect_page
 get_native_text
-run_ocr
 render_page_region
+run_ocr
 classify_page
+detect_document_boundaries
+extract_local_table
 extract_with_vlm
 get_extraction_gaps
 submit_extraction_candidates
+request_reconciliation
+request_validation
+get_current_result
+submit_case_review_brief
 ```
+
+The list is a capability ceiling, not a prescribed sequence. A session tool view may omit tools whose prerequisites or case scope are not satisfied.
 
 `AGT-REQ-029` The tool registry must be a finite, immutable, versioned set assembled by trusted application code before the session starts.
 
@@ -250,7 +244,7 @@ flowchart LR
 
 `AGT-REQ-120` The immutable Tool Catalog must be assembled at application startup from explicitly registered implementations and reviewed schema artifacts; it must not scan the filesystem, installed packages, prompts, or model output for tools.
 
-`AGT-REQ-121` Each session must receive a Session Tool View containing only the subset permitted for its gap type, source scope, workflow policy, and remaining budgets.
+`AGT-REQ-121` Each session must receive a Session Tool View containing only the subset permitted for its current committed state, source scope, workflow policy, prerequisites, and remaining budgets.
 
 `AGT-REQ-122` Removing a tool from a Session Tool View must not require changing the global catalog or expose the existence of unrelated tools to the model.
 
@@ -268,6 +262,8 @@ flowchart LR
 
 ## 7. Tool Semantics
 
+`AGT-REQ-158` `inspect_page`, `get_native_text`, `render_page_region`, `run_ocr`, `classify_page`, `detect_document_boundaries`, and `extract_local_table` must be project-owned wrappers over the approved Document Processing interfaces. The Agent must not receive the PDF Inspector SDK object, filesystem path, command-line interface, or unrestricted operation options.
+
 `AGT-REQ-038` `inspect_page` must return bounded page structure and technical metadata for an authorized page without returning unrelated case content.
 
 `AGT-REQ-039` `get_native_text` must return bounded native spans and evidence coordinates already committed for authorized pages or regions.
@@ -278,17 +274,35 @@ flowchart LR
 
 `AGT-REQ-042` `classify_page` must invoke only the configured classifier operation and must return constrained classification candidates, not workflow commands.
 
+`AGT-REQ-159` `detect_document_boundaries` must return bounded boundary candidates for authorized pages. It must not commit a logical-document revision directly; accepted boundaries remain subject to the deterministic document-processing contract.
+
+`AGT-REQ-160` `extract_local_table` must return schema-valid table candidates and evidence coordinates from an authorized page or bounded page window. It must not infer unrelated business fields or authoritative claims.
+
 `AGT-REQ-043` `extract_with_vlm` must invoke one configured task-specific Model Gateway operation over selected pages, a bounded consecutive-page window, or regions.
 
 `AGT-REQ-044` `extract_with_vlm` must not expose tools to the extraction-model invocation.
 
-`AGT-REQ-045` `get_extraction_gaps` must return only the session-bound gaps and their current persisted resolution state.
+`AGT-REQ-045` `get_extraction_gaps` must return only gaps from the bound case and run that are visible under current tool policy, together with their persisted resolution state.
 
 `AGT-REQ-046` `submit_extraction_candidates` must accept only candidates matching the session gaps, approved field schemas, source scope, and evidence requirements.
 
 `AGT-REQ-047` Candidate submission must not write directly to authoritative Claim, Finding, Disposition, Rule, Prompt, or Workflow records.
 
 `AGT-REQ-048` Submitted Agent candidates must enter the same structural validation, evidence validation, normalization, and reconciliation path as non-Agent candidates.
+
+`AGT-REQ-161` `request_reconciliation` must invoke the deterministic reconciliation component over committed candidates for the bound run and return references to its committed claims, gaps, and lineage. The Agent may not supply a preferred winning value outside the registered reconciliation input contract.
+
+`AGT-REQ-162` `request_validation` must invoke the versioned deterministic rule manifest only after reconciliation prerequisites are committed and must return references to committed findings and recommended disposition. The Agent may not add, remove, rewrite, or selectively suppress rules.
+
+`AGT-REQ-163` `get_current_result` must return a bounded projection of the latest committed claims, gaps, findings, recommended disposition, and evidence availability for the bound run. It must not treat uncommitted Agent narrative as result state.
+
+`AGT-REQ-164` `submit_case_review_brief` must accept one schema-valid report candidate bound to the current committed result revision and send it to the deterministic Report Verifier; it must not mark the report verified or transition the case.
+
+`AGT-REQ-165` The control plane must enforce tool prerequisites. In particular, OCR requires an authorized renderable page or region; VLM extraction requires an unresolved structured need after approved local paths are insufficient or explicitly failed; reconciliation requires committed candidates; validation requires a committed reconciliation projection; and report submission requires a current result revision.
+
+`AGT-REQ-166` Native text must be attempted or its inapplicability established before OCR for the same target, and approved local extraction must be attempted or its insufficiency established before VLM extraction. The Agent chooses targets and whether further eligible work is useful, but it cannot bypass these ordering constraints.
+
+`AGT-REQ-167` Every cacheable document tool invocation must resolve an idempotency key before execution and reuse an integrity-valid compatible committed result. Agent-selected repetition must not create duplicate artifacts or untracked native work.
 
 ## 8. Model Gateway and Prompt Boundary
 
@@ -340,7 +354,8 @@ Every session budget envelope must contain finite limits for:
 Agent session terminal reasons are:
 
 ```text
-gaps_resolved
+report_submitted
+report_not_submitted
 no_progress
 conflicting_candidates
 iteration_budget_exhausted
@@ -356,27 +371,27 @@ cancelled_by_workflow
 internal_error
 ```
 
-Report-mode sessions additionally use `report_submitted` when the Agent submitted a brief for verification and `report_not_submitted` when the model ended its turn without calling `submit_case_review_brief`. Both are terminal reasons of the session only; report availability is decided by the Report Verifier in section 14.
+`report_submitted` means the Agent submitted a brief for verification. `report_not_submitted` means it ended without doing so. Both describe only the Agent session; report availability is decided by the Report Verifier in section 14. Gap resolution is progress state, not a successful terminal reason, because the same session must continue through deterministic validation and report submission.
 
-`AGT-REQ-064` A session must terminate when all bound required gaps have accepted resolution candidates.
+`AGT-REQ-064` A successful session must terminate only after it has consumed a current committed result revision and submitted one Case Review Brief candidate for verification.
 
 `AGT-REQ-065` A session must terminate when a hard budget is exhausted, the deadline passes, workflow cancellation is observed, or no permitted next action remains.
 
-`AGT-REQ-066` Progress must be measured from trusted persisted state, including new valid evidence, a new schema-valid candidate, or a resolved gap; model narrative alone is not progress.
+`AGT-REQ-066` Progress must be measured from trusted persisted state, including new valid evidence, a new schema-valid candidate, a resolved gap, a newly committed reconciliation or validation result, or a submitted brief; model narrative alone is not progress.
 
 `AGT-REQ-067` Repeating an equivalent tool call over the same material inputs without new valid output must increment a no-progress counter.
 
 `AGT-REQ-068` The session must stop with `no_progress` when the configured consecutive no-progress limit is reached.
 
-`AGT-REQ-069` Conflicting candidates that cannot be reconciled within configured policy must remain preserved and terminate with `conflicting_candidates` or escalate without choosing by model preference alone.
+`AGT-REQ-069` Conflicting candidates that cannot be reconciled within configured policy must remain preserved. The Agent may request deterministic validation and report the conflict for human review; it must not choose by model preference alone. `conflicting_candidates` is terminal only when the conflict prevents creation of a reviewable deterministic result.
 
 `AGT-REQ-070` Exactly one terminal reason must be recorded for a terminal Agent session.
 
-`AGT-REQ-071` A non-success terminal reason must preserve unresolved gaps for deterministic workflow routing to retry, fallback, or human review.
+`AGT-REQ-071` A non-success terminal reason must preserve all committed artifacts, candidates, gaps, claims, findings, and results for deterministic routing to retry, fallback, human review, or technical exception handling.
 
 ## 11. Persistence and Recovery
 
-`AGT-REQ-072` PostgreSQL stage, gap, session, step, invocation, candidate, and budget records must be the durable record of Agent work.
+`AGT-REQ-072` PostgreSQL stage, session, step, invocation, artifact, candidate, gap, result, report-submission, and budget records must be the durable record of Agent work.
 
 `AGT-REQ-073` Pi conversation memory and in-process session state must not be authoritative workflow state.
 
@@ -386,7 +401,7 @@ Report-mode sessions additionally use `report_submitted` when the Agent submitte
 
 `AGT-REQ-076` Loss of the Agent process must not lose previously committed candidates, artifacts, gap state, budget consumption, or workflow ownership.
 
-`AGT-REQ-077` Recovery may start a new Agent session or resume through an explicitly supported harness mechanism, but it must first reconstruct authority and remaining budgets from trusted persisted state.
+`AGT-REQ-077` Durable re-entry may start a linked session attempt or resume through an explicitly supported harness mechanism, but it must first reconstruct authority, committed results, completed tool calls, and remaining budgets from trusted persisted state.
 
 `AGT-REQ-078` Recovery must not replay a completed non-idempotent tool operation solely because conversational context was lost.
 
@@ -401,7 +416,7 @@ Retries operate at different layers. A lower layer must not conceal repeated wor
 | Adapter transport retry | Connection reset before a confirmed response | Tool or Model Gateway adapter | Same tool/model invocation | Counts according to configured attempt policy | One invocation result |
 | Tool-call retry | Retryable structured tool failure | Agent Control Plane | Same logical tool call; new execution attempt | Reserves additional operation budget | Validated tool result or terminal tool failure |
 | Model-call retry | Retryable provider failure or declared schema-repair attempt | Model Gateway policy | Same task identity; new invocation attempt | Counts tokens, calls, time, and cost | Schema-valid response or terminal model failure |
-| Agent-step continuation | Valid result leaves gap unresolved | Pi harness under control plane | New step identity | Counts iteration and relevant tool budgets | New candidate, progress, or stop |
+| Agent-step continuation | Valid result leaves useful review work | Pi harness under control plane | New step identity | Counts iteration and relevant tool budgets | New persisted evidence, candidate, deterministic result, brief, or stop |
 | Session retry | Process loss or retryable session infrastructure failure | Workflow Coordinator | New session attempt linked to prior session | Uses persisted remaining or newly authorized budget | Terminal session outcome |
 | Stage retry | Agent stage fails or is redelivered | Workflow Coordinator and pg-boss | New stage attempt in same run | New configured stage budget envelope | Committed session outcome |
 | New run | Inputs or material versions change | Workflow Coordinator | New processing-run identity | Fresh explicitly configured budgets | New immutable machine result |
@@ -424,7 +439,7 @@ Retries operate at different layers. A lower layer must not conceal repeated wor
 
 `AGT-REQ-137` A stage retry may authorize a new session budget only through versioned workflow policy and must retain the prior session and budget history.
 
-`AGT-REQ-138` A material input, prompt, model route, tool implementation, schema, or recovery-policy change must not be hidden as a retry when reproducibility requires a new processing run.
+`AGT-REQ-138` A material input, prompt, model route, tool implementation, schema, or case-review-policy change must not be hidden as a retry when reproducibility requires a new processing run.
 
 `AGT-REQ-139` Retry exhaustion must yield one structured terminal outcome and return control to workflow fallback or human review without an internal infinite retry cycle.
 
@@ -444,11 +459,11 @@ Retries operate at different layers. A lower layer must not conceal repeated wor
 
 ## 14. Case Review Brief
 
-`AGT-REQ-144` The Workflow Coordinator must attempt exactly one current `case_review_report` session for every processable result revision before presenting that revision for human review.
+`AGT-REQ-144` The Workflow Coordinator must make exactly one current case-review attempt for every processable run. That session must be able to submit one brief for its current result revision before human review; a materially changed result requires a new linked report attempt or new case-review attempt according to workflow policy, never silent mutation of the prior brief.
 
-`AGT-REQ-145` Report mode must receive a deterministic `CaseReviewContext` containing document inventory, material claim references, evidence availability, extraction gaps, deterministic findings, recommended disposition, and safe processing diagnostics for one result revision.
+`AGT-REQ-145` Before report submission, the Agent must obtain a deterministic `CaseReviewContext` containing document inventory, material claim references, evidence availability, extraction gaps, deterministic findings, recommended disposition, and safe processing diagnostics for one result revision.
 
-`AGT-REQ-146` Report mode must be read-only except for `submit_case_review_brief`; it must not submit extraction candidates, mutate claims, evaluate rules, change findings or disposition, or transition workflow state.
+`AGT-REQ-146` After the Agent consumes the `CaseReviewContext`, the report-submission phase must be read-only except for `submit_case_review_brief`; it must not submit new extraction candidates, mutate claims, rerun rules, change findings or disposition, or transition workflow state. Discovery of a material missing prerequisite must end the attempt with a structured reason rather than silently revising the sealed result.
 
 `AGT-REQ-147` A `CaseReviewBrief` must contain schema version, bound result revision, report status, concise case summary, zero or more registered review signals, zero or more registered suggested actions, ordered reviewer-attention items, and supporting record references.
 
@@ -464,7 +479,7 @@ The initial suggested-action vocabulary is `inspect_evidence`, `compare_claims`,
 
 `AGT-REQ-151` Only a verified brief may be displayed as the current Agent report. Original submitted output and rejection reasons must remain immutable safe diagnostic provenance.
 
-`AGT-REQ-152` Report failure, timeout, budget exhaustion, or verification rejection must produce an explicit unavailable status and route the deterministic case result to human review without fabricating a brief or blocking access to claims, evidence, findings, and disposition.
+`AGT-REQ-152` Agent failure after a reviewable deterministic result exists, report timeout, budget exhaustion, or verification rejection must produce an explicit unavailable status and route that result to human review without fabricating a brief or blocking access to claims, evidence, findings, and disposition. Failure before a reviewable deterministic result exists must route through the owning workflow failure policy and must not fabricate a reviewable result.
 
 `AGT-REQ-153` A human reviewer must confirm or supersede the document-processing result through registered review actions; an Agent suggestion never constitutes that action.
 
@@ -476,7 +491,7 @@ The initial suggested-action vocabulary is `inspect_evidence`, `compare_claims`,
 
 `AGT-REQ-087` Metrics must include session outcomes, terminal reasons, iterations, tool calls by name and outcome, VLM calls, token usage when available, estimated cost when available, duration, schema failures, no-progress stops, and candidate acceptance outcome.
 
-`AGT-REQ-088` The Review Workbench must be able to query a safe ordered recovery trace containing actions, outcomes, candidate references, evidence references, usage, latency, and estimated cost availability.
+`AGT-REQ-088` The Review Workbench must be able to query a safe ordered case Agent log containing selected actions, tool names, outcomes, evidence or result references, current step, model identity, usage, latency, and estimated cost availability.
 
 `AGT-REQ-089` Logs and traces must not contain unrestricted model context, chain-of-thought, complete documents, page images, full identity numbers, full IBANs, or credentials.
 
@@ -486,11 +501,11 @@ The initial suggested-action vocabulary is `inspect_evidence`, `compare_claims`,
 
 The Agent component is acceptable for implementation when automated tests demonstrate that:
 
-`AGT-REQ-091` An eligible golden-case gap starts one scoped Agent session after applicable fixed extraction paths complete.
+`AGT-REQ-091` Each processable golden case starts one scoped case-review session after deterministic intake and minimum file preflight, and the fake-model path selects the expected registered tool sequence without relying on a fixed extraction pipeline.
 
 `AGT-REQ-092` A schema-valid, evidence-linked Agent candidate enters ordinary reconciliation and can resolve its bound gap without becoming a finding directly.
 
-`AGT-REQ-093` An unresolved or exhausted session leaves the gap visible and routes control back to durable workflow for human review or configured fallback.
+`AGT-REQ-093` An unresolved or exhausted session preserves committed state and routes control back to durable workflow for human review, configured fallback, or technical exception handling according to whether a reviewable result exists.
 
 `AGT-REQ-094` Every registered tool rejects cross-case, cross-run, cross-document, cross-page, cross-region, and unsupported-field access.
 
@@ -510,7 +525,7 @@ The Agent component is acceptable for implementation when automated tests demons
 
 `AGT-REQ-102` Fake harness, fake model, and fake tool adapters support deterministic default continuous-integration tests without paid or external model calls.
 
-`AGT-REQ-103` The adaptive demo path exposes recovery actions, resulting candidates and evidence, terminal outcome, latency, model usage, and estimated cost availability.
+`AGT-REQ-103` The Agent-led demo path exposes selected document-review tools, resulting candidates and evidence, deterministic result requests, terminal outcome, latency, model usage, and estimated cost availability.
 
 `AGT-REQ-155` Every primary demo path attempts report generation, exposes verification status and supporting references, and proceeds to human review even when the report is unavailable.
 
@@ -518,7 +533,7 @@ The Agent component is acceptable for implementation when automated tests demons
 
 `AGT-REQ-157` The Report Verifier must validate requested-change draft structure, signal binding, references, and prohibited content. A verified draft remains non-authoritative and cannot be included in a final review message without an explicit human action.
 
-`AGT-REQ-140` Eligibility tests prove that eligible extraction gaps trigger Agent-in-the-Loop only after fixed paths finish, while validation conflicts, fatal inputs, duplicate attempts, and insufficient budgets do not.
+`AGT-REQ-140` Eligibility tests prove that processable cases trigger Agent-in-the-Loop only after intake and minimum preflight, while fatal inputs, duplicate attempts, and insufficient budgets do not. Validation conflicts must remain reviewable inputs rather than suppressing the Agent attempt.
 
 `AGT-REQ-141` Context tests prove that manifests are scoped, size-bounded, trust-labeled, reproducible, and preserve required control metadata during compaction.
 
@@ -529,17 +544,19 @@ The Agent component is acceptable for implementation when automated tests demons
 ## 17. Assumptions and Deferred Evidence
 
 1. Only synthetic or explicitly demo-safe documents enter the initial demonstration.
-2. Exact budget values, no-progress limits, default model, fallback model, and eligibility thresholds require golden-set evidence and remain in [`../../BACKLOG.md`](../../BACKLOG.md).
+2. Exact budget values, no-progress limits, default model, fallback model, and scheduling thresholds require golden-set evidence and remain in [`../../BACKLOG.md`](../../BACKLOG.md).
 3. Pi SDK integration details and hardening configuration require an implementation proof and `ADR_001_PI_AGENT_HARNESS.md` before the Agent vertical slice is considered complete.
 4. Detailed field schemas and reconciliation behavior belong to the extraction and validation specifications or executable contract artifacts.
 5. The initial Agent is single-purpose and does not provide a general user-facing chat interface.
+6. The exact minimum preflight set, durable re-entry protocol, and tool-view transition table require alignment with the data-model, workflow, and document-processing owners before implementation of version 3.0.0.
 
-No unresolved Agent-authority decision blocks review of this document.
+Version 3.0.0 resolves Agent authority but creates dependent specification work for the session data model, workflow stage contract, and PDF Inspector tool adapters. Those approved owners remain authoritative until updated; implementation must not silently reinterpret their conflicting requirements.
 
 ## 18. Document History
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.0.0 | 2026-09-06 | Approved | Replaced separate adaptive-recovery and report sessions with one bounded Agent-led case review, exposed PDF Inspector and deterministic processing through an exact registered tool ceiling, and defined prerequisites, durable re-entry, failure routing, and report finalization. |
 | 2.1.1 | 2026-09-06 | Approved | Registered the report-mode terminal reasons `report_submitted` and `report_not_submitted` used by the implemented Pi harness; no authority or budget semantics changed. |
 | 2.1.0 | 2026-09-04 | Approved | Added optional verified applicant-readable requested-change drafts without delivery or decision authority for the V1 review workflow. |
 | 2.0.0 | 2026-09-04 | Approved | Expanded Pi into a per-case pre-screening Agent with a verified Case Review Brief while retaining optional bounded adaptive extraction. |

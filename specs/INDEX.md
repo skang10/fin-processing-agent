@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 3.0.2
+Version: 3.0.4
 
 Status: Approved
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-All owning specifications in the catalog are approved, including `SYSTEM_ARCHITECTURE.md` version 3.0.0 and `operations/DEPLOYMENT.md`. `ADR_001_PI_AGENT_HARNESS.md`, `ADR_002_PDF_INSPECTOR.md`, and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
+All owning specifications in the catalog are approved, including `SYSTEM_ARCHITECTURE.md` version 3.0.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.0.0, and `operations/DEPLOYMENT.md`. `ADR_001_PI_AGENT_HARNESS.md`, `ADR_002_PDF_INSPECTOR.md`, and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
 
 ## 3. Product Baseline
 
@@ -69,7 +69,7 @@ Normative product scope belongs to `PRODUCT_AND_SCOPE.md`. This section is an in
 | 3 | `SYSTEM_ARCHITECTURE.md` | `ARC` | System boundaries, components, trust boundaries, processing flow, and cross-cutting architecture | Approved |
 | 4 | `DATA_MODEL.md` | `DAT` | Domain entities, claims, evidence, processing runs, stages, corrections, audit references, and persistence semantics | Approved |
 | 5 | `components/DOCUMENT_PROCESSING.md` | `DOC` | Intake, inspection, rendering, page classification, logical-document grouping, native extraction, OCR, and table extraction | Approved |
-| 6 | `components/ADAPTIVE_EXTRACTION_AGENT.md` | `AGT` | Pi Case Review Agent, verified review briefs, optional gap recovery, allowlisted tools, budgets, stopping, and escalation | Approved |
+| 6 | `components/ADAPTIVE_EXTRACTION_AGENT.md` | `AGT` | Pi-led case review, registered PDF Inspector and deterministic processing tools, verified briefs, budgets, stopping, and escalation | Approved |
 | 7 | `components/VALIDATION_AND_DISPOSITION.md` | `VAL` | Entity matching, validation-rule architecture, findings, and deterministic recommended-disposition mapping | Approved |
 | 8 | `components/REVIEW_WORKBENCH.md` | `UI` | Review Queue, Agent Report, evidence viewer, issue review, requested-change drafts, final review, and bounded case Agent log | Approved |
 | 9 | `API_CONTRACTS.md` | `API` | HTTP endpoints, polling, bounded idempotency, concurrency, error format, authentication context, and generated OpenAPI ownership | Approved |
@@ -197,7 +197,7 @@ Git commit identifiers support traceability but do not replace explicit artifact
 |---|---|
 | Agent | The bounded Pi-based Case Review Agent, unless another agent is explicitly named. It pre-screens each processable case but is not the durable workflow engine, authoritative validator, or business decision-maker. |
 | Case Review Brief | A schema- and reference-verified, non-authoritative Agent report containing evidence-grounded review signals and suggested human review actions for one result revision. |
-| Adaptive Extraction Loop | An optional budgeted Agent mode that selects from approved extraction tools after fixed extraction paths leave an eligible explicit gap. |
+| Agent-led Case Review | The single bounded Pi session for a processable run. It may select registered document inspection and extraction tools, request deterministic reconciliation and validation, and submit a non-authoritative review brief. |
 | Application data | Structured JSON supplied by an upstream caller; it is not necessarily extracted from an application-form document. |
 | Artifact | An immutable stored input or derived object with identity, version, checksum, media type, and lineage. |
 | Case | The top-level document-review container for one applicant, application data, documents, processing runs, and review history. It is not a loan account or lending decision. |
@@ -355,7 +355,7 @@ The minimum processing-run version set will be owned by `DATA_MODEL.md` and must
 
 The following decisions require implementation or evaluation evidence and remain tracked in [`BACKLOG.md`](../BACKLOG.md):
 
-1. Pi Case Review Agent integration proof, including per-case verified briefs and optional Adaptive Extraction.
+1. Pi Case Review Agent integration proof, including Agent-selected PDF Inspector tools, deterministic result requests, durable re-entry, and per-case verified briefs.
 2. PDF Inspector and PP-OCRv6 baseline on the project dataset.
 3. Default and fallback VLM selection.
 4. Versioned golden dataset artifacts.
@@ -367,6 +367,8 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.0.4 | 2026-09-06 | Approved | Approved Agent component 3.0.0 as the single-session Agent-led document review contract. |
+| 3.0.3 | 2026-09-06 | Approved | Registered Agent component 3.0.0 as In Review for the single-session Agent-led document review architecture. |
 | 3.0.2 | 2026-09-06 | Approved | Approved System Architecture 3.0.0 as the bounded Agent-led document-tool architecture. |
 | 3.0.1 | 2026-09-06 | Approved | Registered System Architecture 3.0.0 as In Review for the proposed bounded Agent-led document-tool architecture. |
 | 3.0.0 | 2026-09-05 | Approved | Completed and approved the owning specification set, accepted the Pi, PDF Inspector, and rule-architecture ADRs, retained VLM selection as evidence-gated, and superseded the migration source. |

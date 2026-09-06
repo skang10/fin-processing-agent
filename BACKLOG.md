@@ -39,9 +39,9 @@ Validation findings, risk or review signals, and recommended-disposition mapping
 
 ### BL-002 — Bounded Pi Case Review Agent
 
-**Status:** Report-mode and adaptive-recovery Pi SDK harnesses implemented and verified offline (`packages/agent-pi`, pinned `@earendil-works/pi-coding-agent@0.85.1`) with eleven registered tools, a versioned eligibility policy, persisted gaps, resolutions, decisions, sessions, and steps, and deterministic fake model and port adapters; live model route acceptance, incremental per-step durability during a session, real OCR and VLM ports behind the recovery tools, and the report-tool set beyond findings and references remain pending
+**Status:** The prior report-mode and adaptive-recovery Pi SDK harnesses are implemented and verified offline, but they predate the approved Agent-led architecture. A single durable `case_review` session, Agent-selectable PDF Inspector tools, deterministic reconciliation and validation request tools, durable re-entry, live model route acceptance, and real OCR and VLM adapters remain pending.
 
-Embed the `pi-coding-agent` software development kit as a bounded pre-screening Agent for every processable case. It produces a verified Case Review Brief and may enter Adaptive Extraction mode only for eligible gaps. Disable built-in coding tools, Shell access, arbitrary file and network access, dynamic extensions, runtime package installation, and automatic resource discovery.
+Embed the `pi-coding-agent` software development kit as the bounded pre-screening orchestrator for every processable case. After deterministic intake and minimum file preflight, one case-review session may select registered PDF Inspector, extraction, evidence, reconciliation-request, validation-request, and report-submission tools. Disable built-in coding tools, Shell access, arbitrary file and network access, dynamic extensions, runtime package installation, and automatic resource discovery.
 
 The implementation spike must prove:
 
