@@ -20,6 +20,7 @@
   "documents": [
     {
       "media_type": "application/pdf",
+      "page_count": 1,
       "path": "../documents/golden-001-native-clear.pdf",
       "sha256": "24ec01030520baad7051bb001b9b5bb6d5a6ab579b5dbf9ebc09aa5e28ad0e33"
     }

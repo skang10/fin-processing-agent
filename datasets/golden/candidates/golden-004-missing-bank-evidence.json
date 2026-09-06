@@ -20,6 +20,7 @@
   "documents": [
     {
       "media_type": "application/pdf",
+      "page_count": 1,
       "path": "../documents/golden-004-missing-bank-evidence.pdf",
       "sha256": "81aaaeb791a53158de5a91f4a00e90ad90573203eef43f3fab9ee7977c113751"
     }

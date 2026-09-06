@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -7,6 +7,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const defaultCandidateDirectory = join(repositoryRoot, "datasets/golden/candidates");
 const defaultReleaseDirectory = join(repositoryRoot, "datasets/golden/releases");
 const defaultBlueprintPath = join(repositoryRoot, "datasets/golden/blueprints.json");
+const registeredRuleCodes = new Set(["VAL_DOC_COMPLETENESS_001", "VAL_NAME_CONSISTENCY_001", "VAL_EMPLOYER_CONSISTENCY_001", "VAL_INCOME_CONSISTENCY_001", "VAL_ID_EXPIRY_001"]);
 
 export async function generateCandidates(blueprintPath = defaultBlueprintPath, directory = defaultCandidateDirectory) {
   const blueprint = JSON.parse(await readFile(blueprintPath, "utf8"));
@@ -21,10 +22,20 @@ export async function generateCandidates(blueprintPath = defaultBlueprintPath, d
       }
       const bytes = await readFile(artifactPath);
       const { pages: _pages, ...metadata } = document;
-      return { ...metadata, path: relative(directory, artifactPath), sha256: sha256(bytes) };
+      return { ...metadata, page_count: document.pages?.length ?? document.page_count, path: relative(directory, artifactPath), sha256: sha256(bytes) };
     }));
     const candidate = { ...item, schema_version: "1.0.0", synthetic_data: true, documents };
-    await writeFile(join(directory, `${item.case_id}.json`), canonicalJson(candidate));
+    const candidatePath = join(directory, `${item.case_id}.json`);
+    try {
+      const existing = JSON.parse(await readFile(candidatePath, "utf8"));
+      const withoutVerification = ({ verification: _verification, ...value }) => value;
+      if (existing.verification?.status === "confirmed" && canonicalJson(withoutVerification(existing)) === canonicalJson(withoutVerification(candidate))) {
+        candidate.verification = existing.verification;
+      }
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    await writeFile(candidatePath, canonicalJson(candidate));
   }
   return validateCandidates(directory, dirname(blueprintPath));
 }
@@ -33,6 +44,7 @@ export async function validateCandidates(directory = defaultCandidateDirectory, 
   const files = (await readdir(directory)).filter((name) => name.endsWith(".json")).sort();
   if (files.length === 0) throw new Error("No golden dataset candidates found");
   const ids = new Set();
+  const seeds = new Set();
   const cases = [];
   for (const file of files) {
     const path = join(directory, file);
@@ -40,6 +52,8 @@ export async function validateCandidates(directory = defaultCandidateDirectory, 
     validateCandidateShape(candidate, file);
     if (ids.has(candidate.case_id)) throw new Error(`Duplicate case_id ${candidate.case_id}`);
     ids.add(candidate.case_id);
+    if (seeds.has(candidate.seed)) throw new Error(`Duplicate deterministic seed ${candidate.seed}`);
+    seeds.add(candidate.seed);
     for (const document of candidate.documents) {
       const artifactPath = resolve(directory, document.path);
       if (!artifactPath.startsWith(resolve(allowedRoot) + "/")) throw new Error(`${file}: document escapes dataset root`);
@@ -47,6 +61,7 @@ export async function validateCandidates(directory = defaultCandidateDirectory, 
       if (sha256(bytes) !== document.sha256) throw new Error(`${file}: checksum mismatch for ${document.path}`);
       if (!bytes.includes(Buffer.from("SYNTHETIC DEMO"))) throw new Error(`${file}: document lacks visible synthetic marker`);
     }
+    validateTruthReferences(candidate, file);
     cases.push({ file, path, candidate });
   }
   return cases;
@@ -62,14 +77,15 @@ export async function inspectCandidates(directory = defaultCandidateDirectory, a
   }));
 }
 
-export async function confirmCandidate(caseId, reviewer, directory = defaultCandidateDirectory) {
+export async function confirmCandidate(caseId, reviewer, directory = defaultCandidateDirectory, allowedRoot = repositoryRoot) {
   if (!caseId || !reviewer?.trim()) throw new Error("Case ID and human reviewer identity are required");
   const path = join(directory, `${caseId}.json`);
   const candidate = JSON.parse(await readFile(path, "utf8"));
   if (candidate.case_id !== caseId) throw new Error("Candidate identity does not match its filename");
+  if (candidate.coverage.includes("runtime_support_pending")) throw new Error("Candidate cannot be confirmed while its runtime path is pending");
   candidate.verification = { status: "confirmed", verified_by: reviewer.trim(), verified_at: new Date().toISOString() };
   await writeFile(path, canonicalJson(candidate));
-  await validateCandidates(directory);
+  await validateCandidates(directory, allowedRoot);
   return candidate.verification;
 }
 
@@ -82,15 +98,29 @@ export async function buildRelease(version, candidateDirectory = defaultCandidat
   try { await stat(target); throw new Error(`Release ${version} already exists`); } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
-  await mkdir(target, { recursive: false });
-  const manifestCases = cases.map(({ file, path, candidate }) => ({
-    case_id: candidate.case_id,
-    candidate_file: relative(repositoryRoot, path),
-    candidate_sha256: sha256(Buffer.from(canonicalJson(candidate))),
-    document_sha256: candidate.documents.map((document) => ({ path: document.path, sha256: document.sha256 })),
-    verified_by: candidate.verification.verified_by,
-    verified_at: candidate.verification.verified_at,
-  }));
+  await mkdir(join(target, "cases"), { recursive: true });
+  await mkdir(join(target, "documents"), { recursive: true });
+  const sums = [];
+  const manifestCases = [];
+  for (const { candidate } of cases) {
+    const releaseCandidate = { ...candidate, documents: [] };
+    for (const document of candidate.documents) {
+      const name = basename(document.path);
+      const releasePath = `documents/${candidate.case_id}/${name}`;
+      await mkdir(join(target, "documents", candidate.case_id), { recursive: true });
+      await copyFile(resolve(candidateDirectory, document.path), join(target, releasePath));
+      releaseCandidate.documents.push({ ...document, path: releasePath });
+      sums.push(`${document.sha256}  ${releasePath}`);
+    }
+    const candidateFile = `cases/${candidate.case_id}.json`;
+    const candidateContent = canonicalJson(releaseCandidate);
+    await writeFile(join(target, candidateFile), candidateContent);
+    const candidateChecksum = sha256(Buffer.from(candidateContent));
+    sums.push(`${candidateChecksum}  ${candidateFile}`);
+    manifestCases.push({ case_id: candidate.case_id, candidate_file: candidateFile, candidate_sha256: candidateChecksum,
+      document_sha256: releaseCandidate.documents.map((document) => ({ path: document.path, sha256: document.sha256 })),
+      verified_by: candidate.verification.verified_by, verified_at: candidate.verification.verified_at });
+  }
   const manifest = {
     schema_version: "1.0.0", dataset_id: "findoc-synthetic-golden", version,
     limitation: "Synthetic demonstration and regression data; not representative of production performance.",
@@ -98,7 +128,8 @@ export async function buildRelease(version, candidateDirectory = defaultCandidat
   };
   const content = canonicalJson(manifest);
   await writeFile(join(target, "manifest.json"), content);
-  await writeFile(join(target, "SHA256SUMS"), `${sha256(Buffer.from(content))}  manifest.json\n`);
+  sums.push(`${sha256(Buffer.from(content))}  manifest.json`);
+  await writeFile(join(target, "SHA256SUMS"), `${sums.sort().join("\n")}\n`);
   return manifest;
 }
 
@@ -113,7 +144,35 @@ function validateCandidateShape(value, file) {
   if (!truth || !Array.isArray(truth.expected_issues) || !Array.isArray(truth.expected_checked_facts)) throw new Error(`${file}: incomplete truth candidate`);
   if (!Array.isArray(truth.required_report_content) || !Array.isArray(truth.prohibited_report_content)) throw new Error(`${file}: report constraints are required`);
   if (!truth.report_availability) throw new Error(`${file}: report outcome is required`);
-  for (const issue of truth.expected_issues) if (!issue.code || !Array.isArray(issue.acceptable_evidence) || issue.acceptable_evidence.length === 0) throw new Error(`${file}: issue truth requires code and evidence`);
+  for (const item of [...truth.expected_issues, ...truth.expected_checked_facts]) {
+    if (!registeredRuleCodes.has(item.code) || !Array.isArray(item.acceptable_evidence) || item.acceptable_evidence.length === 0) throw new Error(`${file}: truth requires a registered rule code and evidence`);
+  }
+}
+
+function validateTruthReferences(candidate, file) {
+  const maximumPage = candidate.documents.reduce((count, document) => count + (document.page_count ?? 1), 0);
+  for (const item of [...candidate.truth_candidate.expected_issues, ...candidate.truth_candidate.expected_checked_facts]) {
+    for (const reference of item.acceptable_evidence) {
+      if (reference.startsWith("page:")) {
+        const page = Number(reference.slice(5));
+        if (!Number.isInteger(page) || page < 1 || page > maximumPage) throw new Error(`${file}: evidence page does not exist: ${reference}`);
+      } else if (reference.startsWith("application:/")) {
+        if (!jsonPointerExists(candidate.application_data, reference.slice("application:".length))) throw new Error(`${file}: application evidence does not exist: ${reference}`);
+      } else if (reference.startsWith("document:")) {
+        if (!candidate.documents.some((document) => basename(document.path) === reference.slice(9))) throw new Error(`${file}: document evidence does not exist: ${reference}`);
+      } else throw new Error(`${file}: unsupported evidence reference ${reference}`);
+    }
+  }
+}
+
+function jsonPointerExists(value, pointer) {
+  let current = value;
+  for (const token of pointer.slice(1).split("/")) {
+    const key = token.replaceAll("~1", "/").replaceAll("~0", "~");
+    if (!current || typeof current !== "object" || !(key in current)) return false;
+    current = current[key];
+  }
+  return true;
 }
 
 function canonicalJson(value) {

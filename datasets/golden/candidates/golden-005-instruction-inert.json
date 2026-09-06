@@ -21,6 +21,7 @@
   "documents": [
     {
       "media_type": "application/pdf",
+      "page_count": 1,
       "path": "../documents/golden-005-instruction-inert.pdf",
       "sha256": "7aae67b419c3c0afbeff99787f95cb69c6c55669c6a4417a744dfe548113a87e"
     }
