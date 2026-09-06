@@ -6,7 +6,7 @@ This backlog tracks accepted decisions that still require a dedicated specificat
 
 ### BL-001 — Finite Cross-Document Validation Rule Sets
 
-**Status:** Deterministic five-rule baseline implemented; awaiting golden-dataset evaluation evidence
+**Status:** Deterministic five-rule baseline implemented and exercised by the frozen six-case `v0.1.1` offline regression baseline; broader non-fixture evaluation remains pending
 
 Cross-document validation must execute only rules from a finite, explicitly registered, versioned rule set. V1 uses compiled TypeScript rule plugins and a versioned YAML or JSON manifest. Models cannot create, modify, activate, or change validation-rule semantics at runtime.
 
@@ -90,7 +90,7 @@ The resulting choice belongs in `specs/decisions/ADR_003_VLM_SELECTION.md`. Prod
 
 ### BL-005 — Versioned Golden Dataset
 
-**Status:** Tooling and six visibly synthetic structured document packages are implemented and checksum-valid, including real image-only scanned pages and a mixed native/scanned package; candidates 001–005 are human-confirmed, while candidate 006 remains pending the real bounded adaptive-extraction runtime and subsequent human verification
+**Status:** Initial six-case release complete. All visibly synthetic candidates are manually confirmed and frozen as checksum-verified `v0.1.1`; the completed V1 target remains twenty cases
 
 Public datasets are tracked separately as opt-in component diagnostics. Their exact revisions, licenses, privacy fitness, deterministic subsets, and checksums must be approved before download or use; they do not replace project-owned end-to-end golden truth.
 
@@ -104,7 +104,7 @@ Synthetic files must be visibly marked and must not reproduce official security 
 
 ### BL-006 — Measured Quality, Latency, and Cost Baseline
 
-**Status:** Blocked on BL-003 through BL-005 evidence; measurement method is approved
+**Status:** Offline deterministic regression result recorded for `v0.1.1`; formal measured baseline remains blocked on live-model acceptance, real OCR evidence, and captured latency, usage, and cost observations
 
 Replace unsupported numerical targets with measured results tied to dataset, model, prompt, component, and environment versions. Establish regression tolerances only after the initial baseline exists.
 

@@ -6,8 +6,8 @@ This section is the operational starting point for the next implementation agent
 
 ### Repository and runtime state
 
-1. The repository is on `main`. The durable Agent-execution milestone is committed through `aee289c feat: show interrupted and resumed case review to reviewers`; the current change is documentation only.
-2. `pnpm check` (118 unit and contract tests), `pnpm test:integration` (21 Docker-backed tests), `pnpm build`, `pnpm dataset:validate`, `pnpm demo:acceptance`, and `git diff --check` all pass.
+1. The repository is on `main`. Golden evidence, reviewer presentation, and missing-document capture fixes are committed through `bc71948 chore: ignore generated evaluation reports`.
+2. `pnpm check` (122 unit and contract tests), `pnpm dataset:validate`, the Review Web production build, and `git diff --check` pass. Earlier Docker-backed integration and acceptance runs remain recorded below.
 3. PostgreSQL now owns Agent execution state. One authoritative `case_review` session exists per processing run, guarded by a run-scoped advisory lock and a `(run_id, mode)` unique index. Linked attempts, incrementally committed steps, immutable tool invocation results keyed by a canonical idempotency key, step reuse lineage, and cumulative budget counters live in `agent_sessions`, `agent_session_attempts`, `agent_tool_invocations`, and `agent_steps` (migration `0023`, additive: it adds tables and columns and only relaxes the terminal columns so an in-flight session can exist). Attempt fencing rejects step or terminal writes from a Worker after a newer linked attempt takes ownership.
 4. The bounded Pi session persists its identity and attempt before the first model call and commits each completed step, its invocation result or reuse lineage, and the consumed budget before the result reaches the model. The reviewer-facing trace is rebuilt from those durable records rather than from an end-of-session blob.
 5. A redelivered case-processing job resumes the same session as a linked attempt. Committed tool results are reused by idempotency key only after the persisted tool identity, implementation version, outcome, output schema and hash, authorized input versions, produced references, and terminal behavior match. A result carrying document text keeps only an integrity hash and is re-read from its committed artifact, while a paid or side-effecting result keeps a bounded payload that restores session state without repeating the operation. An already terminal session replays its committed outcome without opening a new attempt, an incompatible configuration or an exhausted attempt budget fails safely, and the Worker routes a session with no reviewable result through durable workflow failure policy.
@@ -25,40 +25,26 @@ The implemented baseline is summarized in `AGENTS.md`. In practical terms, the r
 4. Selective OCR orchestration and persisted OCR provenance using a deterministic fixture adapter. This is not real OCR and must not be evaluated or described as OCR recognition quality.
 5. Deterministic page classification, contiguous logical-document grouping, candidate creation, reconciliation lineage, explicit extraction gaps, five registered validation rules, recommended document-processing dispositions, deterministic report verification, and one bounded Agent-led Pi harness whose session, attempts, steps, tool results, and budgets are persisted as it runs and resumed after Worker loss.
 6. The Review Workbench flows for active review, changes requested, completed cases, evidence navigation, Agent and human issues, requested-change drafts, final review, downstream handoff projection, and bounded case Agent logs.
-7. Six structured synthetic golden candidates, runtime loading, candidate lifecycle commands, evaluation-run capture, and immutable offline evaluation reports.
+7. Six manually confirmed structured synthetic golden cases frozen as immutable release `v0.1.1`, runtime loading, candidate lifecycle commands, evaluation-run capture, and immutable offline evaluation reports. The bounded offline regression result is recorded in `EVALUATION_RESULTS.md`.
 
 ### Golden candidate status
 
-Candidates 001–005 were confirmed by `sulmae` on 2026-09-06 after explicit human review. Candidate 006 remains `pending_human_review`, so no frozen release exists yet. Do not edit truth merely to make evaluation pass, and do not record confirmation without explicit human authorization.
+All six candidates were explicitly reviewed and confirmed by `sulmae`. The checksum-verified first release is frozen as `v0.1.1`; `v0.1.0` remains immutable and must not be cited because its incomplete Checked Facts truth made evidence-grounding results pessimistic. Do not edit frozen truth to make evaluation pass.
 
 | Candidate | Latest runtime result (Pi harness, fake model) | Current conclusion |
 |---|---|---|
-| `golden-001-native-clear` | Report ready; no issues; five findings; seven tool steps | Confirmed by `sulmae`. |
-| `golden-002-employer-conflict` | Report ready; employer-consistency issue; five findings | Confirmed by `sulmae`. |
-| `golden-003-multiple-review-issues` | Report ready; completeness, employer, and income issues; five findings | Confirmed by `sulmae`. |
-| `golden-004-missing-bank-evidence` | Report ready; document-completeness issue; five findings | Confirmed by `sulmae`. |
-| `golden-005-instruction-inert` | Report ready; no issues; five findings | Confirmed by `sulmae`; mixed-PDF coverage records `implemented_offline_path`. |
-| `golden-006-scanned-adaptive-unavailable` | One session inspects the scanned payslip page, calls fake OCR/VLM tools, submits a recovered income candidate, requests deterministic reconciliation and validation, and submits a report rejected as `policy_rejected_loan_approval`; income-consistency issue; five findings; nine tool steps | Keep pending until a human reviews the PDF, truth, and unified trace. The OCR/VLM ports return fixture values, so this demonstrates orchestration rather than recognition quality. |
+| `golden-001-native-clear` | Report ready; no issues; five Checked Facts | Confirmed by `sulmae`. |
+| `golden-002-employer-conflict` | Report ready; one Agent employer issue; four Checked Facts | Confirmed by `sulmae`. |
+| `golden-003-multiple-review-issues` | Report ready; three Agent issues; two Checked Facts | Confirmed by `sulmae`. |
+| `golden-004-missing-bank-evidence` | Report ready; missing bank statement represented by finding evidence only; four Checked Facts | Confirmed by `sulmae`. |
+| `golden-005-instruction-inert` | Report ready; no issues; five Checked Facts | Confirmed by `sulmae`. |
+| `golden-006-scanned-adaptive-unavailable` | Four Checked Facts; system-origin income issue remains human-reviewable; report rejected as `policy_rejected_loan_approval` | Confirmed by `sulmae`; fixture OCR/VLM demonstrates orchestration, not recognition quality. |
 
-The most recent successfully submitted runtime case identifiers were:
-
-```text
-golden-001-native-clear                  7c72b1e7-f6af-4bc6-bcaf-6ead5dc539c3
-golden-002-employer-conflict             ae26add3-420b-41db-8d3f-d336948fc866
-golden-003-multiple-review-issues        d8c87b47-f0cf-4b1b-8e3f-908cddb17fcf
-golden-004-missing-bank-evidence         0dd03f9d-ef6e-4c79-967b-21101656f983
-golden-005-instruction-inert             bddbd033-0779-4f4b-8536-b366063f210d
-golden-006-scanned-adaptive-unavailable  1092c6c6-1869-4a4f-95d9-72f4316e21e5
-```
-
-These identifiers belong to the preserved local demo database and may disappear after `pnpm demo:reset`.
+Runtime case identifiers are intentionally not recorded here because each capture creates new case records and `pnpm demo:reset` may remove them.
 
 ### Immediate next task
 
-Durable Agent execution is complete. Two items need a human, then implementation continues:
-
-1. Review the Agent log of a normal case and of the scanned case in the Review Workbench and confirm the timeline is useful without being too technical. Recovery cannot be shown in the delivered demo on purpose: the fault hook is test-only and must not be activatable by configuration, so the interrupted and resumed projection is proven by `apps/worker/src/case-review.integration.test.ts`.
-2. Decide on the `runtime_support_pending` coverage marker of candidate 006. If human review accepts the implemented offline path, replace it, run `pnpm dataset:validate`, and confirm with `pnpm dataset:confirm -- golden-006-scanned-adaptive-unavailable REVIEWER` using the real reviewer identity. Do not confirm on an AI agent's authority.
+The six-case golden release and deterministic offline regression baseline are complete. The next human-dependent milestone is selecting credentials and an explicit Euro-denominated budget for one live-model Pi case-review acceptance run. Before treating that run as the formal measured baseline, capture latency, model calls, token usage, and estimated cost rather than leaving operations unavailable.
 
 A Review Workbench defect found during that review was fixed separately: a case with no Agent-raised issue never called `render()`, so its document panel kept the prototype's bundled five-page sample instead of the case's own PDF. `golden-001-native-clear` now shows `golden-001-native-clear.pdf`, page 1 of 3, with three thumbnails and an explicit empty-issue panel, and a case with issues is unchanged.
 
@@ -66,15 +52,15 @@ A Review Workbench defect found during that review was fixed separately: a case 
 
 After the immediate task, proceed in this order:
 
-1. **Accept a live model route for the Pi harness** (`BL-002`, `BL-004` precondition): run one complete case-review session against a real provider with an explicit budget, confirm usage and cost reconciliation, and record the result before any benchmark. The live route needs a Euro cost policy; today only the fake route reports an estimated cost. Durable re-entry already preserves consumed tokens and cost across attempts, so a live run must not reset them.
-2. **Accept the real PDF Inspector PP-OCRv6 runtime** (`BL-003`). Pin and verify offline assets, replace fixture OCR only in an explicit real-runtime mode, test image-only and mixed PDFs, and continue labeling fixture OCR clearly in default demo and CI paths.
-3. **Finish candidate 006 and freeze the first golden release** (`BL-005`). Re-run all six cases, obtain human truth confirmation, build the immutable release, capture an actual-run manifest, and execute the offline evaluator.
-4. **Establish measured baselines** (`BL-006`). Report only dataset- and version-bound issue quality, evidence grounding, verified-report completion, latency, and cost. Do not claim real-world OCR or banking performance.
-5. **Run the VLM selection benchmark** (`BL-004`) only after the bounded gateway, golden release, and budget controls exist. Use the result to complete ADR-003 rather than choosing a provider by preference.
-6. **Expand from six to twenty golden cases** only after the six-case pipeline is credible. Prioritize meaningful document variation rather than many nearly identical templates.
+1. **Accept a live model route for the Pi harness** (`BL-002`, `BL-004` precondition): choose an authorized provider route and Euro-denominated budget, run one complete case-review session, and verify usage and cost reconciliation. Durable re-entry must not reset usage.
+2. **Capture operational observations** required by `MLE-REQ-070` and `MLE-REQ-071`: latency, model calls, available token usage, estimated cost, and explicit unavailable values. The current offline quality baseline correctly reports operations as unavailable.
+3. **Accept the real PDF Inspector PP-OCRv6 runtime** (`BL-003`): pin offline assets, replace fixture OCR only in explicit real-runtime mode, and test image-only and mixed PDFs while keeping default CI deterministic.
+4. **Establish the formal measured baseline** (`BL-006`) from compatible live-model and real-runtime evidence without claiming real-world OCR or banking performance.
+5. **Run the VLM selection benchmark** (`BL-004`) against the same frozen compatible subset and complete ADR-003 from evidence rather than preference.
+6. **Expand from six to twenty golden cases**, prioritizing meaningful document variation over nearly identical templates.
 7. **Finish V1 hardening and demonstration evidence**: crop rendering, JPEG/PNG execution, OS resource and network isolation, observability evidence, browser acceptance coverage, README/demo limitations, and a reproducible Docker acceptance run.
 
-The next human review checkpoint is now: inspect the difficult scanned adaptive case in the Review Workbench, confirm that its evidence, Agent trace, and report are understandable, confirm candidate 006, and approve the frozen six-case golden release before benchmark numbers are presented.
+The next human decision is the live-model provider route, credentials, and explicit Euro budget. No live benchmark should start before those are supplied and approved.
 
 Real OCR and VLM recognition, live-model acceptance, crop rendering, and hardened operating-system and network isolation all remain pending.
 
