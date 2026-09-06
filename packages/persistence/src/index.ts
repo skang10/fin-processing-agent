@@ -482,6 +482,11 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     const steps = sessions.length
       ? await this.db.select().from(agentSteps).where(inArray(agentSteps.sessionId, sessions.map((session) => session.id))).orderBy(asc(agentSteps.startedAt), asc(agentSteps.sequence))
       : [];
+    const resolvedGaps = await this.db.select({
+      fieldSchemaId: extractionGaps.fieldSchemaId, pageNumber: extractionGaps.pageNumber,
+      resolutionType: gapResolutions.resolutionType, createdAt: gapResolutions.createdAt,
+    }).from(gapResolutions).innerJoin(extractionGaps, eq(gapResolutions.gapId, extractionGaps.id))
+      .where(eq(extractionGaps.runId, report.runId)).orderBy(asc(gapResolutions.createdAt));
     const timestamp = report.createdAt.toISOString();
     const factCount = (report.checkedFacts as unknown[]).length;
     const issueCount = (report.issueLinks as unknown[]).length;
@@ -505,10 +510,14 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
           ...steps.filter((step) => step.sessionId === session.id).map((step) => ({ timestamp: step.completedAt.toISOString(), activity: step.summary, toolLabel: step.toolName })),
           { timestamp: session.completedAt.toISOString(), activity: `Session ended: ${session.terminalReason.replace(/_/g, " ")}` },
         ]),
+        ...resolvedGaps.map((gap) => ({
+          timestamp: gap.createdAt.toISOString(),
+          activity: `Deterministic reconciliation accepted the Agent's ${gap.fieldSchemaId === "income.monthly_net" ? "monthly net income" : gap.fieldSchemaId.replace(/[._]/g, " ")} candidate from page ${gap.pageNumber}`,
+        })),
         { timestamp, activity: `Checked ${factCount} facts` },
         { timestamp, activity: `Created ${issueCount} review issues` },
         { timestamp, activity: report.availability === "ready" ? "Generated review report" : "Report verification failed" },
-      ],
+      ].sort((left, right) => left.timestamp.localeCompare(right.timestamp)),
     };
   }
 

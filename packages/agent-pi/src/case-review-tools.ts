@@ -57,7 +57,7 @@ const requestReconciliationTool: Tool = {
   execute: async (_args, scope, state) => {
     const result = await scope.ports.requestReconciliation(state.candidates);
     state.reconciliationReference = result.reference;
-    return { summary: "Requested deterministic reconciliation", output: { reference: result.reference } };
+    return { summary: `Sent ${state.candidates.length} Agent-proposed ${state.candidates.length === 1 ? "value" : "values"} to deterministic reconciliation`, output: { reference: result.reference } };
   },
 };
 
@@ -69,7 +69,8 @@ const requestValidationTool: Tool = {
   authorize: (_args, _scope, state) => !state.reconciliationReference ? "reconciliation_required" : state.result ? "validation_already_requested" : undefined,
   execute: async (_args, scope, state) => {
     state.result = await scope.ports.requestValidation();
-    return { summary: "Requested deterministic validation", output: { result_revision_id: state.result.resultRevisionId } };
+    const attentionCount = state.result.findings.filter((finding) => finding.status !== "passed" && finding.status !== "not_applicable").length;
+    return { summary: `Ran registered validation checks; ${attentionCount} ${attentionCount === 1 ? "finding requires" : "findings require"} attention`, output: { result_revision_id: state.result.resultRevisionId } };
   },
 };
 
@@ -82,7 +83,7 @@ const getCurrentResultTool: Tool = {
   execute: async (_args, _scope, state) => {
     if (!state.result) throw new Error("Validated result is unavailable");
     return {
-      summary: "Read current deterministic result",
+      summary: "Reviewed deterministic findings and document-processing disposition",
       output: {
         result_revision_id: state.result.resultRevisionId,
         recommended_disposition: state.result.recommendedDisposition,

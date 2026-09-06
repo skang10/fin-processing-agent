@@ -1007,15 +1007,24 @@ function evidencePresentation(reference) {
   };
 }
 
-function renderApiReport(report) {
-  const unavailableReasons = {
-    policy_rejected: 'The submitted report did not pass policy verification.',
+function reportFailureMessage(reason) {
+  const messages = {
+    policy_rejected_loan_approval: 'The Agent recommended approving the loan, which violates the policy that final lending decisions require an authorized reviewer. Please contact the developer.',
+    policy_rejected_loan_rejection: 'The Agent recommended declining or rejecting the loan, which violates the policy that final lending decisions require an authorized reviewer. Please contact the developer.',
+    policy_rejected_creditworthiness: 'The Agent made a creditworthiness judgment, which is outside its document-review authority. Please contact the developer.',
+    policy_rejected_aml_kyc_decision: 'The Agent made a final AML or KYC decision, which requires an authorized reviewer. Please contact the developer.',
+    policy_rejected_account_or_disbursement: 'The Agent proposed opening an account or disbursing funds, which is outside its authority. Please contact the developer.',
+    policy_rejected_customer_contact: 'The Agent stated that the applicant or customer was contacted, which is outside its authority. Please contact the developer.',
     schema_rejected: 'The submitted report did not match the required format.',
     reference_rejected: 'The submitted report contained invalid evidence references.',
     timeout: 'Report generation timed out.', unavailable: 'Report generation was unavailable.',
   };
+  return messages[reason] || 'Report verification failed.';
+}
+
+function renderApiReport(report) {
   document.querySelector('.report-copy').textContent = report.availability === 'unavailable'
-    ? 'Agent report unavailable. ' + (unavailableReasons[report.failure_reason] || 'Report verification failed.') + ' Deterministic review issues remain available.'
+    ? 'Agent report unavailable. Reason: ' + reportFailureMessage(report.failure_reason) + ' System-generated review issues remain available for manual review.'
     : (report.summary || 'Agent report unavailable.');
   document.querySelector('.report-links').innerHTML = issues.map(function (issue, index) { return { issue, index }; })
     .filter(function (entry) { return entry.issue.origin === 'agent'; }).map(function (entry) {
@@ -1038,8 +1047,7 @@ function renderAgentLog() {
   const activityLabels = {
     'Listed bound extraction gaps': 'Found unresolved fields',
     'Inspected page 2': 'Inspected payslip, page 2',
-    'Ran OCR on page 2': 'Ran OCR on payslip, page 2',
-    'Submitted 1 extraction candidate(s)': 'Submitted 1 recovered value',
+    'Ran OCR on page 2': 'Read the scanned payslip page with OCR',
     'Submitted a Case Review Brief': 'Submitted review report',
   };
   const toolLabels = {
@@ -1059,9 +1067,6 @@ function renderAgentLog() {
     '<div><span>Cost</span><strong>' + (apiAgentLog.estimated_cost ? '€' + escapeHtml(apiAgentLog.estimated_cost.amount) : 'Unavailable') + '</strong></div>' +
     '<div><span>Current step</span><strong>' + escapeHtml(stepLabels[apiAgentLog.current_step] || apiAgentLog.current_step) + '</strong></div>';
 
-  const reportStart = apiAgentLog.events.findIndex(function (event) { return event.activity === 'Started case review report session'; });
-  const recoveryEvents = reportStart < 0 ? apiAgentLog.events : apiAgentLog.events.slice(0, reportStart);
-  const reportEvents = reportStart < 0 ? [] : apiAgentLog.events.slice(reportStart);
   const formatEvents = function (events) {
     return events.map(function (event) {
       const date = new Date(event.timestamp);
@@ -1081,17 +1086,12 @@ function renderAgentLog() {
   };
   const reportOutcome = apiReport && apiReport.availability === 'unavailable'
     ? '<div class="agent-log-outcome rejected"><span>Report rejected by verifier</span><small>' +
-      escapeHtml((apiReport.failure_reason || 'Verification failed').replaceAll('_', ' ')) + '</small></div>'
+      escapeHtml(reportFailureMessage(apiReport.failure_reason)) + '</small></div>'
     : apiReport && apiReport.availability === 'ready'
       ? '<div class="agent-log-outcome ready"><span>Report ready</span></div>' : '';
-  const sections = [];
-  if (recoveryEvents.length || apiAgentLog.recovery_session) {
-    sections.push('<section class="agent-log-session">' + sessionHeader('Targeted extraction', apiAgentLog.recovery_session) + formatEvents(recoveryEvents) + '</section>');
-  }
-  if (reportEvents.length || apiAgentLog.session) {
-    sections.push('<section class="agent-log-session">' + sessionHeader('Report generation', apiAgentLog.session) + formatEvents(reportEvents) + reportOutcome + '</section>');
-  }
-  document.querySelector('.agent-run-events').innerHTML = sections.join('') || '<p class="agent-log-empty">Agent activity is not available yet.</p>';
+  document.querySelector('.agent-run-events').innerHTML = apiAgentLog.events.length || apiAgentLog.session
+    ? '<section class="agent-log-session">' + sessionHeader('Case review', apiAgentLog.session) + formatEvents(apiAgentLog.events) + reportOutcome + '</section>'
+    : '<p class="agent-log-empty">Agent activity is not available yet.</p>';
 }
 
 function wireReportNavigation() {

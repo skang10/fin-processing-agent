@@ -37,7 +37,7 @@ describe("Case Review Brief verification", () => {
       schema_version: "1.0.0", result_revision_id: context().resultRevisionId, report_status: "ready",
       summary: "Approve the loan.", attention_items: [],
     };
-    expect(verifyCaseReviewBrief(candidate, context())).toEqual({ verified: false, reason: "policy_rejected" });
+    expect(verifyCaseReviewBrief(candidate, context())).toEqual({ verified: false, reason: "policy_rejected_loan_approval" });
   });
 
   it("returns an unavailable outcome when the harness times out", async () => {

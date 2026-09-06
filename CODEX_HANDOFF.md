@@ -37,7 +37,7 @@ Candidates 001–005 were confirmed by `sulmae` on 2026-09-06 after explicit hum
 | `golden-003-multiple-review-issues` | Report ready; completeness, employer, and income issues; five findings; three tool steps | Confirmed by `sulmae`. |
 | `golden-004-missing-bank-evidence` | Report ready; document-completeness issue; five findings; three tool steps | Confirmed by `sulmae`. |
 | `golden-005-instruction-inert` | Report ready; no issues; five findings; two tool steps | Confirmed by `sulmae`; mixed-PDF coverage records `implemented_offline_path`. |
-| `golden-006-scanned-adaptive-unavailable` | One session inspects the scanned payslip page, calls fake OCR/VLM tools, submits a recovered income candidate, requests deterministic validation, and submits a report that the verifier rejects for prohibited policy language | Keep pending until a human reviews the PDF, truth, and unified trace. The OCR/VLM ports return fixture values, so this demonstrates orchestration rather than recognition quality. |
+| `golden-006-scanned-adaptive-unavailable` | One session inspects the scanned payslip page, calls fake OCR/VLM tools, submits a recovered income candidate, requests deterministic validation, and submits a report rejected as `policy_rejected_loan_approval` | Keep pending until a human reviews the PDF, truth, and unified trace. The OCR/VLM ports return fixture values, so this demonstrates orchestration rather than recognition quality. |
 
 The most recent successfully submitted runtime case identifiers were:
 

@@ -60,6 +60,10 @@ function validRegion(region: NormalizedRegion): boolean {
   return region.width > 0 && region.height > 0 && region.x + region.width <= 1 + 1e-9 && region.y + region.height <= 1 + 1e-9;
 }
 
+function fieldLabel(fieldSchemaId: string): string {
+  return fieldSchemaId === "income.monthly_net" ? "monthly net income" : fieldSchemaId.replace(/[._]/g, " ");
+}
+
 function observe(state: RecoveryToolState, page: PageReference, value: string): void {
   const key = pageKey(page);
   const values = state.observedValues.get(key) ?? new Set<string>();
@@ -191,7 +195,7 @@ export const extractWithVlmTool: Tool<typeof VlmParameters> = {
       state.vlmResults.set(`${pageKey(toPage(args))}:${args.field_schema_id}`, { rawValue: result.value.rawValue, normalizedValue: result.value.normalizedValue, region: result.value.region, processorVersion: `${result.modelLabel}/${result.promptVersion}` });
     }
     return {
-      summary: `Ran VLM extraction for ${args.field_schema_id} on page ${args.page_number}`,
+      summary: `Checked page ${args.page_number} for ${fieldLabel(args.field_schema_id)} with VLM`,
       output: { model_label: result.modelLabel, prompt_version: result.promptVersion, value: result.value ? { raw_value: result.value.rawValue, region: result.value.region, raw_confidence: result.value.rawConfidence } : null, ...(result.usage ? { usage: result.usage } : {}) },
     };
   },
@@ -228,7 +232,8 @@ export const submitExtractionCandidatesTool: Tool<typeof SubmitParameters> = {
       });
     }
     const remaining = scope.context.gaps.filter((gap) => gap.required && !state.candidates.some((candidate) => candidate.gapId === gap.gapId));
-    return { summary: `Submitted ${args.candidates.length} extraction candidate(s)`, output: { accepted: args.candidates.length, remaining_required_gaps: remaining.map((gap) => gap.gapId) } };
+    const fields = args.candidates.map((candidate) => scope.context.gaps.find((gap) => gap.gapId === candidate.gap_id)?.fieldSchemaId).filter((field): field is string => Boolean(field)).map(fieldLabel);
+    return { summary: `Proposed ${args.candidates.length} recovered ${args.candidates.length === 1 ? "value" : "values"} for ${fields.join(", ")} to deterministic reconciliation`, output: { accepted: args.candidates.length, remaining_required_gaps: remaining.map((gap) => gap.gapId) } };
   },
 };
 

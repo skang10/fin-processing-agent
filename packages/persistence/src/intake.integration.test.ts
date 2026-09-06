@@ -305,6 +305,7 @@ describe("PostgresCaseCommandService", () => {
         { activity: "Listed deterministic findings", toolLabel: "list_findings" },
         { activity: "Submitted a Case Review Brief", toolLabel: "submit_case_review_brief" },
         { activity: "Session ended: report submitted" },
+        { activity: "Deterministic reconciliation accepted the Agent's monthly net income candidate from page 1" },
         { activity: "Checked 4 facts" }, { activity: "Created 1 review issues" }, { activity: "Generated review report" },
       ],
     });

@@ -33,7 +33,7 @@ export async function captureEvaluationRun(releaseDirectory, runConfiguration, o
 }
 
 function verifierState(failure) {
-  return { schema_valid: failure !== "schema_rejected", reference_valid: failure !== "reference_rejected", registered_code_valid: failure !== "registered_code_rejected", prohibited_content_valid: failure !== "policy_rejected" };
+  return { schema_valid: failure !== "schema_rejected", reference_valid: failure !== "reference_rejected", registered_code_valid: failure !== "registered_code_rejected", prohibited_content_valid: !failure?.startsWith("policy_rejected_") };
 }
 function invalidVerifier() { return { schema_valid: false, reference_valid: false, registered_code_valid: false, prohibited_content_valid: false }; }
 function validateConfiguration(configuration, datasetVersion) {

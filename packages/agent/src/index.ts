@@ -56,7 +56,10 @@ export interface AgentLedCaseReviewHarness {
   review(context: AgentLedCaseReviewContext, ports: CaseReviewProcessingPorts): Promise<AgentLedCaseReviewOutcome>;
 }
 
-export type ReportVerificationFailure = "schema_rejected" | "reference_rejected" | "policy_rejected" | "timeout" | "unavailable";
+export type ReportVerificationFailure = "schema_rejected" | "reference_rejected"
+  | "policy_rejected_loan_approval" | "policy_rejected_loan_rejection" | "policy_rejected_creditworthiness"
+  | "policy_rejected_aml_kyc_decision" | "policy_rejected_account_or_disbursement"
+  | "policy_rejected_customer_contact" | "timeout" | "unavailable";
 export type ReportVerificationResult =
   | { readonly verified: true; readonly brief: CaseReviewBriefCandidate }
   | { readonly verified: false; readonly reason: ReportVerificationFailure };
@@ -191,13 +194,13 @@ export class FakeCaseReviewAgentHarness implements CaseReviewAgentHarness {
   }
 }
 
-const PROHIBITED_DECISION_LANGUAGE = [
-  /\bapprove(?:d|s)?\s+(?:the\s+)?(?:loan|application)\b/i,
-  /\b(?:decline|reject)(?:d|s)?\s+(?:the\s+)?(?:loan|application)\b/i,
-  /\bcreditworth(?:y|iness)\b/i,
-  /\b(?:complete|pass|fail)(?:ed|s)?\s+(?:the\s+)?(?:aml|kyc)\b/i,
-  /\b(?:open|disburse)(?:d|s)?\s+(?:the\s+)?(?:account|funds|loan)\b/i,
-  /\bcontact(?:ed|s)?\s+(?:the\s+)?(?:customer|applicant)\b/i,
+const PROHIBITED_REPORT_PATTERNS: readonly { reason: ReportVerificationFailure; pattern: RegExp }[] = [
+  { reason: "policy_rejected_loan_approval", pattern: /\bapprove(?:d|s)?\s+(?:the\s+)?(?:loan|application)\b/i },
+  { reason: "policy_rejected_loan_rejection", pattern: /\b(?:decline|reject)(?:d|s)?\s+(?:the\s+)?(?:loan|application)\b/i },
+  { reason: "policy_rejected_creditworthiness", pattern: /\bcreditworth(?:y|iness)\b/i },
+  { reason: "policy_rejected_aml_kyc_decision", pattern: /\b(?:complete|pass|fail)(?:ed|s)?\s+(?:the\s+)?(?:aml|kyc)\b/i },
+  { reason: "policy_rejected_account_or_disbursement", pattern: /\b(?:open|disburse)(?:d|s)?\s+(?:the\s+)?(?:account|funds|loan)\b/i },
+  { reason: "policy_rejected_customer_contact", pattern: /\bcontact(?:ed|s)?\s+(?:the\s+)?(?:customer|applicant)\b/i },
 ];
 
 export function verifyCaseReviewBrief(candidate: unknown, context: CaseReviewContext): ReportVerificationResult {
@@ -206,7 +209,8 @@ export function verifyCaseReviewBrief(candidate: unknown, context: CaseReviewCon
     return { verified: false, reason: "reference_rejected" };
   }
   const prose = [candidate.summary, ...candidate.attention_items.map((item) => item.description)].join("\n");
-  if (PROHIBITED_DECISION_LANGUAGE.some((pattern) => pattern.test(prose))) return { verified: false, reason: "policy_rejected" };
+  const policyViolation = PROHIBITED_REPORT_PATTERNS.find(({ pattern }) => pattern.test(prose));
+  if (policyViolation) return { verified: false, reason: policyViolation.reason };
   return { verified: true, brief: candidate };
 }
 
