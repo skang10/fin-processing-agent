@@ -22,7 +22,7 @@
   "documents": [
     {
       "media_type": "application/pdf",
-      "path": "../artifacts/golden-006-scanned-adaptive-unavailable.pdf",
+      "path": "../documents/golden-006-scanned-adaptive-unavailable.pdf",
       "sha256": "90654b1b6d06a1e731c363c5143b89ea037328e13c6d3e1d6c7386e522aa42e8"
     }
   ],
