@@ -9,8 +9,10 @@ x-app-environment: &app-environment
   MAX_SOURCE_BYTES: "10000000"
   OCR_MODE: fake
   FINDOC_SYNTHETIC_DEMO: "true"
-  AGENT_MODEL: fake
-  PI_OFFLINE: "1"
+  AGENT_MODEL: ${AGENT_MODEL:-fake}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  AGENT_MODEL_API_KEY: ${AGENT_MODEL_API_KEY:-}
+  PI_OFFLINE: ${PI_OFFLINE:-1}
 
 services:
   postgres:

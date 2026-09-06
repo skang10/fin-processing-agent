@@ -21,10 +21,13 @@ const maximumSourceBytes = Number(process.env["MAX_SOURCE_BYTES"] ?? 10_000_000)
 const ocrMode = process.env["OCR_MODE"] === "fake" ? "fake" : "pdf_inspector";
 const ocrModelDirectory = process.env["OCR_MODEL_DIRECTORY"];
 const agentModel = process.env["AGENT_MODEL"] ?? "fake";
-const agentModelApiKey = process.env["AGENT_MODEL_API_KEY"];
+const agentProvider = agentModel === "fake" ? undefined : agentModel.slice(0, agentModel.indexOf("/"));
+const agentModelApiKey = agentProvider === "openai"
+  ? process.env["OPENAI_API_KEY"] ?? process.env["AGENT_MODEL_API_KEY"]
+  : process.env["AGENT_MODEL_API_KEY"];
 if (agentModel !== "fake") {
   if (!/^[a-z0-9-]+\/.+$/.test(agentModel)) throw new Error("AGENT_MODEL must be 'fake' or '<provider>/<model-id>'");
-  if (!agentModelApiKey) throw new Error("AGENT_MODEL_API_KEY is required for a live Agent model");
+  if (!agentModelApiKey) throw new Error(agentProvider === "openai" ? "OPENAI_API_KEY is required for the OpenAI Agent model" : "AGENT_MODEL_API_KEY is required for a live Agent model");
 } else {
   process.env["PI_OFFLINE"] ??= "1";
 }
