@@ -213,6 +213,26 @@ export const reviewIssueActions = pgTable("review_issue_actions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("review_issue_action_command_uq").on(table.actorId, table.commandId)]);
 
+export const reviewIssueEditRevisions = pgTable("review_issue_edit_revisions", {
+  id: uuid("id").primaryKey(),
+  issueId: uuid("issue_id").notNull().references(() => reviewIssues.id),
+  resultRevisionId: uuid("result_revision_id").notNull().references(() => resultRevisions.id),
+  revision: integer("revision").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  recommendedAction: text("recommended_action").notNull(),
+  supportingReferences: jsonb("supporting_references").notNull(),
+  noReferenceReason: text("no_reference_reason"),
+  actorId: text("actor_id").notNull(),
+  commandId: text("command_id").notNull(),
+  resultingIssueVersion: integer("resulting_issue_version").notNull(),
+  resultingCaseVersion: integer("resulting_case_version"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("review_issue_edit_revision_uq").on(table.issueId, table.revision),
+  uniqueIndex("review_issue_edit_command_uq").on(table.actorId, table.commandId),
+]);
+
 export const requestedChangeRevisions = pgTable("requested_change_revisions", {
   id: uuid("id").primaryKey(),
   issueId: uuid("issue_id").notNull().references(() => reviewIssues.id),

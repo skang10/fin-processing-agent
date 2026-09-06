@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadCaseBundle, loadCaseQueue, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
+import { createIssue, editIssue, loadCaseBundle, loadCaseQueue, loadDemoCase, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
 
 describe('loadCaseQueue', () => {
   it('loads the selected authoritative queue', async () => {
@@ -18,7 +18,7 @@ describe('loadCaseBundle', () => {
   it('loads every separately addressable review projection', async () => {
     const payloads = [
       { case_id: 'case-1' }, { availability: 'ready', checked_facts: [] }, { findings: [{ rule_id: 'rule-1', references: [] }] },
-      { issues: [{ issue_id: 'issue-1' }] }, { groups: [] }, { documents: [{ document_id: 'document-1' }] },
+      { issues: [{ issue_id: 'issue-1' }] }, { groups: [] }, { documents: [{ document_id: 'document-1' }] }, { evidence: [] },
     ];
     const fetcher = vi.fn(async () => ({ ok: true, json: async () => payloads.shift() }));
 
@@ -31,6 +31,7 @@ describe('loadCaseBundle', () => {
       '/api/v1/cases/case%2Fid', '/api/v1/cases/case%2Fid/agent-report',
       '/api/v1/cases/case%2Fid/findings', '/api/v1/cases/case%2Fid/issues',
       '/api/v1/cases/case%2Fid/application-data', '/api/v1/cases/case%2Fid/documents',
+      '/api/v1/cases/case%2Fid/evidence',
     ]);
   });
 
@@ -41,7 +42,7 @@ describe('loadCaseBundle', () => {
       { availability: 'ready', checked_facts: [{ references: [evidencePath, 'https://example.invalid/evidence'] }] },
       { findings: [{ rule_id: 'rule-1', references: [evidencePath] }] },
       { issues: [] }, { groups: [] }, { documents: [] },
-      { evidence_id: 'evidence-1', evidence_type: 'page_level', page_number: 1 },
+      { evidence: [{ evidence_id: 'evidence-1', evidence_type: 'page_level', page_number: 1 }] },
     ];
     const fetcher = vi.fn(async () => ({ ok: true, json: async () => payloads.shift() }));
 
@@ -58,13 +59,35 @@ describe('loadCaseBundle', () => {
   });
 });
 
+describe('loadDemoCase', () => {
+  it('submits the bundled synthetic document and waits for review readiness', async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ status_url: '/api/v1/cases/case-1' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ case_id: 'case-1', lifecycle: 'processing' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ case_id: 'case-1', lifecycle: 'ready_for_review' }) });
+    const wait = vi.fn(async () => {});
+
+    await expect(loadDemoCase(fetcher, wait)).resolves.toMatchObject({ case_id: 'case-1', lifecycle: 'ready_for_review' });
+    expect(fetcher.mock.calls[0][0]).toBe('/case-package.pdf');
+    expect(fetcher.mock.calls[1][0]).toBe('/api/v1/cases');
+    expect(fetcher.mock.calls[1][1]).toMatchObject({ method: 'POST' });
+    expect(fetcher.mock.calls[1][1].body).toBeInstanceOf(FormData);
+    expect(wait).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('review commands', () => {
   it('sends issue, draft, and final-review mutations as JSON', async () => {
     const fetcher = vi.fn(async () => ({ ok: true, json: async () => ({ version: 2 }) }));
+    await createIssue('case-1', { command_id: 'create' }, fetcher);
+    await editIssue('case-1', 'issue-1', { command_id: 'edit' }, fetcher);
     await resolveIssue('case-1', 'issue-1', 'confirm', { command_id: 'one' }, fetcher);
     await saveRequestedChange('case-1', 'issue-1', { command_id: 'two', text: 'Update it', included: true }, fetcher);
     await submitFinalReview('case-1', { command_id: 'three', action: 'request_changes' }, fetcher);
     expect(fetcher.mock.calls.map((call) => [call[0], call[1].method])).toEqual([
+      ['/api/v1/cases/case-1/issues', 'POST'],
+      ['/api/v1/cases/case-1/issues/issue-1', 'PATCH'],
       ['/api/v1/cases/case-1/issues/issue-1/confirm', 'POST'],
       ['/api/v1/cases/case-1/issues/issue-1/requested-change', 'PUT'],
       ['/api/v1/cases/case-1/final-review', 'POST'],

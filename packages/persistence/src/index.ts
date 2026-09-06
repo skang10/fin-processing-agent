@@ -3,7 +3,7 @@ import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { CaseNotFoundError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type EvidenceView, type FindingView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type QueueCaseView, type ReviewCommandService, type ReviewIssueView } from "@findoc/core";
-import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
+import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
@@ -11,6 +11,32 @@ const WORKFLOW_VERSION = "case-processing-v1";
 function asFinalAction(value: string): "request_changes" | "escalate_review" | "clear_for_downstream" {
   if (value === "request_changes" || value === "escalate_review" || value === "clear_for_downstream") return value;
   throw new Error("Persisted final-review action is invalid");
+}
+
+function reviewIssueContent(command: { title: string; description: string; recommendedAction: string; supportingReferences: readonly string[]; noReferenceReason?: string }) {
+  const title = command.title.trim();
+  const description = command.description.trim();
+  const recommendedAction = command.recommendedAction.trim();
+  const supportingReferences = [...new Set(command.supportingReferences.map((value) => value.trim()).filter(Boolean))];
+  const noReferenceReason = command.noReferenceReason?.trim();
+  if (!title || !description || !recommendedAction || (supportingReferences.length === 0 && !noReferenceReason)) {
+    throw new ReviewConflictError("invalid_review_action", "An issue requires text and supporting evidence or a no-reference reason");
+  }
+  if (/\b(approve|reject|decline)\b.{0,24}\b(loan|application)\b/i.test(recommendedAction)) {
+    throw new ReviewConflictError("invalid_review_action", "The recommended action contains a prohibited decision");
+  }
+  return { title, description, recommendedAction, supportingReferences, noReferenceReason: noReferenceReason || null };
+}
+
+async function assertSupportingReferences(db: Pick<ReturnType<typeof drizzle>, "select">, caseId: string, references: readonly string[]) {
+  for (const reference of references) {
+    const evidenceId = reference.split("/").filter(Boolean).at(-1);
+    if (!evidenceId) throw new ReviewConflictError("invalid_review_action", "A supporting reference is invalid");
+    const [evidence] = await db.select({ id: evidenceRecords.id }).from(evidenceRecords)
+      .innerJoin(processingRuns, eq(evidenceRecords.runId, processingRuns.id))
+      .where(and(eq(evidenceRecords.id, evidenceId), eq(processingRuns.caseId, caseId))).limit(1);
+    if (!evidence) throw new ReviewConflictError("invalid_review_action", "A supporting reference does not belong to this case");
+  }
 }
 
 export function createDatabase(databaseUrl: string) {
@@ -122,10 +148,81 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
     });
   }
 
+  async createIssue(command: Parameters<ReviewCommandService["createIssue"]>[0]): ReturnType<ReviewCommandService["createIssue"]> {
+    const content = reviewIssueContent(command);
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${command.caseId}, 0))`);
+      const [replayed] = await tx.select().from(reviewIssueEditRevisions).where(and(
+        eq(reviewIssueEditRevisions.actorId, this.actorId), eq(reviewIssueEditRevisions.commandId, command.commandId),
+      )).limit(1);
+      if (replayed?.resultingCaseVersion) return { issueId: replayed.issueId, issueVersion: replayed.resultingIssueVersion, caseVersion: replayed.resultingCaseVersion };
+      const [caseRecord] = await tx.select().from(cases).where(eq(cases.id, command.caseId)).limit(1);
+      if (!caseRecord) throw new CaseNotFoundError();
+      if (caseRecord.lifecycle !== "ready_for_review" || caseRecord.version !== command.expectedCaseVersion || !caseRecord.currentRunId) {
+        throw new ReviewConflictError("stale_review", "The case changed after it was loaded");
+      }
+      const [revision] = await tx.select({ id: resultRevisions.id }).from(resultRevisions).where(and(
+        eq(resultRevisions.id, command.resultRevisionId), eq(resultRevisions.caseId, command.caseId), eq(resultRevisions.runId, caseRecord.currentRunId),
+      )).limit(1);
+      if (!revision) throw new ReviewConflictError("stale_review", "The reviewed result revision is stale");
+      await assertSupportingReferences(tx, command.caseId, content.supportingReferences);
+      const issueId = randomUUID();
+      const nextCaseVersion = caseRecord.version + 1;
+      await tx.insert(reviewIssues).values({
+        id: issueId, caseId: command.caseId, runId: caseRecord.currentRunId, origin: "human",
+        code: `HUMAN_REVIEW_${issueId}`, description: content.description,
+        recommendedAction: content.recommendedAction, reviewState: "pending", version: 1,
+      });
+      await tx.insert(reviewIssueEditRevisions).values({
+        id: randomUUID(), issueId, resultRevisionId: revision.id, revision: 1,
+        ...content, actorId: this.actorId, commandId: command.commandId,
+        resultingIssueVersion: 1, resultingCaseVersion: nextCaseVersion,
+      });
+      await tx.update(cases).set({ version: nextCaseVersion }).where(and(eq(cases.id, command.caseId), eq(cases.version, caseRecord.version)));
+      return { issueId, issueVersion: 1, caseVersion: nextCaseVersion };
+    });
+  }
+
+  async editIssue(command: Parameters<ReviewCommandService["editIssue"]>[0]): ReturnType<ReviewCommandService["editIssue"]> {
+    const content = reviewIssueContent(command);
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${command.issueId}, 0))`);
+      const [replayed] = await tx.select().from(reviewIssueEditRevisions).where(and(
+        eq(reviewIssueEditRevisions.actorId, this.actorId), eq(reviewIssueEditRevisions.commandId, command.commandId),
+      )).limit(1);
+      if (replayed) return { issueVersion: replayed.resultingIssueVersion };
+      const [issue] = await tx.select({
+        id: reviewIssues.id, version: reviewIssues.version, reviewState: reviewIssues.reviewState,
+        runId: reviewIssues.runId, lifecycle: cases.lifecycle,
+      }).from(reviewIssues).innerJoin(cases, eq(reviewIssues.caseId, cases.id)).where(and(
+        eq(reviewIssues.id, command.issueId), eq(reviewIssues.caseId, command.caseId),
+      )).limit(1);
+      if (!issue) throw new CaseNotFoundError();
+      if (issue.lifecycle !== "ready_for_review" || issue.version !== command.expectedIssueVersion || issue.reviewState !== "pending") {
+        throw new ReviewConflictError("stale_review", "This issue has changed. Refresh to review the latest version.");
+      }
+      const [revision] = await tx.select({ id: resultRevisions.id }).from(resultRevisions).where(and(
+        eq(resultRevisions.id, command.resultRevisionId), eq(resultRevisions.caseId, command.caseId), eq(resultRevisions.runId, issue.runId),
+      )).limit(1);
+      if (!revision) throw new ReviewConflictError("stale_review", "The reviewed result revision is stale");
+      await assertSupportingReferences(tx, command.caseId, content.supportingReferences);
+      const [latest] = await tx.select({ revision: reviewIssueEditRevisions.revision }).from(reviewIssueEditRevisions)
+        .where(eq(reviewIssueEditRevisions.issueId, issue.id)).orderBy(sql`${reviewIssueEditRevisions.revision} desc`).limit(1);
+      const nextVersion = issue.version + 1;
+      const updated = await tx.update(reviewIssues).set({ version: nextVersion }).where(and(
+        eq(reviewIssues.id, issue.id), eq(reviewIssues.version, issue.version),
+      )).returning({ id: reviewIssues.id });
+      if (updated.length !== 1) throw new ReviewConflictError("stale_review", "This issue has changed. Refresh to review the latest version.");
+      await tx.insert(reviewIssueEditRevisions).values({
+        id: randomUUID(), issueId: issue.id, resultRevisionId: revision.id, revision: (latest?.revision ?? 0) + 1,
+        ...content, actorId: this.actorId, commandId: command.commandId,
+        resultingIssueVersion: nextVersion, resultingCaseVersion: null,
+      });
+      return { issueVersion: nextVersion };
+    });
+  }
+
   async resolveIssue(command: Parameters<ReviewCommandService["resolveIssue"]>[0]): ReturnType<ReviewCommandService["resolveIssue"]> {
-    if (command.action === "dismiss_signal" && !command.reason?.trim()) {
-      throw new ReviewConflictError("invalid_review_action", "Ignoring an issue requires a reviewer reason");
-    }
     return this.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${command.issueId}, 0))`);
       const [replayed] = await tx.select().from(reviewIssueActions).where(and(
@@ -135,22 +232,25 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
         issueVersion: replayed.resultingVersion,
         reviewState: replayed.action === "accept_signal" ? "confirmed" as const : "ignored" as const,
       };
-      const [issue] = await tx.select().from(reviewIssues).where(and(
+      const [issue] = await tx.select({
+        id: reviewIssues.id, version: reviewIssues.version, reviewState: reviewIssues.reviewState,
+        runId: reviewIssues.runId, lifecycle: cases.lifecycle,
+      }).from(reviewIssues).innerJoin(cases, eq(reviewIssues.caseId, cases.id)).where(and(
         eq(reviewIssues.id, command.issueId), eq(reviewIssues.caseId, command.caseId),
       )).limit(1);
       if (!issue) throw new CaseNotFoundError();
       const [revision] = await tx.select({ id: resultRevisions.id }).from(resultRevisions).where(and(
         eq(resultRevisions.id, command.resultRevisionId), eq(resultRevisions.caseId, command.caseId), eq(resultRevisions.runId, issue.runId),
       )).limit(1);
-      if (!revision || issue.version !== command.expectedIssueVersion || issue.reviewState !== "pending") {
-        throw new ReviewConflictError("stale_review", "The issue changed after it was loaded");
+      if (!revision || issue.lifecycle !== "ready_for_review" || issue.version !== command.expectedIssueVersion || issue.reviewState !== "pending") {
+        throw new ReviewConflictError("stale_review", "This issue has changed. Refresh to review the latest version.");
       }
       const reviewState = command.action === "accept_signal" ? "confirmed" as const : "ignored" as const;
       const nextVersion = issue.version + 1;
       const updated = await tx.update(reviewIssues).set({ reviewState, version: nextVersion }).where(and(
         eq(reviewIssues.id, issue.id), eq(reviewIssues.version, issue.version),
       )).returning({ id: reviewIssues.id });
-      if (updated.length !== 1) throw new ReviewConflictError("stale_review", "The issue changed after it was loaded");
+      if (updated.length !== 1) throw new ReviewConflictError("stale_review", "This issue has changed. Refresh to review the latest version.");
       await tx.insert(reviewIssueActions).values({
         id: randomUUID(), issueId: issue.id, resultRevisionId: revision.id, action: command.action,
         reason: command.reason?.trim(), actorId: this.actorId, commandId: command.commandId, resultingVersion: nextVersion,
@@ -170,10 +270,13 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
         eq(requestedChangeRevisions.actorId, this.actorId), eq(requestedChangeRevisions.commandId, command.commandId),
       )).limit(1);
       if (replayed) return { draftRevisionId: replayed.id, revision: replayed.revision };
-      const [issue] = await tx.select().from(reviewIssues).where(and(
+      const [issue] = await tx.select({
+        id: reviewIssues.id, reviewState: reviewIssues.reviewState, runId: reviewIssues.runId,
+        recommendedAction: reviewIssues.recommendedAction, lifecycle: cases.lifecycle,
+      }).from(reviewIssues).innerJoin(cases, eq(reviewIssues.caseId, cases.id)).where(and(
         eq(reviewIssues.id, command.issueId), eq(reviewIssues.caseId, command.caseId),
       )).limit(1);
-      if (!issue || issue.reviewState !== "confirmed") throw new ReviewConflictError("stale_review", "The issue is not confirmed");
+      if (!issue || issue.lifecycle !== "ready_for_review" || issue.reviewState !== "confirmed") throw new ReviewConflictError("stale_review", "The issue is not confirmed");
       const [resultRevision] = await tx.select({ id: resultRevisions.id }).from(resultRevisions).where(and(
         eq(resultRevisions.id, command.resultRevisionId), eq(resultRevisions.caseId, command.caseId), eq(resultRevisions.runId, issue.runId),
       )).limit(1);
@@ -328,12 +431,24 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     }).from(requestedChangeRevisions).innerJoin(reviewIssues, eq(requestedChangeRevisions.issueId, reviewIssues.id))
       .where(eq(reviewIssues.caseId, caseId)).orderBy(asc(requestedChangeRevisions.revision));
     const latestDraft = new Map(drafts.map((draft) => [draft.issueId, draft]));
+    const edits = await this.db.select().from(reviewIssueEditRevisions).innerJoin(reviewIssues, eq(reviewIssueEditRevisions.issueId, reviewIssues.id))
+      .where(eq(reviewIssues.caseId, caseId)).orderBy(asc(reviewIssueEditRevisions.revision));
+    const latestEdit = new Map(edits.map(({ review_issue_edit_revisions: edit }) => [edit.issueId, edit]));
     return records.map((record) => ({
+      ...(() => {
+        const edit = latestEdit.get(record.id);
+        return {
+          description: edit?.description ?? record.description,
+          ...(edit?.title ? { title: edit.title } : {}),
+          recommendedAction: edit?.recommendedAction ?? record.recommendedAction,
+          supportingReferences: (edit?.supportingReferences as string[] | undefined) ?? [],
+          ...(edit?.noReferenceReason ? { noReferenceReason: edit.noReferenceReason } : {}),
+          editRevision: edit?.revision ?? 0,
+        };
+      })(),
       issueId: record.id,
       origin: record.origin === "human" ? "human" : "agent",
       code: record.code,
-      description: record.description,
-      recommendedAction: record.recommendedAction,
       reviewState: record.reviewState === "confirmed" ? "confirmed" : record.reviewState === "ignored" ? "ignored" : "pending",
       version: record.version,
       ...(latestDraft.get(record.id) ? { requestedChange: {
@@ -371,6 +486,32 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       };
     }
     throw new Error("Persisted evidence subtype is invalid");
+  }
+
+  async listEvidence(caseId: string): Promise<readonly EvidenceView[]> {
+    const records = await this.db.select({
+      evidenceId: evidenceRecords.id,
+      evidenceType: evidenceRecords.evidenceType,
+      jsonPointer: evidenceRecords.jsonPointer,
+      documentVersionId: evidenceRecords.documentVersionId,
+      pageNumber: evidenceRecords.pageNumber,
+      extractionMethod: evidenceRecords.extractionMethod,
+      processorVersion: evidenceRecords.processorVersion,
+    }).from(evidenceRecords)
+      .innerJoin(processingRuns, eq(evidenceRecords.runId, processingRuns.id))
+      .innerJoin(cases, eq(processingRuns.id, cases.currentRunId))
+      .where(eq(cases.id, caseId));
+    return records.flatMap((record): EvidenceView[] => {
+      if (record.evidenceType === "structured_input" && record.jsonPointer) return [{
+        evidenceId: record.evidenceId, evidenceType: "structured_input", jsonPointer: record.jsonPointer,
+        extractionMethod: record.extractionMethod, processorVersion: record.processorVersion,
+      }];
+      if (record.evidenceType === "page_level" && record.documentVersionId && record.pageNumber !== null) return [{
+        evidenceId: record.evidenceId, evidenceType: "page_level", documentVersionId: record.documentVersionId,
+        pageNumber: record.pageNumber, extractionMethod: record.extractionMethod, processorVersion: record.processorVersion,
+      }];
+      return [];
+    });
   }
 
   async getApplicationData(caseId: string): Promise<ApplicationDataView> {

@@ -1,0 +1,1 @@
+ALTER TABLE "review_issue_edit_revisions" ADD COLUMN "title" text NOT NULL;

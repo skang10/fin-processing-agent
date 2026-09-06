@@ -109,6 +109,23 @@ export interface ReviewCommandContext {
 }
 
 export interface ReviewCommandService {
+  createIssue(command: ReviewCommandContext & {
+    readonly expectedCaseVersion: number;
+    readonly title: string;
+    readonly description: string;
+    readonly recommendedAction: string;
+    readonly supportingReferences: readonly string[];
+    readonly noReferenceReason?: string;
+  }): Promise<{ readonly issueId: string; readonly issueVersion: number; readonly caseVersion: number }>;
+  editIssue(command: ReviewCommandContext & {
+    readonly issueId: string;
+    readonly expectedIssueVersion: number;
+    readonly title: string;
+    readonly description: string;
+    readonly recommendedAction: string;
+    readonly supportingReferences: readonly string[];
+    readonly noReferenceReason?: string;
+  }): Promise<{ readonly issueVersion: number }>;
   resolveIssue(command: ReviewCommandContext & {
     readonly issueId: string;
     readonly expectedIssueVersion: number;
@@ -214,10 +231,14 @@ export interface ReviewIssueView {
   readonly issueId: string;
   readonly origin: "agent" | "human";
   readonly code: string;
+  readonly title?: string;
   readonly description: string;
   readonly recommendedAction: string;
   readonly reviewState: "pending" | "confirmed" | "ignored";
   readonly version: number;
+  readonly supportingReferences: readonly string[];
+  readonly noReferenceReason?: string;
+  readonly editRevision: number;
   readonly requestedChange?: { readonly draftRevisionId: string; readonly revision: number; readonly text: string; readonly included: boolean };
 }
 
@@ -234,6 +255,7 @@ export interface CaseReviewQueryService {
   getAgentReport(caseId: CaseId): Promise<AgentReportView>;
   getIssues(caseId: CaseId): Promise<readonly ReviewIssueView[]>;
   getEvidence(caseId: CaseId, evidenceId: string): Promise<EvidenceView>;
+  listEvidence(caseId: CaseId): Promise<readonly EvidenceView[]>;
   getApplicationData(caseId: CaseId): Promise<ApplicationDataView>;
   getDocuments(caseId: CaseId): Promise<readonly DocumentView[]>;
   getDocumentPage(caseId: CaseId, documentId: string, pageNumber: number): Promise<DocumentPageView>;

@@ -53,7 +53,10 @@
             <div>
               <h1>Review queue</h1>
             </div>
-            <button class="button quiet" id="refresh-queue"><span aria-hidden="true">↻</span> Refresh</button>
+            <div class="queue-heading-actions">
+              <button class="button primary" id="load-demo-case">Load demo case</button>
+              <button class="button quiet" id="refresh-queue"><span aria-hidden="true">↻</span> Refresh</button>
+            </div>
           </header>
 
           <section class="queue-panel" aria-label="Review queue">
@@ -125,13 +128,13 @@
             <section class="case-view report-workspace active" data-case-view="report"></section>
             <section class="case-view issues-workspace" data-case-view="issues">
             <div class="issue-sequence">
-              <div class="issue-sequence-head"><button class="issue-list-toggle" id="issue-list-toggle" aria-expanded="true"><span>Review signals</span><small id="resolved-count">0 of 3 reviewed</small><b>⌃</b></button><button class="create-issue" id="create-issue">+ New issue</button></div>
+              <div class="issue-sequence-head"><button class="issue-list-toggle" id="issue-list-toggle" aria-expanded="true"><span>Review issues</span><small id="resolved-count">0 of 3 reviewed</small><b>⌃</b></button><button class="create-issue" id="create-issue">+ New issue</button></div>
               <div id="issue-list" class="issue-list"></div>
             </div>
             <div class="issue-scroll"><div id="issue-content"></div></div>
             <footer class="issue-footer">
               <button class="button quiet square" id="previous" aria-label="Previous issue">←</button>
-              <span></span>
+              <div id="issue-footer-actions"></div>
               <button class="button quiet square" id="next" aria-label="Next issue">→</button>
             </footer>
             </section>

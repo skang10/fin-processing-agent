@@ -47,6 +47,8 @@ describe("case intake", () => {
       recommendedAction: "Confirm the current employer.",
       reviewState: "pending" as const,
       version: 1,
+      supportingReferences: [],
+      editRevision: 0,
     }]),
     getEvidence: vi.fn(async () => ({
       evidenceId: "4c816f67-5f2f-4e21-8c17-7eb1e5383999",
@@ -55,6 +57,13 @@ describe("case intake", () => {
       extractionMethod: "structured_input",
       processorVersion: "application-schema-1.0.0",
     })),
+    listEvidence: vi.fn(async () => [{
+      evidenceId: "4c816f67-5f2f-4e21-8c17-7eb1e5383999",
+      evidenceType: "structured_input" as const,
+      jsonPointer: "/applicant_display_name",
+      extractionMethod: "structured_input",
+      processorVersion: "application-schema-1.0.0",
+    }]),
     getFindings: vi.fn(async () => [{
       findingId: "4c816f67-5f2f-4e21-8c17-7eb1e5383996",
       ruleId: "VAL_NAME_CONSISTENCY_001", ruleVersion: "1.0.0",
@@ -175,6 +184,17 @@ describe("case intake", () => {
     await app.close();
   });
 
+  it("lists evidence available to the current case", async () => {
+    const app = buildApp({ accept: vi.fn() }, caseQueries);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/evidence",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ evidence: [{ evidence_type: "structured_input", json_pointer: "/applicant_display_name" }] });
+    await app.close();
+  });
+
   it("returns masked application data and current document page metadata", async () => {
     const app = buildApp({ accept: vi.fn() }, caseQueries);
     const base = "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd";
@@ -191,6 +211,8 @@ describe("case intake", () => {
 
   it("persists issue review, requested-change draft, and final request-changes command", async () => {
     const reviewCommands = {
+      createIssue: vi.fn(async () => ({ issueId: "4c816f67-5f2f-4e21-8c17-7eb1e5383992", issueVersion: 1, caseVersion: 3 })),
+      editIssue: vi.fn(async () => ({ issueVersion: 2 })),
       resolveIssue: vi.fn(async () => ({ issueVersion: 2, reviewState: "confirmed" as const })),
       saveRequestedChange: vi.fn(async () => ({ draftRevisionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383994", revision: 1 })),
       submitFinalReview: vi.fn(async () => ({
@@ -201,10 +223,28 @@ describe("case intake", () => {
     const base = "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd";
     const issueId = "4c816f67-5f2f-4e21-8c17-7eb1e53838be";
     const resultRevisionId = "4c816f67-5f2f-4e21-8c17-7eb1e5383995";
+    const created = await app.inject({ method: "POST", url: `${base}/issues`, payload: {
+      result_revision_id: resultRevisionId, command_id: "create_1", expected_case_version: 2,
+      title: "Missing page", description: "A reviewer observed a missing page.", recommended_action: "Please provide the missing page.",
+      supporting_references: [], no_reference_reason: "Visible gap in the submitted package.",
+    } });
+    expect(created.statusCode).toBe(200);
+    const edited = await app.inject({ method: "PATCH", url: `${base}/issues/${issueId}`, payload: {
+      result_revision_id: resultRevisionId, command_id: "edit_1", expected_issue_version: 1,
+      title: "Employer mismatch", description: "The employer names differ.", recommended_action: "Please confirm the current employer.",
+      supporting_references: [], no_reference_reason: "Reviewer comparison.",
+    } });
+    expect(edited.statusCode).toBe(200);
     const confirmed = await app.inject({ method: "POST", url: `${base}/issues/${issueId}/confirm`, payload: {
       result_revision_id: resultRevisionId, command_id: "confirm_1", expected_issue_version: 1,
     } });
     expect(confirmed.statusCode).toBe(200);
+    const ignored = await app.inject({ method: "POST", url: `${base}/issues/${issueId}/ignore`, payload: {
+      result_revision_id: resultRevisionId, command_id: "ignore_1", expected_issue_version: 1,
+    } });
+    expect(ignored.statusCode).toBe(200);
+    expect(reviewCommands.resolveIssue).toHaveBeenCalledWith(expect.objectContaining({ action: "dismiss_signal" }));
+    expect(reviewCommands.resolveIssue).toHaveBeenLastCalledWith(expect.not.objectContaining({ reason: expect.anything() }));
     const draft = await app.inject({ method: "PUT", url: `${base}/issues/${issueId}/requested-change`, payload: {
       result_revision_id: resultRevisionId, command_id: "draft_1", text: "Please provide a current document.", included: true,
     } });

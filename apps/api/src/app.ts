@@ -4,15 +4,19 @@ import { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import multipart from "@fastify/multipart";
 import {
   CaseAcceptedSchema,
+  CreateIssueCommandSchema,
+  CreateIssueResultSchema,
   CaseQueueQuerySchema,
   CaseQueueSchema,
   CaseProjectionSchema,
   AgentReportSchema,
-  EvidenceProjectionSchema,
+  EvidenceListProjectionSchema, EvidenceProjectionSchema,
   FindingsProjectionSchema,
   ApplicationDataProjectionSchema,
   DocumentPageProjectionSchema,
   DocumentsProjectionSchema,
+  EditIssueCommandSchema,
+  EditIssueResultSchema,
   FinalReviewCommandSchema,
   FinalReviewResultSchema,
   ProblemDetailsSchema,
@@ -203,6 +207,20 @@ export function buildApp(
     };
   });
 
+  app.get("/api/v1/cases/:case_id/evidence", {
+    schema: { response: { 200: EvidenceListProjectionSchema, 404: ProblemDetailsSchema } },
+  }, async (request) => {
+    const { case_id: caseId } = request.params as { case_id: string };
+    const evidence = await caseQueries.listEvidence(caseId);
+    return { evidence: evidence.map((item) => item.evidenceType === "structured_input" ? {
+      evidence_id: item.evidenceId, evidence_type: item.evidenceType, json_pointer: item.jsonPointer,
+      extraction_method: item.extractionMethod, processor_version: item.processorVersion,
+    } : {
+      evidence_id: item.evidenceId, evidence_type: item.evidenceType, document_version_id: item.documentVersionId,
+      page_number: item.pageNumber, extraction_method: item.extractionMethod, processor_version: item.processorVersion,
+    }) };
+  });
+
   app.get("/api/v1/cases/:case_id/findings", {
     schema: { response: { 200: FindingsProjectionSchema, 404: ProblemDetailsSchema } },
   }, async (request) => {
@@ -270,13 +288,53 @@ export function buildApp(
     const issues = await caseQueries.getIssues(caseId);
     return { issues: issues.map((issue) => ({
       issue_id: issue.issueId, origin: issue.origin, code: issue.code,
+      ...(issue.title ? { title: issue.title } : {}),
       description: issue.description, recommended_action: issue.recommendedAction,
       review_state: issue.reviewState, version: issue.version,
+      supporting_references: [...issue.supportingReferences],
+      ...(issue.noReferenceReason ? { no_reference_reason: issue.noReferenceReason } : {}),
+      edit_revision: issue.editRevision,
       ...(issue.requestedChange ? { requested_change: {
         draft_revision_id: issue.requestedChange.draftRevisionId, revision: issue.requestedChange.revision,
         text: issue.requestedChange.text, included: issue.requestedChange.included,
       } } : {}),
     })) };
+  });
+
+  app.post("/api/v1/cases/:case_id/issues", {
+    schema: { body: CreateIssueCommandSchema, response: { 200: CreateIssueResultSchema, 400: ProblemDetailsSchema, 404: ProblemDetailsSchema, 409: ProblemDetailsSchema } },
+  }, async (request) => {
+    if (!reviewCommands) throw new Error("Review commands are not configured");
+    const { case_id: caseId } = request.params as { case_id: string };
+    const body = request.body as {
+      result_revision_id: string; command_id: string; expected_case_version: number;
+      title: string; description: string; recommended_action: string; supporting_references: string[]; no_reference_reason?: string;
+    };
+    const result = await reviewCommands.createIssue({
+      caseId, resultRevisionId: body.result_revision_id, commandId: body.command_id,
+      expectedCaseVersion: body.expected_case_version, title: body.title, description: body.description,
+      recommendedAction: body.recommended_action, supportingReferences: body.supporting_references,
+      ...(body.no_reference_reason ? { noReferenceReason: body.no_reference_reason } : {}),
+    });
+    return { issue_id: result.issueId, version: result.issueVersion, case_version: result.caseVersion };
+  });
+
+  app.patch("/api/v1/cases/:case_id/issues/:issue_id", {
+    schema: { body: EditIssueCommandSchema, response: { 200: EditIssueResultSchema, 400: ProblemDetailsSchema, 404: ProblemDetailsSchema, 409: ProblemDetailsSchema } },
+  }, async (request) => {
+    if (!reviewCommands) throw new Error("Review commands are not configured");
+    const { case_id: caseId, issue_id: issueId } = request.params as { case_id: string; issue_id: string };
+    const body = request.body as {
+      result_revision_id: string; command_id: string; expected_issue_version: number;
+      title: string; description: string; recommended_action: string; supporting_references: string[]; no_reference_reason?: string;
+    };
+    const result = await reviewCommands.editIssue({
+      caseId, issueId, resultRevisionId: body.result_revision_id, commandId: body.command_id,
+      expectedIssueVersion: body.expected_issue_version, title: body.title, description: body.description,
+      recommendedAction: body.recommended_action, supportingReferences: body.supporting_references,
+      ...(body.no_reference_reason ? { noReferenceReason: body.no_reference_reason } : {}),
+    });
+    return { issue_id: issueId, version: result.issueVersion };
   });
 
   for (const action of ["confirm", "ignore"] as const) {

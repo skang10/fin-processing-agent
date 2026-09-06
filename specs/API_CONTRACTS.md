@@ -2,11 +2,11 @@
 
 Document ID: `API`
 
-Version: 1.1.1
+Version: 1.1.3
 
 Status: Approved
 
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 
 ## 1. Purpose
 
@@ -155,6 +155,7 @@ GET /api/v1/cases/{case_id}/agent-report
 GET /api/v1/cases/{case_id}/application-data
 GET /api/v1/cases/{case_id}/documents
 GET /api/v1/cases/{case_id}/documents/{document_id}/pages/{page_number}
+GET /api/v1/cases/{case_id}/evidence
 GET /api/v1/cases/{case_id}/evidence/{evidence_id}
 GET /api/v1/cases/{case_id}/findings
 GET /api/v1/cases/{case_id}/issues
@@ -174,6 +175,8 @@ GET /api/v1/cases/{case_id}/agent-log
 `API-REQ-043` Document queries must preserve immutable physical-document version, page order, logical-document range, type, and uncertainty needed by the approved workbench without implying cross-file merging or non-contiguous grouping.
 
 `API-REQ-044` Evidence queries must distinguish page-region, page-level, and structured-input evidence and include the coordinate, rotation, source-dimension, semantic-order, provenance, and availability fields required by the evidence viewer.
+
+`API-REQ-096` `GET /evidence` must list only evidence belonging to the case's current run so that a reviewer can select structured-input fields or document pages as supporting references without discovering evidence from another case or superseded run.
 
 `API-REQ-095` `GET /findings` must return the current result revision's deterministic finding identifiers, registered rule and version, status, reason code, and authorized evidence references so that human review remains possible when the Agent report is unavailable.
 
@@ -206,7 +209,7 @@ POST  /api/v1/cases/{case_id}/final-review
 
 `API-REQ-052` Confirming an Agent-raised issue must persist action `accept_signal`; ignoring it must persist `dismiss_signal`. Transport responses may additionally provide the approved user-facing labels `Confirm issue` and `Ignore issue` but must not change stored semantics.
 
-`API-REQ-053` Ignoring an issue must require a reviewer reason. Confirming, ignoring, editing, or creating an issue must record reviewer, time, predecessor result revision, command identity, and resulting resource version.
+`API-REQ-053` Ignoring an issue may include an optional reviewer note. Confirming, ignoring, editing, or creating an issue must record reviewer, time, predecessor result revision, command identity, and resulting resource version.
 
 `API-REQ-054` A confirm response may create or expose a verified Agent-proposed requested-change draft for human editing, but confirmation must not include that draft in the final message automatically.
 
@@ -326,6 +329,8 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.1.3 | 2026-09-06 | Approved | Made the internal reviewer note optional when ignoring an issue. |
+| 1.1.2 | 2026-09-06 | Approved | Added the current-run evidence collection used by the reviewer supporting-evidence picker. |
 | 1.1.1 | 2026-09-05 | Approved | Added the current deterministic-findings projection required for human review when the Agent report is unavailable. |
 | 1.1.0 | 2026-09-04 | Approved | Reduced V1 to polling, case-creation and final-review idempotency, optimistic concurrency for issue edits, and a bounded case Agent log; deferred SSE and aggregate Agent monitoring. |
 | 1.0.0 | 2026-09-04 | Approved | Approved the V1 HTTP, review-command, evidence, SSE, idempotency, error, Agent-monitoring, and generated-contract baseline aligned with the approved Review Workbench. No unresolved transport-authority or V1 review-command decision remains. |

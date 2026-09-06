@@ -137,6 +137,10 @@ export const EvidenceProjectionSchema = Type.Union([
   }, { additionalProperties: false }),
 ]);
 
+export const EvidenceListProjectionSchema = Type.Object({
+  evidence: Type.Array(EvidenceProjectionSchema),
+}, { additionalProperties: false });
+
 export const FindingsProjectionSchema = Type.Object({
   findings: Type.Array(Type.Object({
     finding_id: Type.String({ format: "uuid" }),
@@ -190,10 +194,14 @@ export const ReviewIssueSchema = Type.Object({
   issue_id: Type.String({ format: "uuid" }),
   origin: Type.Union([Type.Literal("agent"), Type.Literal("human")]),
   code: Type.String(),
+  title: Type.Optional(Type.String()),
   description: Type.String(),
   recommended_action: Type.String(),
   review_state: Type.Union([Type.Literal("pending"), Type.Literal("confirmed"), Type.Literal("ignored")]),
   version: Type.Integer({ minimum: 1 }),
+  supporting_references: Type.Array(Type.String()),
+  no_reference_reason: Type.Optional(Type.String()),
+  edit_revision: Type.Integer({ minimum: 0 }),
   requested_change: Type.Optional(Type.Object({
     draft_revision_id: Type.String({ format: "uuid" }),
     revision: Type.Integer({ minimum: 1 }),
@@ -208,6 +216,36 @@ const ReviewCommandBase = {
   result_revision_id: Type.String({ format: "uuid" }),
   command_id: Type.String({ minLength: 1, maxLength: 100 }),
 };
+
+const IssueContentCommand = {
+  ...ReviewCommandBase,
+  title: Type.String({ minLength: 1, maxLength: 200 }),
+  description: Type.String({ minLength: 1, maxLength: 2000 }),
+  recommended_action: Type.String({ minLength: 1, maxLength: 2000 }),
+  supporting_references: Type.Array(Type.String(), { maxItems: 20 }),
+  no_reference_reason: Type.Optional(Type.String({ minLength: 1, maxLength: 1000 })),
+};
+
+export const CreateIssueCommandSchema = Type.Object({
+  ...IssueContentCommand,
+  expected_case_version: Type.Integer({ minimum: 1 }),
+}, { additionalProperties: false });
+
+export const CreateIssueResultSchema = Type.Object({
+  issue_id: Type.String({ format: "uuid" }),
+  version: Type.Integer({ minimum: 1 }),
+  case_version: Type.Integer({ minimum: 1 }),
+}, { additionalProperties: false });
+
+export const EditIssueCommandSchema = Type.Object({
+  ...IssueContentCommand,
+  expected_issue_version: Type.Integer({ minimum: 1 }),
+}, { additionalProperties: false });
+
+export const EditIssueResultSchema = Type.Object({
+  issue_id: Type.String({ format: "uuid" }),
+  version: Type.Integer({ minimum: 2 }),
+}, { additionalProperties: false });
 
 export const ResolveIssueCommandSchema = Type.Object({
   ...ReviewCommandBase,

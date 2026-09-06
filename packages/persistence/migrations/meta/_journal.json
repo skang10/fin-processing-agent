@@ -92,6 +92,20 @@
       "when": 1788641910570,
       "tag": "0012_large_payback",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788644446954,
+      "tag": "0013_open_frog_thor",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788644576751,
+      "tag": "0014_futuristic_black_queen",
+      "breakpoints": true
     }
   ]
 }

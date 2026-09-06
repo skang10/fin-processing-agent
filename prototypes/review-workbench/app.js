@@ -1,4 +1,4 @@
-import { loadCaseBundle, loadCaseQueue, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
+import { createIssue, editIssue, loadCaseBundle, loadCaseQueue, loadDemoCase, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
 
 let cases = [
   { name: 'Anna Beispiel', id: 'FD-2026-0042', summary: 'Employer information differs', status: 'ready', statusLabel: 'Ready for review', issues: 3, waiting: '18 min' },
@@ -60,6 +60,7 @@ let apiEvidenceByReference = {};
 let apiCaseRecord = null;
 let apiReport = null;
 let activeApplicationPointer = null;
+let caseReadOnly = false;
 const reviewNotes = {};
 const includedRequests = {};
 let internalReviewNote = '';
@@ -129,6 +130,7 @@ async function refreshQueue(view = activeQueueView, updateLocation = true) {
     document.querySelector('.page-heading h1').textContent = view === 'changes_requested' ? 'Changes requested' : view === 'completed' ? 'Completed' : 'Review queue';
     document.querySelector('.queue-panel').setAttribute('aria-label', document.querySelector('.page-heading h1').textContent);
     document.querySelector('.filter-group').hidden = view !== 'review';
+    document.querySelector('#load-demo-case').hidden = view !== 'review';
     document.querySelectorAll('.nav-item').forEach(function (item) { item.classList.remove('active'); });
     document.querySelector(view === 'changes_requested' ? '#changes-nav' : view === 'completed' ? '#completed-nav' : '#queue-nav').classList.add('active');
     activeFilter = 'all';
@@ -176,10 +178,25 @@ function render() {
   document.querySelector('#previous').disabled = current === 0;
   document.querySelector('#next').disabled = current === issues.length - 1;
   document.querySelector('#issue-content').innerHTML = editing ? correctionForm(issue) : confirming ? confirmationForm(issue) : ignoring ? ignoreForm() : issueDetail(issue);
+  renderIssueFooter();
   renderSource(issue);
   renderIssueList();
   renderThumbnails(issue.pageNumber);
   wireIssueActions();
+}
+
+function renderIssueFooter() {
+  const footer = document.querySelector('#issue-footer-actions');
+  if (editing || confirming || ignoring) {
+    footer.innerHTML = '<div class="footer-outcome">' + (editing ? 'Editing issue' : confirming ? 'Confirming issue' : 'Ignoring issue') + '</div>';
+    return;
+  }
+  const outcome = decisions[current];
+  if (outcome === 'pending' && !caseReadOnly) {
+    footer.innerHTML = '<div class="review-actions"><button class="button quiet" id="dismiss">Ignore issue</button><button class="button primary" id="confirm">Confirm issue</button></div>';
+    return;
+  }
+  footer.innerHTML = '<div class="footer-outcome">' + (caseReadOnly && outcome === 'pending' ? 'Not reviewed' : outcomeLabel(outcome)) + '</div>';
 }
 
 function renderSource(issue) {
@@ -218,8 +235,9 @@ function renderIssueList() {
     const state = outcomeLabel(decision);
     const marker = decision === 'pending' ? String(index + 1).padStart(2, '0') : decision === 'dismissed' ? '×' : decision === 'edited' ? '✎' : '✓';
     return '<div class="issue-list-item ' + (index === current ? 'active' : '') + '"><button class="issue-open" data-index="' + index + '">' +
-      '<span class="issue-state ' + decision + '">' + marker + '</span><strong>' + issue.title + '</strong><em>' + state + '</em></button>' +
-      '<button class="issue-edit" data-edit-index="' + index + '" aria-label="Edit ' + issue.title + '">Edit</button></div>';
+      '<span class="issue-state ' + decision + '">' + marker + '</span><span class="issue-list-title"><strong>' + escapeHtml(issue.title) + '</strong><small>' +
+      (issue.origin === 'human' ? 'Human created' : 'AI created') + '</small></span><em>' + state + '</em></button>' +
+      (caseReadOnly || decision === 'dismissed' ? '' : '<button class="issue-edit" data-edit-index="' + index + '" aria-label="' + (decision === 'confirmed' ? 'Edit requested change for ' : 'Edit ') + escapeHtml(issue.title) + '">' + (decision === 'confirmed' ? 'Edit request' : 'Edit') + '</button>') + '</div>';
   }).join('');
   document.querySelectorAll('.issue-open').forEach(function (button) {
     button.addEventListener('click', function () {
@@ -231,7 +249,12 @@ function renderIssueList() {
     });
   });
   document.querySelectorAll('.issue-edit').forEach(function (button) {
-    button.addEventListener('click', function () { current = Number(button.dataset.editIndex); editing = true; confirming = false; render(); });
+    button.addEventListener('click', function () {
+      current = Number(button.dataset.editIndex);
+      confirming = decisions[current] === 'confirmed';
+      editing = !confirming;
+      render();
+    });
   });
 }
 
@@ -251,7 +274,6 @@ function renderThumbnails(activePage) {
 }
 
 function issueDetail(issue) {
-  const outcome = decisions[current];
   const values = issue.values.map(function (item, index) {
     const value = item.value;
     const evidenceControl = item.reference
@@ -260,13 +282,11 @@ function issueDetail(issue) {
     return '<article class="claim-card"><div class="claim-head"><span>' + escapeHtml(item.role) + '</span></div>' +
       '<small class="field-name">' + escapeHtml(item.label) + '</small><strong>' + escapeHtml(value) + '</strong>' + evidenceControl + '</article>';
   }).join('');
-  const outcomeIcon = outcome === 'dismissed' ? '×' : outcome === 'edited' ? '✎' : '✓';
-  const outcomeBlock = outcome !== 'pending'
-    ? '<div class="recorded-outcome"><span class="outcome-icon">' + outcomeIcon + '</span><div><strong>' + outcomeLabel(outcome) + '</strong>' + (reviewNotes[current] ? '<small>' + escapeHtml(reviewNotes[current]) + '</small>' : '') + '</div><button id="change-outcome"><span aria-hidden="true">↶</span> Undo</button></div>'
-    : '<div class="review-actions"><button class="button quiet" id="dismiss">Ignore issue</button><button class="button primary" id="confirm">Confirm issue</button></div>';
-  return '<div class="review-prompt"><p>' + issue.why + '</p></div>' +
+  const reviewedEvidence = values || '<article class="claim-card"><div class="claim-head"><span>Reviewer evidence note</span></div>' +
+    '<strong>' + escapeHtml(issue.noReferenceReason || 'No supporting source was provided.') + '</strong></article>';
+  return '<div class="review-prompt"><p>' + escapeHtml(issue.why) + '</p></div>' +
     '<div class="claim-comparison"><div class="block-label"><span>Evidence reviewed</span></div>' +
-    values + '</div>' + outcomeBlock;
+    reviewedEvidence + '</div>';
 }
 
 function confirmationForm(issue) {
@@ -275,22 +295,63 @@ function confirmationForm(issue) {
     '<div class="issue-kicker"><span class="finding-tone neutral">Confirm issue</span></div></div>' +
     '<form id="confirmation-form" class="correct-form"><label>Requested change<textarea rows="5" required>' + escapeHtml(note) + '</textarea></label>' +
     '<div class="revision-note"><strong>Applicant-facing draft</strong><span>Review and edit this message before confirming the issue. It is used only if you request changes.</span></div>' +
-    '<div class="form-actions"><button type="button" class="button quiet" id="cancel-confirm-bottom">Cancel</button><button class="button primary">Save confirmation</button></div></form>';
+    '<div class="form-actions"><button type="button" class="button quiet" id="cancel-confirm-bottom">Cancel</button><button class="button primary">' + (decisions[current] === 'confirmed' ? 'Save requested change' : 'Save confirmation') + '</button></div></form>';
+}
+
+function evidencePickerLabel(reference) {
+  const evidence = apiEvidenceByReference[reference];
+  if (!evidence) return 'Unavailable source';
+  if (evidence.evidence_type === 'structured_input') {
+    const group = apiApplicationData?.groups.find(function (candidate) {
+      return candidate.fields.some(function (field) { return field.json_pointer === evidence.json_pointer; });
+    });
+    const field = group?.fields.find(function (candidate) { return candidate.json_pointer === evidence.json_pointer; });
+    return 'Application data — ' + (group ? group.group + ' / ' : '') + (field ? field.key.replaceAll('_', ' ') : evidence.json_pointer);
+  }
+  const documentRecord = apiDocuments.find(function (candidate) { return candidate.document_id === evidence.document_version_id; });
+  return (documentRecord?.submitted_filename || 'Document') + ' — page ' + evidence.page_number;
+}
+
+function selectedEvidenceMarkup(references) {
+  if (!references.length) return '<p class="evidence-picker-empty">No evidence selected</p>';
+  return references.map(function (reference) {
+    return '<div class="selected-evidence" data-selected-reference="' + escapeHtml(reference) + '"><span>' +
+      escapeHtml(evidencePickerLabel(reference)) + '</span><button type="button" aria-label="Remove evidence">×</button></div>';
+  }).join('');
+}
+
+function evidencePicker(issue) {
+  const applicationOptions = [];
+  const documentOptions = [];
+  Object.keys(apiEvidenceByReference).forEach(function (reference) {
+    const option = '<option value="' + escapeHtml(reference) + '">' + escapeHtml(evidencePickerLabel(reference)) + '</option>';
+    if (apiEvidenceByReference[reference].evidence_type === 'structured_input') applicationOptions.push(option);
+    else documentOptions.push(option);
+  });
+  return '<fieldset class="evidence-picker"><legend>Supporting evidence</legend><div class="evidence-picker-add"><select id="evidence-reference">' +
+    '<option value="">Select a source</option>' +
+    (applicationOptions.length ? '<optgroup label="Application data">' + applicationOptions.join('') + '</optgroup>' : '') +
+    (documentOptions.length ? '<optgroup label="Documents">' + documentOptions.join('') + '</optgroup>' : '') +
+    '<option value="__none__">No source available</option></select><button type="button" class="button quiet" id="add-evidence">Add</button></div>' +
+    '<div id="selected-evidence">' + selectedEvidenceMarkup(issue.supportingReferences || []) + '</div>' +
+    '<label id="no-source-reason"' + (issue.noReferenceReason ? '' : ' hidden') + '>Why no source is available' +
+    '<textarea rows="3" placeholder="Explain why this issue has no supporting source">' + escapeHtml(issue.noReferenceReason || '') + '</textarea></label></fieldset>';
 }
 
 function correctionForm(issue) {
   return '<div class="issue-heading"><button class="inline-back" id="cancel">← Back to issue</button>' +
     '<div class="issue-kicker"><span class="finding-tone neutral">Edit issue</span></div></div>' +
-    '<form id="inline-form" class="correct-form"><label>Issue title<input value="' + issue.title + '" required></label>' +
-    '<label>Issue note<textarea rows="4" required>' + issue.why + '</textarea></label>' +
+    '<form id="inline-form" class="correct-form"><label>Issue title<input value="' + escapeHtml(issue.title) + '" required></label>' +
+    '<label>Issue description<textarea rows="4" required>' + escapeHtml(issue.why) + '</textarea></label>' +
+    '<label>Requested change<textarea rows="4" required>' + escapeHtml(issue.recommendation || '') + '</textarea></label>' + evidencePicker(issue) +
     '<div class="form-actions"><button type="button" class="button quiet" id="cancel-bottom">Cancel</button><button class="button primary">Save issue</button></div></form>';
 }
 
 function ignoreForm() {
   return '<div class="issue-heading"><button class="inline-back" id="cancel-ignore">← Back to issue</button>' +
     '<div class="issue-kicker"><span class="finding-tone neutral">Ignore issue</span></div></div>' +
-    '<form id="ignore-form" class="correct-form"><label>Reason<textarea rows="4" required placeholder="Explain why this issue does not require action"></textarea></label>' +
-    '<div class="revision-note"><strong>Internal review record</strong><span>This reason is not included in the applicant message.</span></div>' +
+    '<form id="ignore-form" class="correct-form"><label>Note <span class="optional-label">Optional</span><textarea rows="4" placeholder="Add context for other reviewers"></textarea></label>' +
+    '<div class="revision-note"><strong>Internal review record</strong><span>This note is not included in the applicant message.</span></div>' +
     '<div class="form-actions"><button type="button" class="button quiet" id="cancel-ignore-bottom">Cancel</button><button class="button primary">Save and ignore</button></div></form>';
 }
 
@@ -311,6 +372,7 @@ function documentPaper(kind) {
 }
 
 function wireIssueActions() {
+  const issue = issues[current];
   const confirm = document.querySelector('#confirm');
   const dismiss = document.querySelector('#dismiss');
   const change = document.querySelector('#change-outcome');
@@ -349,12 +411,82 @@ function wireIssueActions() {
     await persistDecision('confirmed', event.currentTarget.querySelector('textarea').value.trim());
   });
   const form = document.querySelector('#inline-form');
-  if (form) form.addEventListener('submit', function (event) {
+  const selectedEvidence = document.querySelector('#selected-evidence');
+  const noSourceReason = document.querySelector('#no-source-reason');
+  function wireEvidenceRemoval() {
+    selectedEvidence?.querySelectorAll('.selected-evidence button').forEach(function (button) {
+      button.addEventListener('click', function () {
+        button.closest('.selected-evidence').remove();
+        if (!selectedEvidence.querySelector('.selected-evidence')) selectedEvidence.innerHTML = '<p class="evidence-picker-empty">No evidence selected</p>';
+      });
+    });
+  }
+  wireEvidenceRemoval();
+  const addEvidence = document.querySelector('#add-evidence');
+  if (addEvidence) addEvidence.addEventListener('click', function () {
+    const select = document.querySelector('#evidence-reference');
+    if (!select.value) return;
+    if (select.value === '__none__') {
+      selectedEvidence.innerHTML = '<p class="evidence-picker-empty">No evidence selected</p>';
+      noSourceReason.hidden = false;
+      noSourceReason.querySelector('textarea').required = true;
+      return;
+    }
+    noSourceReason.hidden = true;
+    noSourceReason.querySelector('textarea').required = false;
+    noSourceReason.querySelector('textarea').value = '';
+    const existing = [...selectedEvidence.querySelectorAll('[data-selected-reference]')].some(function (item) { return item.dataset.selectedReference === select.value; });
+    if (existing) return;
+    selectedEvidence.querySelector('.evidence-picker-empty')?.remove();
+    selectedEvidence.insertAdjacentHTML('beforeend', selectedEvidenceMarkup([select.value]));
+    wireEvidenceRemoval();
+  });
+  if (form) form.addEventListener('submit', async function (event) {
     event.preventDefault();
-    issue.title = event.currentTarget.querySelector('input').value;
-    issue.why = event.currentTarget.querySelector('textarea').value;
-    creatingIssue = false;
-    decide('edited');
+    const textareas = event.currentTarget.querySelectorAll('textarea');
+    const title = event.currentTarget.querySelector('input').value.trim();
+    const description = textareas[0].value.trim();
+    const recommendation = textareas[1].value.trim();
+    const supportingReferences = [...event.currentTarget.querySelectorAll('[data-selected-reference]')].map(function (item) { return item.dataset.selectedReference; });
+    const noReferenceReason = noSourceReason?.querySelector('textarea').value.trim() || '';
+    if (!supportingReferences.length && !noReferenceReason) {
+      toast('Select supporting evidence or explain why no source is available');
+      return;
+    }
+    if (!apiCaseRecord || !apiReport?.result_revision) return;
+    try {
+      if (creatingIssue) {
+        const result = await createIssue(apiCaseRecord.case_id, {
+          result_revision_id: apiReport.result_revision.id, command_id: crypto.randomUUID(),
+          expected_case_version: apiCaseRecord.version, title, description,
+          recommended_action: recommendation, supporting_references: supportingReferences,
+          ...(supportingReferences.length ? {} : { no_reference_reason: noReferenceReason }),
+        });
+        apiCaseRecord.version = result.case_version;
+        issue.issueId = result.issue_id;
+        issue.version = result.version;
+        issue.origin = 'human';
+      } else {
+        const result = await editIssue(apiCaseRecord.case_id, issue.issueId, {
+          result_revision_id: apiReport.result_revision.id, command_id: crypto.randomUUID(),
+          expected_issue_version: issue.version, title, description, recommended_action: recommendation,
+          supporting_references: supportingReferences,
+          ...(supportingReferences.length ? {} : { no_reference_reason: noReferenceReason }),
+        });
+        issue.version = result.version;
+      }
+      issue.title = title;
+      issue.why = description;
+      issue.recommendation = recommendation;
+      issue.supportingReferences = supportingReferences;
+      issue.noReferenceReason = noReferenceReason;
+      creatingIssue = false;
+      editing = false;
+      render();
+      toast('Issue saved');
+    } catch (error) {
+      showReviewError(error, 'Issue could not be saved');
+    }
   });
   document.querySelectorAll('.evidence-link').forEach(function (button) {
     button.addEventListener('click', function () {
@@ -435,11 +567,23 @@ async function persistDecision(kind, noteOrReason) {
     return;
   }
   try {
+    if (kind === 'confirmed' && decisions[current] === 'confirmed') {
+      const draft = await saveRequestedChange(apiCaseRecord.case_id, issue.issueId, {
+        result_revision_id: apiReport.result_revision.id,
+        command_id: crypto.randomUUID(), text: noteOrReason, included: includedRequests[current] === true,
+      });
+      issue.requestedChange = { draft_revision_id: draft.draft_revision_id, revision: draft.revision, text: noteOrReason, included: includedRequests[current] === true };
+      reviewNotes[current] = noteOrReason;
+      confirming = false;
+      render();
+      toast('Requested change saved');
+      return;
+    }
     const result = await resolveIssue(apiCaseRecord.case_id, issue.issueId, kind === 'confirmed' ? 'confirm' : 'ignore', {
       result_revision_id: apiReport.result_revision.id,
       command_id: crypto.randomUUID(),
       expected_issue_version: issue.version,
-      ...(kind === 'dismissed' ? { reason: noteOrReason } : {}),
+      ...(kind === 'dismissed' && noteOrReason ? { reason: noteOrReason } : {}),
     });
     issue.version = result.version;
     if (kind === 'confirmed') {
@@ -454,7 +598,7 @@ async function persistDecision(kind, noteOrReason) {
     ignoring = false;
     decide(kind);
   } catch (error) {
-    toast(error instanceof Error ? error.message : 'Review decision could not be saved');
+    showReviewError(error, 'Review decision could not be saved');
   }
 }
 
@@ -466,7 +610,7 @@ function renderSummary() {
     const included = includedRequests[index] !== false;
     const marker = decisions[index] === 'pending' ? '!' : decisions[index] === 'dismissed' ? '×' : '✓';
     return '<div class="summary-issue-row ' + (canRequest && !included ? 'excluded' : '') + '"><button data-summary-issue="' + index + '"><span class="summary-state ' + decisions[index] + '">' + marker + '</span><span><strong>' +
-      issue.title + '</strong><small>' + outcomeLabel(decisions[index]) + '</small></span><i>→</i></button>' + (canRequest ? '<label><input type="checkbox" data-request-include="' + index + '" ' + (included ? 'checked' : '') + '> Include in message</label>' : '') + '</div>';
+      escapeHtml(issue.title) + '</strong><small>' + outcomeLabel(decisions[index]) + '</small></span><i>→</i></button>' + (canRequest ? '<label><input type="checkbox" data-request-include="' + index + '" ' + (included ? 'checked' : '') + (caseReadOnly ? ' disabled' : '') + '> Include in message</label>' : '') + '</div>';
   }).join('');
   document.querySelectorAll('[data-summary-issue]').forEach(function (button) {
     button.addEventListener('click', function () {
@@ -496,7 +640,7 @@ function renderSummary() {
           checkbox.checked = !checkbox.checked;
           checkbox.closest('.summary-issue-row').classList.toggle('excluded', !checkbox.checked);
           updateApplicantPreview();
-          toast(error instanceof Error ? error.message : 'Requested change could not be saved');
+          showReviewError(error, 'Requested change could not be saved');
         }
       }
     });
@@ -504,6 +648,7 @@ function renderSummary() {
   updateApplicantPreview();
   const internalNote = document.querySelector('#internal-review-note');
   internalNote.value = internalReviewNote;
+  internalNote.disabled = caseReadOnly;
   internalNote.addEventListener('input', function () { internalReviewNote = internalNote.value; });
   updateSubmissionActions();
 }
@@ -532,7 +677,7 @@ function updateSubmissionActions() {
     const primary = (action === 'changes' && hasRequest) || (action === 'clear' && !hasRequest);
     button.classList.toggle('primary', primary);
     button.classList.toggle('quiet', !primary);
-    button.disabled = incomplete || (action === 'changes' && !hasRequest) || (action === 'clear' && hasRequest);
+    button.disabled = caseReadOnly || incomplete || (action === 'changes' && !hasRequest) || (action === 'clear' && hasRequest);
     button.title = incomplete ? 'Review every issue before submitting' : action === 'changes' && !hasRequest ? 'Include an applicant request to use this action' : action === 'clear' && hasRequest ? 'Remove or exclude applicant requests to complete the review' : '';
   });
 }
@@ -563,6 +708,7 @@ document.querySelector('#issue-list-toggle').addEventListener('click', function 
   event.currentTarget.querySelector('b').textContent = expanded ? '⌄' : '⌃';
 });
 document.querySelector('#create-issue').addEventListener('click', function () {
+  if (caseReadOnly) return;
   issues.push({
     type: 'Reviewer-created', tone: 'neutral', title: 'New review issue',
     why: 'Add the issue details and supporting evidence.',
@@ -628,6 +774,21 @@ document.querySelector('#refresh-queue').addEventListener('click', async functio
   }
 });
 
+document.querySelector('#load-demo-case').addEventListener('click', async function (event) {
+  const button = event.currentTarget;
+  button.disabled = true;
+  button.textContent = 'Loading demo case…';
+  try {
+    const createdCase = await loadDemoCase();
+    await updateAllQueueCounts();
+    window.location.search = '?case_id=' + encodeURIComponent(createdCase.case_id) + '&queue_view=review';
+  } catch (error) {
+    toast(error instanceof Error ? error.message : 'Demo case could not be loaded');
+    button.disabled = false;
+    button.textContent = 'Load demo case';
+  }
+});
+
 const reportContent = document.querySelector('[data-view="report"]');
 const submitContent = document.querySelector('#summary .summary-wrap');
 reportContent.classList.remove('drawer-view', 'active');
@@ -655,6 +816,7 @@ document.querySelectorAll('.case-action').forEach(function (button) {
       toast('Exclude applicant requests before completing the review');
       return;
     }
+    let savedAction = null;
     if (apiCaseRecord && apiReport?.result_revision) {
       try {
         const action = button.dataset.caseAction === 'clear' ? 'clear_for_downstream' : button.dataset.caseAction === 'changes' ? 'request_changes' : 'escalate_review';
@@ -670,6 +832,7 @@ document.querySelectorAll('.case-action').forEach(function (button) {
         apiCaseRecord.version = result.case_version;
         apiCaseRecord.lifecycle = 'review_complete';
         apiCaseRecord.final_review_action = result.action;
+        savedAction = result.action;
       } catch (error) {
         toast(error instanceof Error ? error.message : 'Final review could not be saved');
         return;
@@ -679,6 +842,10 @@ document.querySelectorAll('.case-action').forEach(function (button) {
     button.textContent = button.dataset.caseAction === 'clear' ? 'Document review completed' : button.dataset.caseAction === 'changes' ? 'Changes requested' : 'Review escalated';
     applyFinalOutcome(button.dataset.caseAction === 'clear' ? 'clear_for_downstream' : button.dataset.caseAction === 'changes' ? 'request_changes' : 'escalate_review');
     toast(button.textContent);
+    if (savedAction) {
+      const targetView = savedAction === 'clear_for_downstream' ? 'completed' : savedAction === 'request_changes' ? 'changes_requested' : 'review';
+      await Promise.all([refreshQueue(targetView), updateAllQueueCounts()]);
+    }
   });
 });
 
@@ -695,12 +862,35 @@ function applyFinalOutcome(action) {
     outcomeStep.querySelector('span').textContent = action === 'clear_for_downstream' ? 'Completed' : action === 'request_changes' ? 'Changes requested' : 'Review escalated';
 }
 
-function toast(message) {
+function showReviewError(error, fallback) {
+  if (error instanceof Error && error.code === 'stale_review') {
+    toast('This issue has changed. Refresh to review the latest version.', 'Refresh issue', async function () {
+      await loadCaseFromApi();
+      activateCaseTab('issues');
+    });
+    return;
+  }
+  toast(error instanceof Error ? error.message : fallback);
+}
+
+function toast(message, actionLabel, action) {
   const element = document.querySelector('#toast');
-  element.textContent = message;
+  element.replaceChildren(document.createTextNode(message));
+  if (actionLabel && action) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = actionLabel;
+    button.addEventListener('click', async function () {
+      clearTimeout(toast.timer);
+      element.classList.remove('show');
+      await action();
+    });
+    element.appendChild(button);
+  }
+  element.classList.toggle('actionable', Boolean(action));
   element.classList.add('show');
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(function () { element.classList.remove('show'); }, 2400);
+  toast.timer = setTimeout(function () { element.classList.remove('show'); }, action ? 8000 : 2400);
 }
 
 function issuePresentation(record, finding, index) {
@@ -709,10 +899,13 @@ function issuePresentation(record, finding, index) {
     VAL_EMPLOYER_CONSISTENCY_001: { title: 'Employer mismatch', type: 'Cross-document conflict', tone: 'failed', paper: 'bank', pageNumber: 4 },
     VAL_INCOME_CONSISTENCY_001: { title: 'Monthly income', type: 'Evidence review', tone: 'warning', paper: 'pay', pageNumber: 2 },
   }[record.code] || { title: 'Review issue ' + (index + 1), type: 'Agent finding', tone: 'warning', paper: 'boundary', pageNumber: 1 };
-  const references = finding ? finding.references : [];
+  const references = finding ? finding.references : (record.supporting_references || []);
   return {
     issueId: record.issue_id, version: record.version, requestedChange: record.requested_change,
-    code: record.code, type: presentation.type, tone: presentation.tone, title: presentation.title,
+    origin: record.origin,
+    supportingReferences: record.supporting_references?.length ? record.supporting_references : references,
+    noReferenceReason: record.no_reference_reason,
+    code: record.code, type: presentation.type, tone: presentation.tone, title: record.title || presentation.title,
     why: record.description, recommendation: record.recommended_action,
     doc: apiDocuments[0] ? apiDocuments[0].submitted_filename : 'Submitted document',
     page: 'Page ' + presentation.pageNumber + (apiDocuments[0] ? ' of ' + apiDocuments[0].page_count : ''),
@@ -744,7 +937,10 @@ function evidencePresentation(reference) {
 
 function renderApiReport(report) {
   document.querySelector('.report-copy').textContent = report.summary || 'Agent report unavailable.';
-  document.querySelector('.report-links').innerHTML = issues.map(function (issue, index) {
+  document.querySelector('.report-links').innerHTML = issues.map(function (issue, index) { return { issue, index }; })
+    .filter(function (entry) { return entry.issue.origin === 'agent'; }).map(function (entry) {
+    const issue = entry.issue;
+    const index = entry.index;
     return '<button data-report-issue="' + index + '"><b>' + String(index + 1).padStart(2, '0') + '</b><span>' + escapeHtml(issue.title) + '</span><em>→</em></button>';
   }).join('');
   document.querySelector('.checked-facts').innerHTML = report.checked_facts.map(function (fact, index) {
@@ -779,6 +975,7 @@ async function loadCaseFromApi() {
     const report = bundle.report;
     apiCaseRecord = caseRecord;
     apiReport = report;
+    caseReadOnly = Boolean(caseRecord.final_review_action);
     const findings = bundle.findings;
     const issueRecords = bundle.issues;
     apiApplicationData = bundle.applicationData;
@@ -796,7 +993,13 @@ async function loadCaseFromApi() {
     current = 0;
     document.querySelectorAll('.case-id').forEach(function (element) { element.textContent = caseRecord.case_id; });
     document.querySelectorAll('.case-identity strong').forEach(function (element) { element.textContent = caseRecord.applicant_display_name; });
+    const statusBadge = document.querySelector('.status-badge');
+    statusBadge.textContent = caseRecord.final_review_action === 'clear_for_downstream' ? 'Ready for handoff'
+      : caseRecord.final_review_action === 'request_changes' ? 'Changes requested'
+        : caseRecord.final_review_action === 'escalate_review' ? 'Review escalated' : 'Review required';
     document.querySelector('[data-case-tab="issues"] span').textContent = String(issues.length);
+    document.querySelector('#create-issue').hidden = caseReadOnly;
+    document.querySelectorAll('.case-action').forEach(function (button) { button.hidden = caseReadOnly; });
     document.querySelector('#case-agent-trigger strong').textContent = report.availability === 'ready' ? 'Generated review report' : 'Report unavailable';
     renderApiReport(report);
     if (issues.length) render();
