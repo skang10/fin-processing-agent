@@ -110,6 +110,52 @@ export interface OfflineClaimResult {
   readonly evidenceIds: readonly string[];
 }
 
+export interface ExtractionCandidate {
+  readonly candidateId: string;
+  readonly fieldSchemaId: string;
+  readonly fieldSchemaVersion: string;
+  readonly valueType: "string" | "money" | "date";
+  readonly rawValue: string;
+  readonly normalizedValue: unknown;
+  readonly extractionMethod: string;
+  readonly processorVersion: string;
+  readonly evidenceIds: readonly string[];
+  readonly source: { readonly type: "structured_input"; readonly applicationSnapshotId: string; readonly jsonPointer: string } |
+    { readonly type: "logical_document"; readonly logicalDocumentRevisionId: string };
+  readonly qualityStatus: "accepted" | "rejected";
+}
+
+export interface CandidateReconciliation {
+  readonly fieldSchemaId: string;
+  readonly method: "single_accepted_candidate";
+  readonly version: "1.0.0";
+  readonly status: "selected" | "unresolved";
+  readonly candidates: readonly { readonly candidateId: string; readonly status: "selected" | "not_selected" }[];
+  readonly selectedCandidateId?: string;
+  readonly reason: "one_accepted_candidate" | "no_accepted_candidate" | "competing_accepted_candidates";
+}
+
+export function reconcileSingleAcceptedCandidate(
+  fieldSchemaId: string,
+  candidates: readonly ExtractionCandidate[],
+): CandidateReconciliation {
+  if (candidates.length === 0 || candidates.some((candidate) => candidate.fieldSchemaId !== fieldSchemaId)) {
+    throw new Error("Reconciliation candidates must target one declared field schema");
+  }
+  const accepted = candidates.filter((candidate) => candidate.qualityStatus === "accepted");
+  const selected = accepted.length === 1 ? accepted[0] : undefined;
+  return {
+    fieldSchemaId, method: "single_accepted_candidate", version: "1.0.0",
+    status: selected ? "selected" : "unresolved",
+    candidates: candidates.map((candidate) => ({
+      candidateId: candidate.candidateId,
+      status: candidate.candidateId === selected?.candidateId ? "selected" : "not_selected",
+    })),
+    ...(selected ? { selectedCandidateId: selected.candidateId } : {}),
+    reason: selected ? "one_accepted_candidate" : accepted.length === 0 ? "no_accepted_candidate" : "competing_accepted_candidates",
+  };
+}
+
 export interface CaseIntakeCommand {
   readonly applicantDisplayName: string;
   readonly idempotencyKey: string;
