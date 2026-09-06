@@ -64,7 +64,17 @@ The implementation spike must prove that:
 
 ### Implementation evidence (2026-09-06)
 
-`PiAgentLedCaseReviewHarness` proves one session spanning scoped document inspection, optional OCR/VLM extraction, evidence-bound candidate submission, deterministic reconciliation and validation requests, current-result retrieval, and report submission. Automated tests cover unknown-tool and cross-scope rejection, schema enforcement, OCR/VLM and session budgets, no-progress handling, provider failure, and external report verification. The former separately scheduled report and adaptive-recovery harnesses were removed. Durable re-entry after Worker loss, real OCR/VLM ports, and live-model acceptance remain required before this prototype can claim those capabilities.
+`PiAgentLedCaseReviewHarness` proves one session spanning scoped document inspection, optional OCR/VLM extraction, evidence-bound candidate submission, deterministic reconciliation and validation requests, current-result retrieval, and report submission. Automated tests cover unknown-tool and cross-scope rejection, schema enforcement, OCR/VLM and session budgets, no-progress handling, provider failure, and external report verification. The former separately scheduled report and adaptive-recovery harnesses were removed.
+
+### Durability evidence (2026-09-06)
+
+Verification item 4 is met. The adapter no longer materializes a trace at session end. `PostgresAgentSessionLifecycle` owns one authoritative session per processing run, guarded by a run-scoped advisory lock and a `(run_id, mode)` unique index, plus linked execution attempts, immutable tool invocation results keyed by a canonical idempotency key, step reuse lineage, and cumulative budget counters. The control plane persists the session and its attempt before the first model call and commits each completed step, its invocation result or reuse lineage, and the consumed budget before the result reaches the model.
+
+Each registered tool declares how a committed result is reused: a result whose payload carries document text keeps only an integrity hash and is re-read from its committed artifact, while a paid or side-effecting result keeps a bounded structured payload that restores session state without repeating the operation. Durable re-entry opens a linked attempt, restores tool state from committed results, seeds the model with a resumed-progress block instead of claiming that conversation survived, and refuses to resume when harness, prompt, tool-registry, context-manifest, model-route, or budget identity changed. A configured attempt limit ends endless re-entry with `cancelled_by_workflow`.
+
+A Docker-backed suite terminates the Worker after each committed boundary — page inspection, fake OCR output, model extraction output, candidate submission, deterministic reconciliation, deterministic validation and result sealing, and report completion — then redelivers the job through the real coordinator. Every row reaches the correct human-reviewable state with one authoritative session, one result revision, one report, one gap resolution, ordered steps, and OCR and model budgets charged once. A tool call that completed but whose step had not yet committed may repeat; the deterministic components it calls are idempotent for the run, which is the documented mitigation rather than a hidden transport retry.
+
+Real OCR/VLM ports and live-model acceptance remain required before this prototype can claim those capabilities.
 
 ## Affected Specifications
 

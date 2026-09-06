@@ -548,7 +548,7 @@ The Agent component is acceptable for implementation when automated tests demons
 3. Pi SDK integration details and hardening configuration require an implementation proof and `ADR_001_PI_AGENT_HARNESS.md` before the Agent vertical slice is considered complete.
 4. Detailed field schemas and reconciliation behavior belong to the extraction and validation specifications or executable contract artifacts.
 5. The initial Agent is single-purpose and does not provide a general user-facing chat interface.
-6. The exact minimum preflight set, durable re-entry protocol, and tool-view transition table require alignment with the data-model, workflow, and document-processing owners before implementation of version 3.0.0.
+6. The exact minimum preflight set and tool-view transition table require alignment with the data-model, workflow, and document-processing owners before implementation of version 3.0.0. The durable re-entry protocol is implemented: one authoritative session per run, linked attempts, committed tool results reused by canonical idempotency key, and remaining budgets reconstructed from persisted consumption. See `../decisions/ADR_001_PI_AGENT_HARNESS.md`.
 
 Version 3.0.0 resolves Agent authority but creates dependent specification work for the session data model, workflow stage contract, and PDF Inspector tool adapters. Those approved owners remain authoritative until updated; implementation must not silently reinterpret their conflicting requirements.
 

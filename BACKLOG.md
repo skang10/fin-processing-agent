@@ -39,7 +39,7 @@ Validation findings, risk or review signals, and recommended-disposition mapping
 
 ### BL-002 — Bounded Pi Case Review Agent
 
-**Status:** The single `case_review` Pi SDK harness is implemented and used by the Worker for every processable case. Its registered tools cover bounded PDF inspection and extraction, candidate submission, deterministic reconciliation and validation requests, current-result retrieval, and report submission. The former separately scheduled report and recovery harnesses have been removed. Incremental per-step persistence and durable re-entry, live-model acceptance, and real OCR/VLM adapters remain pending.
+**Status:** The single `case_review` Pi SDK harness is implemented and used by the Worker for every processable case. Its registered tools cover bounded PDF inspection and extraction, candidate submission, deterministic reconciliation and validation requests, current-result retrieval, and report submission. Incremental per-step persistence and durable re-entry are implemented and proven by a Docker-backed Worker-termination suite covering six committed boundaries. Live-model acceptance and real OCR/VLM adapters remain pending.
 
 Embed the `pi-coding-agent` software development kit as the bounded pre-screening orchestrator for every processable case. After deterministic intake and minimum file preflight, one case-review session may select registered PDF Inspector, extraction, evidence, reconciliation-request, validation-request, and report-submission tools. Disable built-in coding tools, Shell access, arbitrary file and network access, dynamic extensions, runtime package installation, and automatic resource discovery.
 
@@ -47,7 +47,7 @@ The implementation spike must prove:
 
 1. Only registered TypeBox-validated tools can execute.
 2. The loop respects iteration, model-call, timeout, token, and cost budgets.
-3. Durable progress survives Agent-process loss because PostgreSQL and pg-boss own workflow state.
+3. Durable progress survives Agent-process loss because PostgreSQL and pg-boss own workflow state. *(Proven: one authoritative session per run, linked recovery attempts, incrementally committed steps and tool results, budgets that never reset, and no duplicate candidate, claim, finding, result revision, or report after termination at any tested boundary.)*
 4. Document instruction injection cannot expand tool authority or change validation and disposition logic.
 5. A fake-model adapter can reproduce the acceptance path offline.
 6. Every processable case attempts a schema- and reference-validated report without making the report a single point of failure for human review.
