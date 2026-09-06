@@ -374,16 +374,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .tool-button { width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; cursor: pointer; }
 .tool-button:hover { background: #e9edf0; }
 .tool-divider { width: 1px; height: 17px; margin: 0 4px; background: var(--line); }
-.document-body { min-height: 0; flex: 1; display: grid; grid-template-columns: 76px minmax(0, 1fr); }
+.document-body { min-height: 0; flex: 1; display: grid; grid-template-columns: 112px minmax(0, 1fr); }
 .document-body.application-mode { grid-template-columns: minmax(0, 1fr); }
-.thumbnail-strip { padding: 14px 10px; border-right: 1px solid var(--line-strong); background: #f6f8f9; overflow-y: auto; }
-.thumbnail { width: 55px; padding: 4px 4px 5px; margin-bottom: 10px; border: 1px solid transparent; border-radius: 3px; background: transparent; cursor: pointer; }
+.thumbnail-strip { padding: 14px 9px; border-right: 1px solid var(--line-strong); background: #f6f8f9; overflow-y: auto; }
+.thumbnail { width: 92px; padding: 5px 6px 6px; margin-bottom: 10px; border: 1px solid transparent; border-radius: 4px; background: transparent; cursor: pointer; }
 .thumbnail:hover { background: #edf0f2; }
 .thumbnail.active { border-color: var(--accent); background: var(--accent-soft); }
-.thumbnail > span { height: 66px; padding: 10px 7px; border: 1px solid #d8dde1; background: #fff; display: block; box-shadow: 0 1px 2px rgba(23,33,40,.06); }
-.thumbnail i { display: block; height: 2px; margin-bottom: 7px; background: #d8dde1; }
-.thumbnail i:nth-child(2) { width: 70%; }
-.thumbnail i:nth-child(4) { width: 80%; }
+.thumbnail-preview { width: 76px; height: 98px; border: 1px solid #d8dde1; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 1px 3px rgba(23,33,40,.09); }
+.thumbnail-preview canvas, .thumbnail-preview img { display: block; width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.thumbnail-placeholder { width: 58%; height: 48%; background: repeating-linear-gradient(to bottom, #d8dde1 0 2px, transparent 2px 10px); opacity: .75; }
 .thumbnail small { display: block; margin-top: 5px; color: var(--muted); font-size: 8px; text-align: center; }
 .document-stage { min-width: 0; overflow: auto; padding: 32px 40px 80px; display: flex; justify-content: center; align-items: flex-start; }
 .paper {

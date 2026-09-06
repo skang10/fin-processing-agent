@@ -68,6 +68,7 @@ let activeApplicationPointer = null;
 let caseReadOnly = false;
 const pdfDocuments = new Map();
 let documentRenderSequence = 0;
+let thumbnailRenderSequence = 0;
 const reviewNotes = {};
 const includedRequests = {};
 let internalReviewNote = '';
@@ -341,24 +342,58 @@ function renderIssueList() {
 }
 
 function renderThumbnails(activePage) {
-  const pageCount = apiDocuments[0] ? apiDocuments[0].page_count : 5;
+  const documentRecord = sourceOverride?.document || apiDocuments[0];
+  const pageCount = documentRecord ? documentRecord.page_count : 5;
+  const sequence = ++thumbnailRenderSequence;
   document.querySelector('#thumbnails').innerHTML = Array.from({ length: pageCount }, function (_, index) { return index + 1; }).map(function (page) {
-    return '<button class="thumbnail ' + (page === activePage ? 'active' : '') + '" aria-label="Page ' + page + '">' +
-      '<span><i></i><i></i><i></i><i></i></span><small>' + page + '</small></button>';
+    return '<button class="thumbnail ' + (page === activePage ? 'active' : '') + '" data-page-number="' + page + '" aria-label="Page ' + page + '">' +
+      '<span class="thumbnail-preview" data-thumbnail-page="' + page + '"><span class="thumbnail-placeholder"></span></span><small>' + page + '</small></button>';
   }).join('');
+  if (documentRecord?.content_url) {
+    Array.from({ length: pageCount }, function (_, index) { return index + 1; }).forEach(function (page) {
+      void renderThumbnailPreview(documentRecord, page, sequence);
+    });
+  }
   document.querySelectorAll('.thumbnail').forEach(function (button) {
     button.addEventListener('click', function () {
-      const pageNumber = Number(button.querySelector('small').textContent);
-      const documentRecord = sourceOverride?.document || apiDocuments[0];
+      const pageNumber = Number(button.dataset.pageNumber);
+      const selectedDocument = sourceOverride?.document || apiDocuments[0];
       sourceOverride = {
-        name: documentRecord ? documentRecord.submitted_filename : currentIssue().doc,
-        page: 'Page ' + pageNumber + (documentRecord ? ' of ' + documentRecord.page_count : ''),
-        pageNumber, document: documentRecord, kind: pagePaperKind(pageNumber),
+        name: selectedDocument ? selectedDocument.submitted_filename : currentIssue().doc,
+        page: 'Page ' + pageNumber + (selectedDocument ? ' of ' + selectedDocument.page_count : ''),
+        pageNumber, document: selectedDocument, kind: pagePaperKind(pageNumber),
       };
       renderSource(currentIssue());
       renderThumbnails(pageNumber);
     });
   });
+}
+
+async function renderThumbnailPreview(documentRecord, pageNumber, sequence) {
+  const target = document.querySelector('[data-thumbnail-page="' + pageNumber + '"]');
+  if (!target) return;
+  try {
+    if (documentRecord.media_type !== 'application/pdf') {
+      if (sequence === thumbnailRenderSequence) target.innerHTML = '<img src="' + escapeHtml(documentRecord.content_url) + '" alt="">';
+      return;
+    }
+    const pdf = await loadPdf(documentRecord);
+    const page = await pdf.getPage(Math.min(Math.max(pageNumber, 1), pdf.numPages));
+    const baseViewport = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: 76 / baseViewport.width });
+    const outputScale = window.devicePixelRatio || 1;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.floor(viewport.width * outputScale));
+    canvas.height = Math.max(1, Math.floor(viewport.height * outputScale));
+    canvas.style.width = Math.floor(viewport.width) + 'px';
+    canvas.style.height = Math.floor(viewport.height) + 'px';
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas is unavailable');
+    await page.render({ canvasContext: context, viewport, transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0] }).promise;
+    if (sequence === thumbnailRenderSequence && target.isConnected) target.replaceChildren(canvas);
+  } catch {
+    // Keep the neutral placeholder when a source preview cannot be rendered.
+  }
 }
 
 function issueDetail(issue) {
