@@ -35,6 +35,7 @@ datasets/generated/
 datasets/.cache/
 evaluation-results/
 reports/generated/
+output/evaluations/
 
 # Model and native-runtime assets
 models/
