@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_AGENT_BUDGET, InMemoryAgentSessionLifecycle, AgentReportExecutionError, FAKE_HARNESS_DESCRIPTOR, FakeCaseReviewAgentHarness, buildSyntheticSessionTrace, canonicalJson, evaluateCaseReviewEligibility, hashArguments, runVerifiedReport, verifyCaseReviewBrief, type CaseReviewContext } from "./index.js";
-import { AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError, type AgentSessionConfiguration } from "@findoc/core";
+import { AgentAttemptSupersededError, AgentInvocationConflictError, AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError, type AgentSessionConfiguration } from "@findoc/core";
 
 function context(): CaseReviewContext {
   return {
@@ -104,6 +104,12 @@ describe("InMemoryAgentSessionLifecycle", () => {
     expect(first).toMatchObject({ attemptNumber: 1, startReason: "initial", resumed: false });
     expect(second).toMatchObject({ attemptNumber: 2, startReason: "recovery", resumed: true });
     expect(second.attemptId).not.toBe(first.attemptId);
+    await expect(lifecycle.commitStep({ ...step(1), sessionId: first.sessionId, attemptId: first.attemptId }))
+      .rejects.toBeInstanceOf(AgentAttemptSupersededError);
+    await expect(lifecycle.terminalizeSession({
+      sessionId: first.sessionId, attemptId: first.attemptId, terminalReason: "internal_error",
+      completedAt: "2026-09-06T10:00:03.000Z", offeredTools: [], budgetDelta: {},
+    })).rejects.toBeInstanceOf(AgentAttemptSupersededError);
   });
 
   it("refuses an incompatible configuration instead of silently starting over", async () => {
@@ -140,6 +146,10 @@ describe("InMemoryAgentSessionLifecycle", () => {
     const snapshot = await lifecycle.loadSnapshot("run-1");
     expect(snapshot?.committedToolResults).toHaveLength(1);
     expect(snapshot?.committedToolResults[0]).toMatchObject({ idempotencyKey: invocation.idempotencyKey, outputHash: "output-hash", safeOutput: { pageNumber: 1 } });
+    await expect(lifecycle.commitStep({
+      ...step(3), sessionId: start.sessionId, attemptId: start.attemptId,
+      invocation: { ...invocation, outputHash: "different-output" },
+    })).rejects.toBeInstanceOf(AgentInvocationConflictError);
   });
 
   it("preserves consumed budgets across a recovery attempt", async () => {

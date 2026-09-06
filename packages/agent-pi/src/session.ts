@@ -9,7 +9,7 @@ import {
   type AgentBudgetEnvelope, type AgentCommittedToolResult, type AgentConsumedBudget, type AgentProducedReference,
   type AgentRecoverySnapshot, type AgentSessionConfiguration, type AgentSessionLifecyclePort, type AgentSessionMode,
   type AgentSessionStart, type AgentSessionTrace, type AgentStepOutcome, type AgentStepPhase, type AgentStepTrace,
-  type AgentTerminalReason,
+  type AgentTerminalReason, type CommitAgentStepResult,
 } from "@findoc/core";
 import { FAKE_MODEL, createFakeStreamFn, type FakeModelScript } from "./fake-model.js";
 
@@ -235,9 +235,10 @@ export class SessionControlPlane<TScope, TState> {
       authorizedInputVersions: { toolVersion: spec.version, argumentHash: hashArguments(args) },
       terminatesSession: result.terminate ?? false,
     };
-    await this.commit(toolCallId, toolName, args, "succeeded", result.summary, spec.version, phase, { invocation });
+    const committedStep = await this.commit(toolCallId, toolName, args, "succeeded", result.summary, spec.version, phase, { invocation });
+    if (!committedStep.invocationId) throw new Error("A committed Agent tool step has no invocation identity");
     this.committedByKey.set(idempotencyKey, {
-      invocationId: "pending", idempotencyKey, toolName, toolVersion: spec.version, outcome: "succeeded",
+      invocationId: committedStep.invocationId, idempotencyKey, toolName, toolVersion: spec.version, outcome: "succeeded",
       outputSchemaVersion: invocation.outputSchemaVersion, outputHash: invocation.outputHash,
       ...(reuse === "safe_output" ? { safeOutput: result.output } : {}),
       producedReferences: invocation.producedReferences,
@@ -363,7 +364,7 @@ export class SessionControlPlane<TScope, TState> {
     toolCallId: string, toolName: string, args: unknown, outcome: AgentStepOutcome, summary: string,
     toolVersion: string | undefined, phase: AgentStepPhase,
     lineage: { invocation?: Parameters<AgentSessionLifecyclePort["commitStep"]>[0]["invocation"]; reusedInvocationId?: string; integrityCheck?: "hash_match" | "hash_mismatch" } = {},
-  ): Promise<void> {
+  ): Promise<CommitAgentStepResult> {
     this.sequence += 1;
     const budgetDelta = this.pending;
     this.pending = {};
@@ -391,6 +392,7 @@ export class SessionControlPlane<TScope, TState> {
       if (stored) this.committedByKey.set(lineage.invocation.idempotencyKey, { ...stored, invocationId: result.invocationId });
     }
     this.emit(step);
+    return result;
   }
 }
 

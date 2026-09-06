@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { Value } from "@sinclair/typebox/value";
 import { CaseReviewBriefCandidateSchema, type CaseReviewBriefCandidate } from "@findoc/contracts";
 import {
-  AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError,
+  AgentAttemptSupersededError, AgentInvocationConflictError, AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError,
   EMPTY_AGENT_CONSUMED_BUDGET, addConsumedBudget, evaluateAgentSessionCompatibility,
   type AgentAttemptStartReason, type AgentBudgetEnvelope, type AgentCommittedToolResult, type AgentConsumedBudget,
   type AgentEligibilityDecision, type AgentRecoverySnapshot, type AgentSessionConfiguration,
@@ -368,6 +368,24 @@ interface InMemorySession {
   invocations: AgentCommittedToolResult[];
 }
 
+function sameStringRecord(left: Readonly<Record<string, string>>, right: Readonly<Record<string, string>>): boolean {
+  return canonicalJson(Object.entries(left).sort(([a], [b]) => a.localeCompare(b)))
+    === canonicalJson(Object.entries(right).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+function invocationMatches(input: CommitAgentStepInput, committed: AgentCommittedToolResult): boolean {
+  const invocation = input.invocation;
+  return invocation !== undefined
+    && committed.toolName === input.toolName
+    && committed.toolVersion === (input.toolVersion ?? "unknown")
+    && committed.outcome === input.outcome
+    && committed.outputSchemaVersion === invocation.outputSchemaVersion
+    && committed.outputHash === invocation.outputHash
+    && sameStringRecord(committed.authorizedInputVersions, invocation.authorizedInputVersions)
+    && canonicalJson(committed.producedReferences) === canonicalJson(invocation.producedReferences)
+    && committed.terminatesSession === invocation.terminatesSession;
+}
+
 /**
  * Deterministic in-process implementation of the durable lifecycle port. It enforces the same
  * identity, idempotency, budget, and terminal invariants as PostgreSQL so harness tests can run
@@ -411,17 +429,37 @@ export class InMemoryAgentSessionLifecycle implements AgentSessionLifecyclePort 
   async commitStep(input: CommitAgentStepInput): Promise<CommitAgentStepResult> {
     const session = this.requireSession(input.sessionId);
     if (session.status === "terminal") throw new AgentSessionTerminalError(session.terminalReason ?? "internal_error");
+    const activeAttempt = session.attempts.at(-1);
+    if (!activeAttempt || activeAttempt.attemptId !== input.attemptId || activeAttempt.status !== "running") {
+      throw new AgentAttemptSupersededError(input.sessionId, input.attemptId);
+    }
     const existing = session.steps.find((step) => step.sequence === input.sequence);
     if (existing) {
-      if (existing.toolName !== input.toolName || existing.argumentHash !== input.argumentHash || existing.outcome !== input.outcome) {
+      if (existing.toolName !== input.toolName || existing.toolVersion !== input.toolVersion
+        || existing.argumentHash !== input.argumentHash || existing.outcome !== input.outcome) {
         throw new AgentStepConflictError(input.sessionId, input.sequence);
+      }
+      if (input.invocation) {
+        const committed = session.invocations.find((item) => item.invocationId === existing.invocationId);
+        if (!committed || !invocationMatches(input, committed)) {
+          throw new AgentInvocationConflictError(input.sessionId, input.invocation.idempotencyKey);
+        }
       }
       return { stepId: existing.stepId, sequence: existing.sequence, ...(existing.invocationId ? { invocationId: existing.invocationId } : {}), alreadyCommitted: true, consumed: session.consumed };
     }
     let invocationId = input.reusedInvocationId;
+    if (input.reusedInvocationId) {
+      const reused = session.invocations.find((item) => item.invocationId === input.reusedInvocationId);
+      if (!reused || reused.toolName !== input.toolName || reused.toolVersion !== (input.toolVersion ?? "unknown")) {
+        throw new AgentInvocationConflictError(input.sessionId, input.reusedInvocationId);
+      }
+    }
     if (input.invocation) {
       const committed = session.invocations.find((item) => item.idempotencyKey === input.invocation!.idempotencyKey);
-      if (committed) invocationId = committed.invocationId;
+      if (committed) {
+        if (!invocationMatches(input, committed)) throw new AgentInvocationConflictError(input.sessionId, input.invocation.idempotencyKey);
+        invocationId = committed.invocationId;
+      }
       else {
         invocationId = this.newId();
         session.invocations.push({
@@ -451,11 +489,14 @@ export class InMemoryAgentSessionLifecycle implements AgentSessionLifecyclePort 
 
   async terminalizeSession(input: TerminalizeAgentSessionInput): Promise<AgentSessionTerminalResult> {
     const session = this.requireSession(input.sessionId);
-    const attempt = session.attempts.find((item) => item.attemptId === input.attemptId);
-    if (attempt) attempt.status = "terminal";
     if (session.status === "terminal") {
       return { applied: false, terminalReason: session.terminalReason ?? "internal_error", consumed: session.consumed };
     }
+    const attempt = session.attempts.at(-1);
+    if (!attempt || attempt.attemptId !== input.attemptId || attempt.status !== "running") {
+      throw new AgentAttemptSupersededError(input.sessionId, input.attemptId);
+    }
+    attempt.status = "terminal";
     session.consumed = addConsumedBudget(session.consumed, input.budgetDelta);
     session.status = "terminal";
     session.terminalReason = input.terminalReason;

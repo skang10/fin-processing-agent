@@ -4,7 +4,7 @@ import { count, eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError,
+  AgentAttemptSupersededError, AgentInvocationConflictError, AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError,
   type AgentSessionConfiguration, type CommitAgentStepInput,
 } from "@findoc/core";
 import {
@@ -84,6 +84,13 @@ describe("PostgresAgentSessionLifecycle", () => {
     const running = await connection.db.select().from(agentSessionAttempts)
       .where(eq(agentSessionAttempts.sessionId, results[0]!.sessionId));
     expect(running.filter((attempt) => attempt.status === "running")).toHaveLength(1);
+    const stale = results.find((result) => result.attemptNumber === 1)!;
+    await expect(lifecycle.commitStep(step({ sessionId: stale.sessionId, attemptId: stale.attemptId })))
+      .rejects.toBeInstanceOf(AgentAttemptSupersededError);
+    await expect(lifecycle.terminalizeSession({
+      sessionId: stale.sessionId, attemptId: stale.attemptId, terminalReason: "internal_error",
+      completedAt: "2026-09-06T10:00:03.000Z", offeredTools: [], budgetDelta: {},
+    })).rejects.toBeInstanceOf(AgentAttemptSupersededError);
   });
 
   it("refuses an incompatible configuration rather than starting over with fresh budgets", async () => {
@@ -117,6 +124,10 @@ describe("PostgresAgentSessionLifecycle", () => {
     expect(stepRows).toHaveLength(2);
     expect(stepRows.every((row) => row.attemptId === start.attemptId)).toBe(true);
     expect(stepRows.find((row) => row.outcome === "duplicate_resolved")?.integrityCheck).toBe("hash_match");
+    await expect(lifecycle.commitStep(step({
+      sessionId: start.sessionId, attemptId: start.attemptId,
+      invocation: { ...invocation, authorizedInputVersions: { documentVersion: "2" } },
+    }))).rejects.toBeInstanceOf(AgentInvocationConflictError);
   });
 
   it("preserves consumed budget across attempts and returns a safe snapshot", async () => {

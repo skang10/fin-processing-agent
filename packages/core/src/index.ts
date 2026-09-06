@@ -309,6 +309,22 @@ export class AgentStepConflictError extends Error {
   }
 }
 
+/** A newer linked attempt owns the session; a stale Worker must not commit further work. */
+export class AgentAttemptSupersededError extends Error {
+  constructor(readonly sessionId: string, readonly attemptId: string) {
+    super("The Agent session attempt was superseded by a newer execution");
+    this.name = "AgentAttemptSupersededError";
+  }
+}
+
+/** One canonical idempotency key may never identify two materially different tool results. */
+export class AgentInvocationConflictError extends Error {
+  constructor(readonly sessionId: string, readonly idempotencyKey: string) {
+    super("The Agent tool idempotency key is already bound to an incompatible invocation result");
+    this.name = "AgentInvocationConflictError";
+  }
+}
+
 export class AgentSessionTerminalError extends Error {
   constructor(readonly terminalReason: AgentTerminalReason) {
     super("The Agent session already recorded a terminal reason");

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError, EMPTY_AGENT_CONSUMED_BUDGET,
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, AgentAttemptSupersededError, AgentInvocationConflictError, AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError, EMPTY_AGENT_CONSUMED_BUDGET,
   addConsumedBudget, evaluateAgentSessionCompatibility,
   type AcceptedCase, type AgentAttemptStartReason, type AgentCommittedToolResult, type AgentConsumedBudget,
   type AgentLogSessionView, type AgentLogView, type AgentProducedReference, type AgentRecoverySnapshot,
@@ -1615,6 +1615,26 @@ function committedResultOf(invocation: typeof agentToolInvocations.$inferSelect)
   };
 }
 
+function sameCanonicalValue(left: unknown, right: unknown): boolean {
+  return JSON.stringify(canonicalize(left)) === JSON.stringify(canonicalize(right));
+}
+
+function invocationRowMatches(
+  row: typeof agentToolInvocations.$inferSelect,
+  input: CommitAgentStepInput,
+): boolean {
+  const invocation = input.invocation;
+  return invocation !== undefined
+    && row.toolName === input.toolName
+    && row.toolVersion === (input.toolVersion ?? "unknown")
+    && row.outcome === input.outcome
+    && row.outputSchemaVersion === invocation.outputSchemaVersion
+    && row.outputHash === invocation.outputHash
+    && sameCanonicalValue(row.authorizedInputVersions, invocation.authorizedInputVersions)
+    && sameCanonicalValue(row.producedReferences, invocation.producedReferences)
+    && row.terminatesSession === invocation.terminatesSession;
+}
+
 async function snapshotOf(tx: Transaction | ReturnType<typeof drizzle>, session: SessionRow): Promise<AgentRecoverySnapshot> {
   const [steps, invocations, attempts] = await Promise.all([
     tx.select().from(agentSteps).where(eq(agentSteps.sessionId, session.id)).orderBy(asc(agentSteps.sequence)),
@@ -1688,11 +1708,25 @@ export class PostgresAgentSessionLifecycle implements AgentSessionLifecyclePort 
       const [session] = await tx.select().from(agentSessions).where(eq(agentSessions.id, input.sessionId)).limit(1);
       if (!session) throw new CaseNotFoundError();
       if (session.terminalReason) throw new AgentSessionTerminalError(session.terminalReason as AgentTerminalReason);
+      const [attempt] = await tx.select().from(agentSessionAttempts)
+        .where(and(eq(agentSessionAttempts.id, input.attemptId), eq(agentSessionAttempts.sessionId, input.sessionId))).limit(1);
+      if (!attempt || attempt.status !== "running" || attempt.attemptNumber !== session.currentAttempt) {
+        throw new AgentAttemptSupersededError(input.sessionId, input.attemptId);
+      }
       const [existing] = await tx.select().from(agentSteps)
         .where(and(eq(agentSteps.sessionId, input.sessionId), eq(agentSteps.sequence, input.sequence))).limit(1);
       if (existing) {
-        if (existing.toolName !== input.toolName || existing.argumentHash !== input.argumentHash || existing.outcome !== input.outcome) {
+        if (existing.toolName !== input.toolName || existing.toolVersion !== (input.toolVersion ?? null)
+          || existing.argumentHash !== input.argumentHash || existing.outcome !== input.outcome) {
           throw new AgentStepConflictError(input.sessionId, input.sequence);
+        }
+        if (input.invocation) {
+          const [committed] = existing.toolInvocationId
+            ? await tx.select().from(agentToolInvocations).where(eq(agentToolInvocations.id, existing.toolInvocationId)).limit(1)
+            : [];
+          if (!committed || !invocationRowMatches(committed, input)) {
+            throw new AgentInvocationConflictError(input.sessionId, input.invocation.idempotencyKey);
+          }
         }
         return {
           stepId: existing.id, sequence: existing.sequence,
@@ -1701,10 +1735,22 @@ export class PostgresAgentSessionLifecycle implements AgentSessionLifecyclePort 
         };
       }
       let invocationId = input.reusedInvocationId;
+      if (input.reusedInvocationId) {
+        const [reused] = await tx.select().from(agentToolInvocations)
+          .where(and(eq(agentToolInvocations.id, input.reusedInvocationId), eq(agentToolInvocations.sessionId, input.sessionId))).limit(1);
+        if (!reused || reused.toolName !== input.toolName || reused.toolVersion !== (input.toolVersion ?? "unknown")) {
+          throw new AgentInvocationConflictError(input.sessionId, input.reusedInvocationId);
+        }
+      }
       if (input.invocation) {
-        const [committed] = await tx.select({ id: agentToolInvocations.id }).from(agentToolInvocations)
+        const [committed] = await tx.select().from(agentToolInvocations)
           .where(and(eq(agentToolInvocations.sessionId, input.sessionId), eq(agentToolInvocations.idempotencyKey, input.invocation.idempotencyKey))).limit(1);
-        if (committed) invocationId = committed.id;
+        if (committed) {
+          if (!invocationRowMatches(committed, input)) {
+            throw new AgentInvocationConflictError(input.sessionId, input.invocation.idempotencyKey);
+          }
+          invocationId = committed.id;
+        }
         else {
           invocationId = randomUUID();
           await tx.insert(agentToolInvocations).values({
@@ -1745,12 +1791,17 @@ export class PostgresAgentSessionLifecycle implements AgentSessionLifecyclePort 
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${input.sessionId}, 2))`);
       const [session] = await tx.select().from(agentSessions).where(eq(agentSessions.id, input.sessionId)).limit(1);
       if (!session) throw new CaseNotFoundError();
-      await tx.update(agentSessionAttempts)
-        .set({ status: "terminal", terminalReason: input.terminalReason, completedAt: new Date(input.completedAt) })
-        .where(eq(agentSessionAttempts.id, input.attemptId));
       if (session.terminalReason) {
         return { applied: false, terminalReason: session.terminalReason as AgentTerminalReason, consumed: consumedOf(session) };
       }
+      const [attempt] = await tx.select().from(agentSessionAttempts)
+        .where(and(eq(agentSessionAttempts.id, input.attemptId), eq(agentSessionAttempts.sessionId, input.sessionId))).limit(1);
+      if (!attempt || attempt.status !== "running" || attempt.attemptNumber !== session.currentAttempt) {
+        throw new AgentAttemptSupersededError(input.sessionId, input.attemptId);
+      }
+      await tx.update(agentSessionAttempts)
+        .set({ status: "terminal", terminalReason: input.terminalReason, completedAt: new Date(input.completedAt) })
+        .where(eq(agentSessionAttempts.id, input.attemptId));
       const consumed = addConsumedBudget(consumedOf(session), input.budgetDelta);
       const [updated] = await tx.update(agentSessions).set({
         ...budgetIncrements(input.budgetDelta),
