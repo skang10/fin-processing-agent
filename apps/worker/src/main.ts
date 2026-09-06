@@ -127,7 +127,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
     });
     await coordinator.persistOfflineDeterministic(job.data.case_id, job.data.run_id, deterministic);
     const persistedResult = await coordinator.loadOfflineReportInput(job.data.case_id, job.data.run_id);
-    const report = await runOfflineReport(persistedResult);
+    const report = await runOfflineReport(persistedResult, undefined, applicationData["demo_fixture_id"]);
     await coordinator.completeOfflineReport(job.data.case_id, job.data.run_id, persistedResult.resultRevisionId, report);
   } catch (error) {
     if (!(error instanceof OfflineFixtureUnavailableError)) throw error;

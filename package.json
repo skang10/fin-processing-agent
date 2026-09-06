@@ -24,6 +24,7 @@
     "dataset:generate": "pnpm dataset:documents && node scripts/dataset.mjs generate",
     "dataset:validate": "node scripts/dataset.mjs validate",
     "dataset:inspect": "node scripts/dataset.mjs inspect",
+    "dataset:load": "node scripts/load-golden.mjs",
     "dataset:external": "node scripts/dataset.mjs external",
     "dataset:confirm": "node scripts/dataset.mjs confirm",
     "dataset:build": "node scripts/dataset.mjs build",

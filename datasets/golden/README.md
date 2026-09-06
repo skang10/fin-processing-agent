@@ -8,8 +8,11 @@ Review each generated PDF together with its candidate JSON. Confirm that the exp
 pnpm dataset:generate
 pnpm dataset:validate
 pnpm dataset:inspect
+pnpm dataset:load -- golden-001-native-clear
 pnpm dataset:confirm -- CASE_ID REVIEWER
 pnpm dataset:build -- v0.1.0
 ```
 
 `dataset:build` refuses to freeze a release while any case remains `pending_human_review`, and it never rewrites a prior release.
+
+`dataset:load` submits one candidate to a running local demo, waits for processing, and prints the case lifecycle, report outcome, issue codes, and Review Workbench URL. It does not confirm or mutate golden truth.

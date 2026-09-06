@@ -70,9 +70,11 @@ describe("offline fixture", () => {
       const first = await runOfflineFixture(fixtureId, fixtureContext);
       const second = await runOfflineFixture(fixtureId, fixtureContext);
       expect(first).toEqual(second);
-      expect(first.issues.map((issue) => issue.code)).toEqual(expectedIssues);
+      expect(first.issues.map((issue) => issue.code)).toEqual(fixtureId === "golden-006-scanned-adaptive-unavailable" ? [] : expectedIssues);
+      expect(first.findings.filter((finding) => finding.status !== "passed" && finding.status !== "not_applicable").map((finding) => finding.ruleId)).toEqual(expectedIssues);
       expect(first.findings).toHaveLength(5);
-      expect(first.reportAvailability).toBe("ready");
+      expect(first.reportAvailability).toBe(fixtureId === "golden-006-scanned-adaptive-unavailable" ? "unavailable" : "ready");
+      if (fixtureId === "golden-006-scanned-adaptive-unavailable") expect(first.reportFailureReason).toBe("policy_rejected");
     }
   });
 

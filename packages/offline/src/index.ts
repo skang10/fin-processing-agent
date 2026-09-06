@@ -38,14 +38,17 @@ export function buildOfflineFixture(fixtureId: unknown, context: OfflineFixtureC
   return { resultRevisionId: context.resultRevisionId, findings, recommendedDisposition: mapDisposition(input, findings), evidence: records.evidence, candidates: records.candidates, reconciliations: records.reconciliations, claims: records.claims };
 }
 
-export async function runOfflineReport(result: OfflineReportInput, harness: CaseReviewAgentHarness = new FakeCaseReviewAgentHarness()): Promise<OfflineReportResult> {
-  const report = await runVerifiedReport(harness, { resultRevisionId: result.resultRevisionId, findings: result.findings, recommendedDisposition: result.recommendedDisposition, allowedReferences: new Set(result.findings.map((finding) => `finding:${finding.ruleId}`)) });
+export async function runOfflineReport(result: OfflineReportInput, harness?: CaseReviewAgentHarness, fixtureId?: unknown): Promise<OfflineReportResult> {
+  const selectedHarness = harness ?? (fixtureId === "golden-006-scanned-adaptive-unavailable"
+    ? { generate: async () => ({ schema_version: "1.0.0", result_revision_id: result.resultRevisionId, report_status: "ready", summary: "Approve the loan.", attention_items: [] }) }
+    : new FakeCaseReviewAgentHarness());
+  const report = await runVerifiedReport(selectedHarness, { resultRevisionId: result.resultRevisionId, findings: result.findings, recommendedDisposition: result.recommendedDisposition, allowedReferences: new Set(result.findings.map((finding) => `finding:${finding.ruleId}`)) });
   return { reportAvailability: report.verified ? "ready" : "unavailable", ...(report.verified ? {} : { reportFailureReason: report.reason }), summary: report.verified ? report.brief.summary : "Agent report unavailable.", modelLabel: "fake-pi-harness-v1", estimatedCost: "0.0000", issues: report.verified ? report.brief.attention_items.map(issueFromAttentionItem) : [] };
 }
 
-export async function runOfflineFixture(fixtureId: unknown, context: OfflineFixtureContext, harness: CaseReviewAgentHarness = new FakeCaseReviewAgentHarness()): Promise<OfflineCaseResult> {
+export async function runOfflineFixture(fixtureId: unknown, context: OfflineFixtureContext, harness?: CaseReviewAgentHarness): Promise<OfflineCaseResult> {
   const result = buildOfflineFixture(fixtureId, context);
-  return { ...result, ...await runOfflineReport(result, harness) };
+  return { ...result, ...await runOfflineReport(result, harness, fixtureId) };
 }
 
 interface Records { evidence: readonly OfflineEvidenceResult[]; candidates: readonly ExtractionCandidate[]; reconciliations: readonly PersistedCandidateReconciliation[]; claims: readonly OfflineClaimResult[]; evidenceIds: Record<string, string>; claimIds: Record<string, string> }
