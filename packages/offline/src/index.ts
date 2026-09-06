@@ -68,12 +68,11 @@ export function buildOfflineExtraction(fixtureId: unknown, context: OfflineFixtu
   return { fixtureId: id, records, gaps };
 }
 
-/** Bounded recovery context: only the gap pages' logical document and the gap field schema (AGT-REQ-013). */
-export function buildRecoveryContext(runId: string, extraction: OfflineExtraction, context: OfflineFixtureContext): AdaptiveRecoveryContext {
-  const logicalDocumentIds = new Set(extraction.gaps.map((gap) => gap.scope.logicalDocumentRevisionId));
+/** Bounded case-review context: all current-run pages plus schemas for explicit extraction gaps. */
+export function buildAgentReviewContext(runId: string, extraction: OfflineExtraction, context: OfflineFixtureContext): AdaptiveRecoveryContext {
   const pages = context.pages.flatMap((page) => {
     const logical = context.logicalDocuments.find((item) => item.documentVersionId === page.documentVersionId && item.startPage <= page.pageNumber && item.endPage >= page.pageNumber);
-    if (!logical || !logicalDocumentIds.has(logical.logicalDocumentRevisionId)) return [];
+    if (!logical) return [];
     return [{
       documentVersionId: page.documentVersionId, logicalDocumentRevisionId: logical.logicalDocumentRevisionId, pageNumber: page.pageNumber,
       needsOcr: page.needsOcr ?? false, ocrAvailable: page.ocrAvailable ?? false, nativeCharacterCount: page.nativeCharacterCount ?? 0, renderAvailable: page.renderAvailable ?? false,

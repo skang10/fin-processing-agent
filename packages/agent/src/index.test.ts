@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AgentReportExecutionError, FAKE_HARNESS_DESCRIPTOR, FakeCaseReviewAgentHarness, buildSyntheticSessionTrace, canonicalJson, hashArguments, runVerifiedReport, verifyCaseReviewBrief, type CaseReviewContext } from "./index.js";
+import { AgentReportExecutionError, FAKE_HARNESS_DESCRIPTOR, FakeCaseReviewAgentHarness, buildSyntheticSessionTrace, canonicalJson, evaluateCaseReviewEligibility, hashArguments, runVerifiedReport, verifyCaseReviewBrief, type CaseReviewContext } from "./index.js";
 
 function context(): CaseReviewContext {
   return {
@@ -56,5 +56,23 @@ describe("Case Review Brief verification", () => {
   it("hashes arguments canonically regardless of key order", () => {
     expect(canonicalJson({ b: [1, { d: 2, c: 3 }], a: "x" })).toBe('{"a":"x","b":[1,{"c":3,"d":2}]}');
     expect(hashArguments({ a: 1, b: 2 })).toBe(hashArguments({ b: 2, a: 1 }));
+  });
+});
+
+describe("case-review eligibility", () => {
+  const page = { documentVersionId: "document-1", logicalDocumentRevisionId: "logical-1", pageNumber: 1, needsOcr: false, ocrAvailable: true, nativeCharacterCount: 100, renderAvailable: true };
+  const tools = ["request_validation", "submit_case_review_brief"];
+
+  it("schedules every processable case, including cases without extraction gaps", () => {
+    expect(evaluateCaseReviewEligibility({ gaps: [], pages: [page], registeredToolNames: tools, budgetAvailable: true, fatalFailure: false }, "decision-1"))
+      .toMatchObject({ decision: "eligible", reasonCodes: ["processable_case"], gapIds: [], policyVersion: "case-review-eligibility-2.0.0" });
+  });
+
+  it("rejects fatal, unbudgeted, stale, or incompletely registered sessions", () => {
+    const base = { gaps: [], pages: [page], registeredToolNames: tools, budgetAvailable: true, fatalFailure: false };
+    expect(evaluateCaseReviewEligibility({ ...base, fatalFailure: true }, "d").reasonCodes).toContain("fatal_processing_failure");
+    expect(evaluateCaseReviewEligibility({ ...base, budgetAvailable: false }, "d").reasonCodes).toContain("budget_unavailable");
+    expect(evaluateCaseReviewEligibility({ ...base, previousAttemptWithoutNewInputs: true }, "d").reasonCodes).toContain("equivalent_attempt_completed");
+    expect(evaluateCaseReviewEligibility({ ...base, registeredToolNames: [] }, "d").reasonCodes).toContain("required_case_review_tools_unavailable");
   });
 });

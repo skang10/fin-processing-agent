@@ -18,8 +18,6 @@ export type ScriptedTurn =
 /** A script maps the turn number and the visible conversation to the next scripted assistant message. */
 export type FakeModelScript = (turn: number, context: Context) => ScriptedTurn;
 
-interface ListedFinding { rule_id: string; status: string; reason_code: string; rule_version?: string }
-
 /** Read the latest successful tool result of one tool from the conversation, exactly as the model would see it. */
 export function readToolResult<T>(context: Context, toolName: string): T | undefined {
   for (let index = context.messages.length - 1; index >= 0; index -= 1) {
@@ -31,73 +29,6 @@ export function readToolResult<T>(context: Context, toolName: string): T | undef
   }
   return undefined;
 }
-
-function listedFindings(context: Context): readonly ReportFindingView[] {
-  const listed = readToolResult<{ findings: ListedFinding[] }>(context, "list_findings");
-  return (listed?.findings ?? []).map((finding) => ({ ruleId: finding.rule_id, status: finding.status, reasonCode: finding.reason_code, ...(finding.rule_version ? { ruleVersion: finding.rule_version } : {}) }));
-}
-
-function resultRevisionId(context: Context): string {
-  return readToolResult<{ result_revision_id: string }>(context, "list_findings")?.result_revision_id ?? "unknown";
-}
-
-function briefCall(context: Context, summaryOverride?: string): ScriptedTurn {
-  const findings = listedFindings(context);
-  const items = attentionItemsForFindings(findings);
-  return { kind: "tool_calls", calls: [{ name: "submit_case_review_brief", args: { brief: {
-    schema_version: "1.0.0", result_revision_id: resultRevisionId(context), report_status: "ready",
-    summary: summaryOverride ?? `Document processing completed with ${items.length} items requiring human review.`,
-    attention_items: items,
-  } } }] };
-}
-
-/** Lists findings, inspects the first failed finding's references, then submits a schema-valid brief. */
-export const standardReportScript: FakeModelScript = (turn, context) => {
-  if (turn === 1) return { kind: "tool_calls", calls: [{ name: "list_findings", args: {} }] };
-  const failed = listedFindings(context).find((finding) => finding.status !== "passed" && finding.status !== "not_applicable");
-  if (turn === 2 && failed) return { kind: "tool_calls", calls: [{ name: "get_finding_references", args: { rule_id: failed.ruleId } }] };
-  if (turn <= 3) return briefCall(context);
-  return { kind: "text", text: "The brief has been submitted." };
-};
-
-/** Submits a brief containing prohibited decision language so the deterministic verifier rejects it. */
-export const policyViolationScript: FakeModelScript = (turn, context) => {
-  if (turn === 1) return { kind: "tool_calls", calls: [{ name: "list_findings", args: {} }] };
-  if (turn === 2) return briefCall(context, "Approve the loan.");
-  return { kind: "text", text: "Done." };
-};
-
-/** Attempts shell, file, and out-of-scope access before completing the bounded task. */
-export const injectionAttemptScript: FakeModelScript = (turn, context) => {
-  if (turn === 1) return { kind: "tool_calls", calls: [{ name: "bash", args: { command: "cat /etc/passwd" } }, { name: "read", args: { path: "/etc/hosts" } }] };
-  if (turn === 2) return { kind: "tool_calls", calls: [{ name: "get_finding_references", args: { rule_id: "VAL_NOT_IN_SCOPE_999" } }] };
-  if (turn === 3) return { kind: "tool_calls", calls: [{ name: "list_findings", args: {} }] };
-  if (turn === 4) return briefCall(context);
-  return { kind: "text", text: "Done." };
-};
-
-/** Repeats the same tool call forever; the no-progress policy must stop it. */
-export const runawayScript: FakeModelScript = () => ({ kind: "tool_calls", calls: [{ name: "list_findings", args: {} }] });
-
-/** Never answers; the wall-clock budget must stop it. */
-export const stallScript: FakeModelScript = () => ({ kind: "stall" });
-
-/** Ends immediately without submitting anything. */
-export const silentScript: FakeModelScript = () => ({ kind: "text", text: "No brief." });
-
-/** Fails like an unavailable provider. */
-export const providerErrorScript: FakeModelScript = () => ({ kind: "error", message: "provider unavailable" });
-
-/** Reports a large estimated cost on every turn so the cost budget stops the session. */
-export const expensiveScript: FakeModelScript = (turn, context) => {
-  const next = standardReportScript(turn, context);
-  return next.kind === "tool_calls" || next.kind === "text" ? { ...next, costUsd: 1 } : next;
-};
-
-export const FAKE_MODEL_SCRIPTS: Readonly<Record<string, FakeModelScript>> = Object.freeze({
-  standard: standardReportScript, policy_violation: policyViolationScript, injection_attempt: injectionAttemptScript,
-  runaway: runawayScript, stall: stallScript, silent: silentScript, provider_error: providerErrorScript, expensive: expensiveScript,
-});
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
@@ -170,49 +101,7 @@ export function createFakeStreamFn(script: FakeModelScript): StreamFn {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Adaptive-recovery scripts
-// ---------------------------------------------------------------------------
-
 interface ListedGap { gap_id: string; field_schema_id: string; scope: { document_version_id: string; page_number: number } }
-
-function firstGap(context: Context): ListedGap | undefined {
-  return readToolResult<{ gaps: ListedGap[] }>(context, "get_extraction_gaps")?.gaps[0];
-}
-
-/** Lists gaps, inspects and OCRs the gap page, runs VLM extraction for the gap field, then submits the returned value. */
-export const standardRecoveryScript: FakeModelScript = (turn, context) => {
-  if (turn === 1) return { kind: "tool_calls", calls: [{ name: "get_extraction_gaps", args: {} }] };
-  const gap = firstGap(context);
-  if (!gap) return { kind: "text", text: "No gap is bound to this session." };
-  const page = { document_version_id: gap.scope.document_version_id, page_number: gap.scope.page_number };
-  if (turn === 2) return { kind: "tool_calls", calls: [{ name: "inspect_page", args: page }] };
-  if (turn === 3) return { kind: "tool_calls", calls: [{ name: "run_ocr", args: page }] };
-  if (turn === 4) return { kind: "tool_calls", calls: [{ name: "extract_with_vlm", args: { ...page, field_schema_id: gap.field_schema_id } }] };
-  const vlm = readToolResult<{ value: { raw_value: string; region: { x: number; y: number; width: number; height: number } } | null }>(context, "extract_with_vlm");
-  if (turn === 5 && vlm?.value) return { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates: [{ gap_id: gap.gap_id, raw_value: vlm.value.raw_value, ...page, region: vlm.value.region }] } }] };
-  return { kind: "text", text: "Recovery finished." };
-};
-
-/** Tries to read a page outside the gap scope and to submit a fabricated value before recovering properly. */
-export const overreachingRecoveryScript: FakeModelScript = (turn, context) => {
-  if (turn === 1) return { kind: "tool_calls", calls: [{ name: "get_extraction_gaps", args: {} }] };
-  const gap = firstGap(context);
-  if (!gap) return { kind: "text", text: "No gap." };
-  const page = { document_version_id: gap.scope.document_version_id, page_number: gap.scope.page_number };
-  if (turn === 2) return { kind: "tool_calls", calls: [{ name: "get_native_text", args: { document_version_id: "other-document", page_number: 1 } }] };
-  if (turn === 3) return { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates: [{ gap_id: gap.gap_id, raw_value: "9999.00", ...page, region: { x: 0, y: 0, width: 1, height: 1 } }] } }] };
-  if (turn === 4) return { kind: "tool_calls", calls: [{ name: "inspect_page", args: page }] };
-  if (turn === 5) return { kind: "tool_calls", calls: [{ name: "run_ocr", args: page }] };
-  if (turn === 6) return { kind: "tool_calls", calls: [{ name: "extract_with_vlm", args: { ...page, field_schema_id: gap.field_schema_id } }] };
-  const vlm = readToolResult<{ value: { raw_value: string; region: { x: number; y: number; width: number; height: number } } | null }>(context, "extract_with_vlm");
-  if (turn === 7 && vlm?.value) return { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates: [{ gap_id: gap.gap_id, raw_value: vlm.value.raw_value, ...page, region: vlm.value.region }] } }] };
-  return { kind: "text", text: "Recovery finished." };
-};
-
-export const FAKE_RECOVERY_SCRIPTS: Readonly<Record<string, FakeModelScript>> = Object.freeze({
-  standard: standardRecoveryScript, overreaching: overreachingRecoveryScript, runaway: runawayScript, stall: stallScript, silent: silentScript,
-});
 
 interface CurrentResult {
   result_revision_id: string;

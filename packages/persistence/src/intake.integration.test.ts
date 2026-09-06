@@ -206,9 +206,9 @@ describe("PostgresCaseCommandService", () => {
       summary: "Synthetic case requires review.", modelLabel: "fake-pi-harness-v1", estimatedCost: "0.0000",
       session: {
         sessionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383aaa", mode: "case_review" as const,
-        harnessId: "pi-case-review-harness", harnessVersion: "pi-coding-agent@0.85.1", modelLabel: "findoc-fake/case-review-script-v1", modelRoute: "fake" as const,
-        promptVersion: "case-review-report-prompt-1.0.0", promptHash: "abc", configurationVersion: "pi-harness-1.0.0", toolRegistryVersion: "case-review-tools-1.0.0",
-        offeredTools: ["list_findings", "get_finding_references", "submit_case_review_brief"],
+        harnessId: "pi-agent-led-case-review-harness", harnessVersion: "pi-coding-agent@0.85.1", modelLabel: "findoc-fake/case-review-script-v1", modelRoute: "fake" as const,
+        promptVersion: "case-review-prompt-2.0.0", promptHash: "abc", configurationVersion: "pi-harness-1.0.0", toolRegistryVersion: "case-review-tools-2.0.0",
+        offeredTools: ["get_extraction_gaps", "inspect_page", "request_reconciliation", "request_validation", "get_current_result", "submit_case_review_brief"],
         budget: { maxIterations: 6, maxToolCalls: 8, maxModelCalls: 6, maxInputTokens: 60000, maxOutputTokens: 8000, maxWallClockMs: 60000, maxEstimatedCostUsd: 0.25, maxVlmCalls: 2, maxOcrPages: 3, maxConsecutiveNoProgressSteps: 2 },
         iterations: 2, toolCalls: 2, usage: { available: true, modelCalls: 2, inputTokens: 400, outputTokens: 80 },
         estimatedCost: { amount: "0.0000", currency: "EUR" as const }, terminalReason: "report_submitted" as const,
@@ -225,7 +225,7 @@ describe("PostgresCaseCommandService", () => {
         scope: { documentVersionId: document.documentVersionId, logicalDocumentRevisionId: logicalDocument.id, pageNumber: 1 },
       }],
       gapResolutions: [{ gapId: "4c816f67-5f2f-4e21-8c17-7eb1e5383bbb", resolutionType: "claim" as const, reference: claimId }],
-      eligibility: { decisionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383ccc", policyVersion: "recovery-eligibility-1.0.0", gapIds: ["4c816f67-5f2f-4e21-8c17-7eb1e5383bbb"], decision: "eligible" as const, reasonCodes: ["eligible_required_gap"] },
+      eligibility: { decisionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383ccc", policyVersion: "case-review-eligibility-2.0.0", gapIds: ["4c816f67-5f2f-4e21-8c17-7eb1e5383bbb"], decision: "eligible" as const, reasonCodes: ["processable_case"] },
       findings: ruleIds.map((ruleId) => ({
         ruleId, ruleVersion: "1.0.0", ruleSetId: "demo-de-personal-loan-v1", ruleSetVersion: "1.0.0",
         inputSnapshotId: inputRevisionId, resultRevisionId, status: ruleId === "VAL_EMPLOYER_CONSISTENCY_001" ? "failed" : "passed",
@@ -299,7 +299,7 @@ describe("PostgresCaseCommandService", () => {
     await expect(queries.getAgentLog(accepted.caseId)).resolves.toMatchObject({
       availability: "ready", modelLabel: "fake-pi-harness-v1", estimatedCost: { amount: "0.0000", currency: "EUR" },
       currentStep: "awaiting_human_review",
-      session: { harnessLabel: "pi-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review", terminalReason: "report_submitted", iterations: 2, toolCalls: 2, usageAvailable: true },
+      session: { harnessLabel: "pi-agent-led-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review", terminalReason: "report_submitted", iterations: 2, toolCalls: 2, usageAvailable: true },
       events: [
         { activity: "Started case review session" },
         { activity: "Listed deterministic findings", toolLabel: "list_findings" },

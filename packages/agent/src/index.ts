@@ -255,7 +255,7 @@ export interface RecoveryFieldSchemaView {
   readonly valueType: "string" | "money" | "date";
 }
 
-/** Minimum bounded context for one recovery session (AGT-REQ-013 to AGT-REQ-015). */
+/** Minimum bounded document context for one case-review session (AGT-REQ-013 to AGT-REQ-015). */
 export interface AdaptiveRecoveryContext {
   readonly runId: string;
   readonly gaps: readonly ExtractionGap[];
@@ -300,19 +300,9 @@ export interface SubmittedExtractionCandidate {
   readonly processorVersion: string;
 }
 
-export interface AdaptiveRecoveryOutcome {
-  readonly candidates: readonly SubmittedExtractionCandidate[];
-  readonly trace: AgentSessionTrace;
-}
+export const CASE_REVIEW_ELIGIBILITY_POLICY_VERSION = "case-review-eligibility-2.0.0";
 
-export interface AdaptiveRecoveryHarness {
-  readonly descriptor: CaseReviewHarnessDescriptor;
-  recover(context: AdaptiveRecoveryContext, ports: RecoveryToolPorts): Promise<AdaptiveRecoveryOutcome>;
-}
-
-export const RECOVERY_ELIGIBILITY_POLICY_VERSION = "recovery-eligibility-1.0.0";
-
-export interface RecoveryEligibilityInput {
+export interface CaseReviewEligibilityInput {
   readonly gaps: readonly ExtractionGap[];
   readonly pages: readonly RecoveryPageView[];
   readonly registeredToolNames: readonly string[];
@@ -322,51 +312,22 @@ export interface RecoveryEligibilityInput {
 }
 
 /**
- * Versioned deterministic Agent-in-the-Loop eligibility policy over structured gap state (AGT-REQ-104 to AGT-REQ-108).
- * It never inspects model output or free text.
+ * Versioned deterministic eligibility policy for the mandatory case-review session
+ * (AGT-REQ-104 to AGT-REQ-108). Extraction gaps affect the tools the Agent may
+ * use; they do not determine whether a processable case gets reviewed.
  */
-export function evaluateRecoveryEligibility(input: RecoveryEligibilityInput, decisionId: string): AgentEligibilityDecision {
+export function evaluateCaseReviewEligibility(input: CaseReviewEligibilityInput, decisionId: string): AgentEligibilityDecision {
   const openRequired = input.gaps.filter((gap) => gap.required);
   const reasonCodes: string[] = [];
-  if (openRequired.length === 0) reasonCodes.push("no_open_required_gap");
   if (input.fatalFailure) reasonCodes.push("fatal_processing_failure");
   if (!input.budgetAvailable) reasonCodes.push("budget_unavailable");
   if (input.previousAttemptWithoutNewInputs) reasonCodes.push("equivalent_attempt_completed");
-  if (openRequired.some((gap) => gap.attemptedPaths.length === 0)) reasonCodes.push("fixed_paths_incomplete");
   if (openRequired.some((gap) => !input.pages.some((page) => page.documentVersionId === gap.scope.documentVersionId && page.pageNumber === gap.scope.pageNumber))) reasonCodes.push("gap_scope_outside_run");
-  const logicalDocuments = new Set(openRequired.map((gap) => gap.scope.logicalDocumentRevisionId));
-  if (logicalDocuments.size > 1) reasonCodes.push("gaps_span_multiple_logical_documents");
-  if (!input.registeredToolNames.includes("extract_with_vlm") || !input.registeredToolNames.includes("submit_extraction_candidates")) reasonCodes.push("no_relevant_registered_tool");
+  if (!input.registeredToolNames.includes("request_validation") || !input.registeredToolNames.includes("submit_case_review_brief")) reasonCodes.push("required_case_review_tools_unavailable");
   return {
-    decisionId, policyVersion: RECOVERY_ELIGIBILITY_POLICY_VERSION,
+    decisionId, policyVersion: CASE_REVIEW_ELIGIBILITY_POLICY_VERSION,
     gapIds: openRequired.map((gap) => gap.gapId),
     decision: reasonCodes.length === 0 ? "eligible" : "ineligible",
-    reasonCodes: reasonCodes.length === 0 ? ["eligible_required_gap"] : reasonCodes,
+    reasonCodes: reasonCodes.length === 0 ? ["processable_case"] : reasonCodes,
   };
-}
-
-/** Model-free recovery harness: calls the VLM port once per required gap and submits the returned value. Keeps golden outcomes identical when Pi is disabled. */
-export class FakeAdaptiveRecoveryHarness implements AdaptiveRecoveryHarness {
-  readonly descriptor: CaseReviewHarnessDescriptor = Object.freeze({ harnessId: "fake-adaptive-recovery-harness", harnessVersion: "1.0.0", modelLabel: "fake-pi-harness-v1", modelRoute: "fake" });
-
-  async recover(context: AdaptiveRecoveryContext, ports: RecoveryToolPorts): Promise<AdaptiveRecoveryOutcome> {
-    const candidates: SubmittedExtractionCandidate[] = [];
-    const steps: Omit<AgentStepTrace, "sequence" | "startedAt" | "completedAt" | "budgetState">[] = [];
-    for (const gap of context.gaps.filter((item) => item.required)) {
-      const page = { documentVersionId: gap.scope.documentVersionId, pageNumber: gap.scope.pageNumber };
-      const request = { page, fieldSchemaId: gap.fieldSchemaId };
-      const result = await ports.extractWithVlm(request);
-      steps.push({ toolName: "extract_with_vlm", toolVersion: "1.0.0", argumentHash: hashArguments(request), outcome: "succeeded", summary: `Ran VLM extraction for ${gap.fieldSchemaId} on page ${page.pageNumber}` });
-      if (!result.value) continue;
-      candidates.push({
-        gapId: gap.gapId, fieldSchemaId: gap.fieldSchemaId, fieldSchemaVersion: gap.fieldSchemaVersion, valueType: gap.valueType,
-        rawValue: result.value.rawValue, normalizedValue: result.value.normalizedValue, page, region: result.value.region,
-        extractionMethod: "agent_vlm_extraction", processorVersion: `${result.modelLabel}/${result.promptVersion}`,
-      });
-      steps.push({ toolName: "submit_extraction_candidates", toolVersion: "1.0.0", argumentHash: hashArguments({ gapId: gap.gapId, rawValue: result.value.rawValue }), outcome: "succeeded", summary: "Submitted 1 extraction candidate(s)" });
-    }
-    const resolved = context.gaps.filter((gap) => gap.required).every((gap) => candidates.some((candidate) => candidate.gapId === gap.gapId));
-    const trace = buildSyntheticSessionTrace({ descriptor: this.descriptor, steps, terminalReason: resolved && candidates.length > 0 ? "report_not_submitted" : "no_progress" });
-    return { candidates, trace: { ...trace, mode: "case_review", boundGapIds: context.gaps.map((gap) => gap.gapId) } };
-  }
 }

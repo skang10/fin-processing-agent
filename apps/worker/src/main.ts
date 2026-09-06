@@ -1,11 +1,12 @@
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import pino from "pino";
 import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
 import { DocumentSandboxClient, classifySyntheticDemoPages, groupLogicalDocuments } from "@findoc/document-processing";
-import { type AgentLedCaseReviewHarness, type CaseReviewContext } from "@findoc/agent";
-import { PiAgentLedCaseReviewHarness, policyViolationCaseReviewScript, standardCaseReviewScript } from "@findoc/agent-pi";
-import { buildOfflineExtraction, buildOfflineFixture, buildRecoveryContext, createOfflineRecoveryPorts, OfflineFixtureUnavailableError, runOfflineReport } from "@findoc/offline";
+import { evaluateCaseReviewEligibility, type AgentLedCaseReviewHarness, type CaseReviewContext } from "@findoc/agent";
+import { CASE_REVIEW_TOOL_NAMES, PiAgentLedCaseReviewHarness, policyViolationCaseReviewScript, standardCaseReviewScript } from "@findoc/agent-pi";
+import { buildAgentReviewContext, buildOfflineExtraction, buildOfflineFixture, createOfflineRecoveryPorts, OfflineFixtureUnavailableError, runOfflineReport } from "@findoc/offline";
 import { PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
 import { createMinioObjectStore, readObjectBytes, storeNativeTextArtifact, storeOcrArtifact, storePageRenderArtifact } from "@findoc/storage";
 import { CASE_PROCESSING_QUEUE, OutboxRelay } from "./outbox.js";
@@ -20,10 +21,9 @@ if (!minioEndpoint || !minioAccessKey || !minioSecretKey) throw new Error("MinIO
 const maximumSourceBytes = Number(process.env["MAX_SOURCE_BYTES"] ?? 10_000_000);
 const ocrMode = process.env["OCR_MODE"] === "fake" ? "fake" : "pdf_inspector";
 const ocrModelDirectory = process.env["OCR_MODEL_DIRECTORY"];
-const agentHarnessMode = process.env["AGENT_HARNESS"] === "fake" ? "fake" : "pi";
 const agentModel = process.env["AGENT_MODEL"] ?? "fake";
 const agentModelApiKey = process.env["AGENT_MODEL_API_KEY"];
-if (agentHarnessMode === "pi" && agentModel !== "fake") {
+if (agentModel !== "fake") {
   if (!/^[a-z0-9-]+\/.+$/.test(agentModel)) throw new Error("AGENT_MODEL must be 'fake' or '<provider>/<model-id>'");
   if (!agentModelApiKey) throw new Error("AGENT_MODEL_API_KEY is required for a live Agent model");
 } else {
@@ -163,7 +163,12 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
       logicalDocuments: sourceContext.logicalDocuments,
     };
     const extraction = buildOfflineExtraction(applicationData["demo_fixture_id"], fixtureContext);
-    const reviewContext = buildRecoveryContext(job.data.run_id, extraction, fixtureContext);
+    const reviewContext = buildAgentReviewContext(job.data.run_id, extraction, fixtureContext);
+    const eligibility = evaluateCaseReviewEligibility({
+      gaps: extraction.gaps, pages: reviewContext.pages, registeredToolNames: CASE_REVIEW_TOOL_NAMES,
+      budgetAvailable: true, fatalFailure: false,
+    }, randomUUID());
+    if (eligibility.decision !== "eligible") throw new Error(`Case Review Agent is ineligible: ${eligibility.reasonCodes.join(",")}`);
     const documentPorts = createOfflineRecoveryPorts(applicationData["demo_fixture_id"], fixtureContext);
     let deterministicPersisted = false;
     let persistedResult: Awaited<ReturnType<typeof coordinator.loadOfflineReportInput>> | undefined;
@@ -175,7 +180,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
         return { reference: `${job.data.run_id}:reconciliation:${candidates.length}` };
       },
       requestValidation: async (): Promise<CaseReviewContext> => {
-        const deterministic = buildOfflineFixture(applicationData["demo_fixture_id"], fixtureContext, { candidates: outcomeCandidates, eligibility: undefined });
+        const deterministic = buildOfflineFixture(applicationData["demo_fixture_id"], fixtureContext, { candidates: outcomeCandidates, eligibility });
         await coordinator.persistOfflineDeterministic(job.data.case_id, job.data.run_id, deterministic);
         deterministicPersisted = true;
         persistedResult = await coordinator.loadOfflineReportInput(job.data.case_id, job.data.run_id);
@@ -198,7 +203,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
       harness_id: report.session?.harnessId, model_label: report.modelLabel, terminal_reason: report.session?.terminalReason,
       iterations: report.session?.iterations, tool_calls: report.session?.toolCalls, report_availability: report.reportAvailability,
       report_failure_reason: report.reportFailureReason,
-    }, "agent report session completed");
+    }, "agent-led case review session completed");
   } catch (error) {
     if (!(error instanceof OfflineFixtureUnavailableError)) throw error;
     await coordinator.failRun(job.data.case_id, job.data.run_id, "offline_fixture_unavailable");
@@ -226,4 +231,4 @@ async function shutdown() {
 process.once("SIGINT", () => void shutdown());
 process.once("SIGTERM", () => void shutdown());
 
-logger.info({ mode: "offline", queue: CASE_PROCESSING_QUEUE, agent_harness: agentHarnessMode, agent_model: agentModel === "fake" ? "fake" : agentModel }, "worker ready");
+logger.info({ mode: "offline", queue: CASE_PROCESSING_QUEUE, agent_harness: "pi", agent_model: agentModel === "fake" ? "fake" : agentModel }, "worker ready");

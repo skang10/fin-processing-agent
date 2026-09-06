@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FakeAdaptiveRecoveryHarness, evaluateRecoveryEligibility } from "@findoc/agent";
-import { ANNA_EXAMPLE_FIXTURE_ID, GOLDEN_FIXTURE_IDS, OfflineFixtureUnavailableError, buildOfflineExtraction, buildOfflineFixture, buildRecoveryContext, createOfflineRecoveryPorts, defaultOfflineHarness, runOfflineFixture } from "./index.js";
+import { evaluateCaseReviewEligibility } from "@findoc/agent";
+import { ANNA_EXAMPLE_FIXTURE_ID, GOLDEN_FIXTURE_IDS, OfflineFixtureUnavailableError, buildAgentReviewContext, buildOfflineExtraction, buildOfflineFixture, createOfflineRecoveryPorts, defaultOfflineHarness, runOfflineFixture } from "./index.js";
 
 describe("offline fixture", () => {
   const context = {
@@ -113,9 +113,9 @@ describe("adaptive recovery gap path", () => {
     expect(extraction.gaps).toHaveLength(1);
     expect(extraction.gaps[0]).toMatchObject({ fieldSchemaId: "income.monthly_net", required: true, reasonCode: "scanned_page_value_unresolved", attemptedPaths: ["native_text", "fixture_ocr"], scope: { documentVersionId: "document-6", pageNumber: 2, logicalDocumentRevisionId: "logical-6-2" } });
     expect(extraction.records.claims.some((claim) => claim.fieldSchemaId === "income.monthly_net" && claim.rawValue === "2980.00")).toBe(false);
-    const recoveryContext = buildRecoveryContext("run-6", extraction, context);
-    expect(recoveryContext.pages.map((page) => page.pageNumber)).toEqual([2]);
-    expect(recoveryContext.fieldSchemas).toEqual([{ fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money" }]);
+    const reviewContext = buildAgentReviewContext("run-6", extraction, context);
+    expect(reviewContext.pages.map((page) => page.pageNumber)).toEqual([1, 2, 3]);
+    expect(reviewContext.fieldSchemas).toEqual([{ fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money" }]);
   });
 
   it("keeps the gap explicit and routes to human review when no recovery happens", () => {
@@ -128,13 +128,14 @@ describe("adaptive recovery gap path", () => {
 
   it("resolves the gap through the fake recovery harness and reconciliation, then finds the income conflict", async () => {
     const extraction = buildOfflineExtraction(fixtureId, context);
-    const recoveryContext = buildRecoveryContext("run-6", extraction, context);
-    const eligibility = evaluateRecoveryEligibility({ gaps: extraction.gaps, pages: recoveryContext.pages, registeredToolNames: ["extract_with_vlm", "submit_extraction_candidates"], budgetAvailable: true, fatalFailure: false }, "decision-6");
+    const reviewContext = buildAgentReviewContext("run-6", extraction, context);
+    const eligibility = evaluateCaseReviewEligibility({ gaps: extraction.gaps, pages: reviewContext.pages, registeredToolNames: ["request_validation", "submit_case_review_brief"], budgetAvailable: true, fatalFailure: false }, "decision-6");
     expect(eligibility.decision).toBe("eligible");
-    const outcome = await new FakeAdaptiveRecoveryHarness().recover(recoveryContext, createOfflineRecoveryPorts(fixtureId, context));
-    expect(outcome.candidates).toHaveLength(1);
-    expect(outcome.trace).toMatchObject({ mode: "case_review", terminalReason: "report_not_submitted", boundGapIds: [extraction.gaps[0]!.gapId] });
-    const result = buildOfflineFixture(fixtureId, context, { eligibility, candidates: outcome.candidates, trace: outcome.trace });
+    const gap = extraction.gaps[0]!;
+    const page = { documentVersionId: gap.scope.documentVersionId, pageNumber: gap.scope.pageNumber };
+    const value = (await createOfflineRecoveryPorts(fixtureId, context).extractWithVlm({ page, fieldSchemaId: gap.fieldSchemaId })).value!;
+    const candidates = [{ gapId: gap.gapId, fieldSchemaId: gap.fieldSchemaId, fieldSchemaVersion: gap.fieldSchemaVersion, valueType: gap.valueType, rawValue: value.rawValue, normalizedValue: value.normalizedValue, page, region: value.region, extractionMethod: "agent_vlm_extraction" as const, processorVersion: "fake-vlm-gateway/income-monthly-net-extract-1.0.0" }];
+    const result = buildOfflineFixture(fixtureId, context, { eligibility, candidates });
     expect(result.gapResolutions).toEqual([{ gapId: extraction.gaps[0]!.gapId, resolutionType: "claim", reference: expect.any(String) }]);
     const claim = result.claims.find((item) => item.claimId === result.gapResolutions![0]!.reference);
     expect(claim).toMatchObject({ fieldSchemaId: "income.monthly_net", rawValue: "2980.00" });
@@ -150,7 +151,7 @@ describe("adaptive recovery gap path", () => {
     const extraction = buildOfflineExtraction(fixtureId, context);
     const gap = extraction.gaps[0]!;
     const rogue = { gapId: gap.gapId, fieldSchemaId: gap.fieldSchemaId, fieldSchemaVersion: "1.0.0", valueType: "money" as const, rawValue: "9999.00", normalizedValue: { amount: "9999.00", currency: "EUR" }, page: { documentVersionId: "document-6", pageNumber: 3 }, region: { x: 0, y: 0, width: 1, height: 1 }, extractionMethod: "agent_vlm_extraction" as const, processorVersion: "x" };
-    const result = buildOfflineFixture(fixtureId, context, { eligibility: { decisionId: "d", policyVersion: "recovery-eligibility-1.0.0", gapIds: [gap.gapId], decision: "eligible", reasonCodes: ["eligible_required_gap"] }, candidates: [rogue] });
+    const result = buildOfflineFixture(fixtureId, context, { eligibility: { decisionId: "d", policyVersion: "case-review-eligibility-2.0.0", gapIds: [gap.gapId], decision: "eligible", reasonCodes: ["processable_case"] }, candidates: [rogue] });
     expect(result.gapResolutions).toEqual([]);
     expect(result.claims.some((claim) => claim.rawValue === "9999.00")).toBe(false);
   });

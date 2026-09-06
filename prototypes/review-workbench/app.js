@@ -1036,19 +1036,19 @@ function renderAgentLog() {
   if (!apiAgentLog) return;
   const stepLabels = { processing: 'Processing', awaiting_human_review: 'Awaiting human review', review_completed: 'Review completed' };
   const activityLabels = {
-    'Started adaptive recovery session': 'Started targeted extraction',
     'Listed bound extraction gaps': 'Found unresolved fields',
     'Inspected page 2': 'Inspected payslip, page 2',
     'Ran OCR on page 2': 'Ran OCR on payslip, page 2',
     'Submitted 1 extraction candidate(s)': 'Submitted 1 recovered value',
-    'Started case review report session': 'Started report generation',
-    'Listed deterministic findings': 'Checked validation findings',
     'Submitted a Case Review Brief': 'Submitted review report',
   };
   const toolLabels = {
-    get_extraction_gaps: 'Get extraction gaps', inspect_page: 'Inspect page', run_ocr: 'Run OCR',
+    get_extraction_gaps: 'Get extraction gaps', inspect_page: 'Inspect page', get_native_text: 'Get native text',
+    run_ocr: 'Run OCR', render_page_region: 'Render page region', classify_page: 'Classify page',
+    detect_document_boundaries: 'Detect document boundaries', extract_local_table: 'Extract local table',
     extract_with_vlm: 'Extract with VLM', submit_extraction_candidates: 'Submit candidates',
-    list_findings: 'List findings', get_finding_references: 'Get finding evidence',
+    request_reconciliation: 'Request reconciliation', request_validation: 'Request validation',
+    get_current_result: 'Get current result',
     submit_case_review_brief: 'Submit report',
   };
   const modelLabel = apiAgentLog.model_label && apiAgentLog.model_label.startsWith('findoc-fake/')

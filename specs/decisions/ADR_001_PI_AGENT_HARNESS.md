@@ -12,7 +12,7 @@ Pi's official SDK supports programmatic `AgentSession` creation, explicit tool l
 
 ## Decision
 
-The Worker Service will embed the official pi-coding-agent SDK through a project-owned `PiCaseReviewAgentHarness` adapter in `packages/agent-pi`. The SDK is published as `@earendil-works/pi-coding-agent`; the former `@mariozechner/pi-coding-agent` scope named in the original decision is deprecated upstream in favour of that package, and the rename does not change this decision.
+The Worker Service will embed the official pi-coding-agent SDK through a project-owned `PiAgentLedCaseReviewHarness` adapter in `packages/agent-pi`. The SDK is published as `@earendil-works/pi-coding-agent`; the former `@mariozechner/pi-coding-agent` scope named in the original decision is deprecated upstream in favour of that package, and the rename does not change this decision.
 
 The adapter will:
 
@@ -62,17 +62,9 @@ The implementation spike must prove that:
 5. Fake-model sessions produce deterministic report and failure fixtures.
 6. Document prompt injection cannot alter tools, rules, dispositions, schemas, or customer-contact authority.
 
-### Superseded spike evidence (2026-09-06, report mode)
+### Implementation evidence (2026-09-06)
 
-The existing `packages/agent-pi` report harness proves the narrow Pi embedding, empty base-tool override, no-discovery resource loader, external authorization, budgets, deterministic fake-model behavior, and report verification boundaries. Its separately scheduled report session and three-tool view are retained as implementation evidence but are superseded as the target lifecycle by this amended decision.
-
-### Superseded spike evidence (2026-09-06, adaptive-recovery mode)
-
-The existing `PiAdaptiveRecoveryHarness` proves scope authorization for eight recovery tools, candidate-evidence binding, OCR and VLM budgets, and ordinary reconciliation of submitted candidates. Its separately scheduled gap-eligibility lifecycle is superseded. The fixture OCR and VLM ports remain synthetic outputs rather than recognition, and the live model route remains unverified.
-
-### Required superseding implementation evidence
-
-The V1 implementation must additionally prove one session spanning Agent-selected PDF Inspector operations, extraction candidate submission, deterministic reconciliation and validation requests, current-result retrieval, report submission, durable re-entry, and explicit failure routing. Until that evidence exists, the prior two-session code is implemented legacy behavior, not conformance with the current decision.
+`PiAgentLedCaseReviewHarness` proves one session spanning scoped document inspection, optional OCR/VLM extraction, evidence-bound candidate submission, deterministic reconciliation and validation requests, current-result retrieval, and report submission. Automated tests cover unknown-tool and cross-scope rejection, schema enforcement, OCR/VLM and session budgets, no-progress handling, provider failure, and external report verification. The former separately scheduled report and adaptive-recovery harnesses were removed. Durable re-entry after Worker loss, real OCR/VLM ports, and live-model acceptance remain required before this prototype can claim those capabilities.
 
 ## Affected Specifications
 
