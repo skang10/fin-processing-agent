@@ -14,6 +14,7 @@ import {
   FindingsProjectionSchema,
   ApplicationDataProjectionSchema,
   DocumentPageProjectionSchema,
+  DownstreamHandoffSchema,
   DocumentsProjectionSchema,
   EditIssueCommandSchema,
   EditIssueResultSchema,
@@ -26,7 +27,7 @@ import {
   ResolveIssueResultSchema,
   ReviewIssuesSchema,
 } from "@findoc/contracts";
-import { CaseNotFoundError, IdempotencyConflictError, ReviewConflictError, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService, type IntakeDocument, type ReviewCommandService, type SourceArtifactIntake } from "@findoc/core";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService, type IntakeDocument, type ReviewCommandService, type SourceArtifactIntake } from "@findoc/core";
 import { DocumentSizeLimitError, EmptyDocumentError, UnsupportedDocumentMediaError } from "@findoc/storage";
 
 class IntakeRequestError extends Error {}
@@ -63,6 +64,16 @@ export function buildApp(
         status: 404,
         code: "not_found",
         request_id: request.id,
+      });
+    }
+    if (error instanceof HandoffUnavailableError) {
+      return reply.code(409).type("application/problem+json").send({
+        type: "https://example.invalid/problems/handoff_unavailable",
+        title: "Downstream handoff is unavailable",
+        status: 409,
+        code: "handoff_unavailable",
+        request_id: request.id,
+        detail: error.message,
       });
     }
     if (error instanceof ReviewConflictError) {
@@ -165,7 +176,27 @@ export function buildApp(
         findings: `${base}/findings`,
         issues: `${base}/issues`,
         final_review: `${base}/final-review`,
+        downstream_handoff: `${base}/downstream-handoff`,
       },
+    };
+  });
+
+  app.get("/api/v1/cases/:case_id/downstream-handoff", {
+    schema: { response: { 200: DownstreamHandoffSchema, 404: ProblemDetailsSchema, 409: ProblemDetailsSchema } },
+  }, async (request) => {
+    const { case_id: caseId } = request.params as { case_id: string };
+    const handoff = await caseQueries.getDownstreamHandoff(caseId);
+    return {
+      case_id: handoff.caseId, status: handoff.status,
+      result_revision: { id: handoff.resultRevision.id, revision: handoff.resultRevision.revision, sealed_at: handoff.resultRevision.sealedAt },
+      final_review: { id: handoff.finalReview.id, action: handoff.finalReview.action, reviewer_id: handoff.finalReview.reviewerId,
+        completed_at: handoff.finalReview.completedAt, resulting_case_version: handoff.finalReview.resultingCaseVersion },
+      recommended_disposition: { value: handoff.recommendedDisposition.value, policy_id: handoff.recommendedDisposition.policyId,
+        policy_version: handoff.recommendedDisposition.policyVersion },
+      claims: handoff.claims.map((claim) => ({ claim_id: claim.claimId, field_schema_id: claim.fieldSchemaId, value_type: claim.valueType,
+        normalized_value: claim.normalizedValue, normalization_version: claim.normalizationVersion, evidence_references: [...claim.evidenceReferences] })),
+      findings: handoff.findings.map((finding) => ({ finding_id: finding.findingId, rule_id: finding.ruleId,
+        rule_version: finding.ruleVersion, status: finding.status, reason_code: finding.reasonCode, references: [...finding.references] })),
     };
   });
 

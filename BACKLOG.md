@@ -101,7 +101,7 @@ Replace unsupported numerical targets with measured results tied to dataset, mod
 
 ### BL-007 — V1 Review UX Contracts
 
-**Status:** Read projections, API-hydrated workbench, Agent-issue confirm/ignore, append-only human issue create/edit, requested-change revisions, atomic final-review recording, post-review read-only enforcement, and separate active, changes-requested, and completed queues implemented; downstream handoff contract and case Agent-log projection pending; aggregate monitoring deferred
+**Status:** Read projections, API-hydrated workbench, Agent-issue confirm/ignore, append-only human issue create/edit, requested-change revisions, atomic final-review recording, post-review read-only enforcement, separate active, changes-requested, and completed queues, and the read-only downstream handoff contract implemented; case Agent-log projection pending; aggregate monitoring deferred
 
 Define implementation contracts for the approved V1 HTML UX baseline:
 

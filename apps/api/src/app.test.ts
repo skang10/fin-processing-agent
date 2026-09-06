@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { IdempotencyConflictError } from "@findoc/core";
+import { HandoffUnavailableError, IdempotencyConflictError } from "@findoc/core";
 import { buildApp } from "./app.js";
 
 const boundary = "findoc-test-boundary";
@@ -90,6 +90,19 @@ describe("case intake", () => {
       documentId: "4c816f67-5f2f-4e21-8c17-7eb1e5383998",
       pageNumber: 1, needsOcr: false, hasTable: true, hasColumns: false, nativeCharacterCount: 42,
     })),
+    getDownstreamHandoff: vi.fn(async () => ({
+      caseId: "4c816f67-5f2f-4e21-8c17-7eb1e53838bd",
+      status: "ready_for_handoff" as const,
+      resultRevision: { id: "4c816f67-5f2f-4e21-8c17-7eb1e5383995", revision: 1, sealedAt: "2026-09-01T10:05:00.000Z" },
+      finalReview: { id: "4c816f67-5f2f-4e21-8c17-7eb1e5383993", action: "clear_for_downstream" as const,
+        reviewerId: "reviewer_1", completedAt: "2026-09-01T10:10:00.000Z", resultingCaseVersion: 3 },
+      recommendedDisposition: { value: "human_review_required" as const, policyId: "demo-policy", policyVersion: "1.0.0" },
+      claims: [{ claimId: "4c816f67-5f2f-4e21-8c17-7eb1e5383997", fieldSchemaId: "employment.employer", valueType: "string",
+        normalizedValue: "Beispieltechnik GmbH", normalizationVersion: "1.0.0",
+        evidenceReferences: ["/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/evidence/4c816f67-5f2f-4e21-8c17-7eb1e5383999"] }],
+      findings: [{ findingId: "4c816f67-5f2f-4e21-8c17-7eb1e5383996", ruleId: "VAL_NAME_CONSISTENCY_001",
+        ruleVersion: "1.0.0", status: "passed" as const, reasonCode: "NAME_CONSISTENT", references: [] }],
+    })),
   };
 
   it("accepts work asynchronously", async () => {
@@ -107,6 +120,32 @@ describe("case intake", () => {
     expect(accept).toHaveBeenCalledWith(expect.objectContaining({
       applicationData: { applicant_display_name: "Anna Beispiel" },
     }));
+    await app.close();
+  });
+
+  it("returns the versioned read-only downstream handoff projection", async () => {
+    const app = buildApp({ accept: vi.fn() }, caseQueries);
+    const response = await app.inject({
+      method: "GET", url: "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/downstream-handoff",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      status: "ready_for_handoff",
+      final_review: { action: "clear_for_downstream", reviewer_id: "reviewer_1" },
+      claims: [{ field_schema_id: "employment.employer", evidence_references: [expect.stringContaining("/evidence/")] }],
+      findings: [{ rule_id: "VAL_NAME_CONSISTENCY_001" }],
+    });
+    await app.close();
+  });
+
+  it("does not expose a handoff before document review is cleared", async () => {
+    const unavailableQueries = { ...caseQueries, getDownstreamHandoff: vi.fn(async () => { throw new HandoffUnavailableError(); }) };
+    const app = buildApp({ accept: vi.fn() }, unavailableQueries);
+    const response = await app.inject({
+      method: "GET", url: "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/downstream-handoff",
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ code: "handoff_unavailable" });
     await app.close();
   });
 

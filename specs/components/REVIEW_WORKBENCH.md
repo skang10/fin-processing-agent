@@ -2,7 +2,7 @@
 
 Document ID: `UI`
 
-Version: 3.1.1
+Version: 3.2.0
 
 Status: Approved
 
@@ -226,7 +226,7 @@ clear_for_downstream
 
 The workbench presents `accept_signal` as **Confirm issue** and `dismiss_signal` as **Ignore issue**. These user-facing labels describe whether the reviewer considers the Agent-raised issue valid; the persisted action values remain unchanged.
 
-When a reviewer chooses **Confirm issue**, the workbench presents an Agent-generated applicant-readable requested-change draft for review and editing before the confirmation is saved. The draft must state what information or document is needed in plain language and must not expose internal processing terminology. Confirming the issue does not include the draft in the final message automatically, and choosing `request_changes` records the selected drafts without sending or delivering them. The draft must not contain or imply a final banking decision.
+When a reviewer chooses **Confirm issue**, the workbench presents an Agent-generated applicant-readable requested-change draft for review and editing before the confirmation is saved. The draft must state what information or document is needed in plain language and must not expose internal processing terminology. The confirmed draft is selected for the message by default, the reviewer may exclude it before final submission, and choosing `request_changes` records selected drafts without sending or delivering them. The draft must not contain or imply a final banking decision.
 
 `UI-REQ-074` After all issues are reviewed, the reviewer must choose `request_changes`, `escalate_review`, or `clear_for_downstream` for the document-processing case.
 
@@ -456,6 +456,7 @@ No unresolved Review Workbench boundary decision blocks review of this document.
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.2.0 | 2026-09-06 | Approved | Selected confirmed requested-change drafts for the message by default while retaining reviewer opt-out. |
 | 3.1.1 | 2026-09-05 | Approved | Added individual deprecated and removed requirement tombstones so all published UI identifiers remain machine-verifiable. |
 | 3.1.0 | 2026-09-04 | Approved | Reduced V1 to polling and a bounded case Agent log; deferred SSE and the separate aggregate Agent-monitoring surface. |
 | 3.0.0 | 2026-09-04 | Approved | Approved the V1 HTML UX baseline: Agent Report entry, workflow-state queue, issue review, applicant-readable drafts without delivery, compact progress, bounded case Agent log, and separate monitoring; deprecated direct correction, Pipeline, and reviewer audit views from V1. No unresolved boundary decision remains. |

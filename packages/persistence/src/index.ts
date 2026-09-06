@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type EvidenceView, type FindingView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type QueueCaseView, type ReviewCommandService, type ReviewIssueView } from "@findoc/core";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type QueueCaseView, type ReviewCommandService, type ReviewIssueView } from "@findoc/core";
 import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
@@ -393,6 +393,51 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       progress: lifecycle === "processing" ? "submitted" : lifecycle === "ready_for_review" ? "human_review" : "outcome",
       resultAvailability: lifecycle === "processing" ? "pending" : lifecycle === "processing_exception" ? "unavailable" : "ready",
       ...(finalReview ? { finalReviewAction: asFinalAction(finalReview.action) } : {}),
+    };
+  }
+
+  async getDownstreamHandoff(caseId: string): Promise<DownstreamHandoffView> {
+    const [record] = await this.db.select({
+      caseId: cases.id, lifecycle: cases.lifecycle,
+      finalReviewId: finalReviews.id, action: finalReviews.action, reviewerId: finalReviews.actorId,
+      completedAt: finalReviews.createdAt, resultingCaseVersion: finalReviews.resultingCaseVersion,
+      resultRevisionId: resultRevisions.id, resultRevisionNumber: resultRevisions.revision,
+      resultSealedAt: resultRevisions.sealedAt, runId: resultRevisions.runId,
+      disposition: recommendedDispositions.disposition, policyId: recommendedDispositions.policyId,
+      policyVersion: recommendedDispositions.policyVersion,
+    }).from(cases)
+      .leftJoin(finalReviews, eq(finalReviews.caseId, cases.id))
+      .leftJoin(resultRevisions, eq(resultRevisions.id, finalReviews.resultRevisionId))
+      .leftJoin(recommendedDispositions, eq(recommendedDispositions.resultRevisionId, resultRevisions.id))
+      .where(eq(cases.id, caseId)).limit(1);
+    if (!record) throw new CaseNotFoundError();
+    if (record.lifecycle !== "review_complete" || record.action !== "clear_for_downstream" || !record.finalReviewId ||
+      !record.reviewerId || !record.completedAt || !record.resultRevisionId || record.resultRevisionNumber === null ||
+      !record.resultSealedAt || !record.runId || !record.disposition || !record.policyId || !record.policyVersion) {
+      throw new HandoffUnavailableError();
+    }
+    const disposition = record.disposition;
+    if (disposition !== "ready_for_downstream_processing" && disposition !== "additional_documents_needed" && disposition !== "human_review_required") {
+      throw new Error("Persisted disposition is invalid");
+    }
+    const [claims, findings] = await Promise.all([
+      this.db.select({
+        claimId: claimRecords.id, fieldSchemaId: claimRecords.fieldSchemaId, valueType: claimRecords.valueType,
+        normalizedValue: claimRecords.normalizedValue, normalizationVersion: claimRecords.normalizationVersion,
+      }).from(claimRecords).where(eq(claimRecords.runId, record.runId)).orderBy(asc(claimRecords.fieldSchemaId), asc(claimRecords.id)),
+      this.getFindings(caseId),
+    ]);
+    const links = claims.length === 0 ? [] : await this.db.select({ claimId: claimEvidenceLinks.claimId, evidenceId: claimEvidenceLinks.evidenceId })
+      .from(claimEvidenceLinks).where(inArray(claimEvidenceLinks.claimId, claims.map((claim) => claim.claimId)));
+    const base = `/api/v1/cases/${caseId}/evidence/`;
+    return {
+      caseId, status: "ready_for_handoff",
+      resultRevision: { id: record.resultRevisionId, revision: record.resultRevisionNumber, sealedAt: record.resultSealedAt.toISOString() },
+      finalReview: { id: record.finalReviewId, action: "clear_for_downstream", reviewerId: record.reviewerId,
+        completedAt: record.completedAt.toISOString(), resultingCaseVersion: record.resultingCaseVersion! },
+      recommendedDisposition: { value: disposition, policyId: record.policyId, policyVersion: record.policyVersion },
+      claims: claims.map((claim) => ({ ...claim, evidenceReferences: links.filter((link) => link.claimId === claim.claimId).map((link) => base + link.evidenceId) })),
+      findings,
     };
   }
 

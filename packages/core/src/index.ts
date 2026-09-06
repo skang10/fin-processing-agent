@@ -251,6 +251,33 @@ export interface FindingView {
   readonly references: readonly string[];
 }
 
+export interface DownstreamHandoffView {
+  readonly caseId: CaseId;
+  readonly status: "ready_for_handoff";
+  readonly resultRevision: { readonly id: string; readonly revision: number; readonly sealedAt: string };
+  readonly finalReview: {
+    readonly id: string;
+    readonly action: "clear_for_downstream";
+    readonly reviewerId: string;
+    readonly completedAt: string;
+    readonly resultingCaseVersion: number;
+  };
+  readonly recommendedDisposition: {
+    readonly value: "ready_for_downstream_processing" | "additional_documents_needed" | "human_review_required";
+    readonly policyId: string;
+    readonly policyVersion: string;
+  };
+  readonly claims: readonly {
+    readonly claimId: string;
+    readonly fieldSchemaId: string;
+    readonly valueType: string;
+    readonly normalizedValue: unknown;
+    readonly normalizationVersion: string;
+    readonly evidenceReferences: readonly string[];
+  }[];
+  readonly findings: readonly FindingView[];
+}
+
 export interface CaseReviewQueryService {
   getAgentReport(caseId: CaseId): Promise<AgentReportView>;
   getIssues(caseId: CaseId): Promise<readonly ReviewIssueView[]>;
@@ -260,6 +287,7 @@ export interface CaseReviewQueryService {
   getDocuments(caseId: CaseId): Promise<readonly DocumentView[]>;
   getDocumentPage(caseId: CaseId, documentId: string, pageNumber: number): Promise<DocumentPageView>;
   getFindings(caseId: CaseId): Promise<readonly FindingView[]>;
+  getDownstreamHandoff(caseId: CaseId): Promise<DownstreamHandoffView>;
 }
 
 export class CaseNotFoundError extends Error {
@@ -280,6 +308,13 @@ export class ReviewConflictError extends Error {
   constructor(readonly code: "stale_review" | "review_incomplete" | "invalid_review_action", message: string) {
     super(message);
     this.name = "ReviewConflictError";
+  }
+}
+
+export class HandoffUnavailableError extends Error {
+  constructor() {
+    super("The case is not ready for downstream handoff");
+    this.name = "HandoffUnavailableError";
   }
 }
 

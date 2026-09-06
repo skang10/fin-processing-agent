@@ -3,7 +3,7 @@ import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { count, eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CaseNotFoundError, IdempotencyConflictError } from "@findoc/core";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError } from "@findoc/core";
 import {
   PostgresCaseCommandService,
   PostgresCaseQueryService,
@@ -207,6 +207,8 @@ describe("PostgresCaseCommandService", () => {
 
   it("persists issue resolution, requested-change revisions, and final review atomically", async () => {
     const service = new PostgresCaseCommandService(connection.db, "reviewer_1");
+    await expect(new PostgresCaseQueryService(connection.db).getDownstreamHandoff(reviewFixture.caseId))
+      .rejects.toBeInstanceOf(HandoffUnavailableError);
     await expect(service.submitFinalReview({
       caseId: reviewFixture.caseId, resultRevisionId: reviewFixture.resultRevisionId,
       commandId: "incomplete_final", expectedCaseVersion: 2, action: "request_changes",
@@ -246,22 +248,19 @@ describe("PostgresCaseCommandService", () => {
       commandId: "excluded_final", expectedCaseVersion: 3, action: "request_changes",
       selectedDraftRevisionIds: [firstDraft.draftRevisionId],
     })).rejects.toMatchObject({ code: "invalid_review_action" });
-    const selectedDraft = await service.saveRequestedChange({
-      ...reviewFixture, text: "Please provide a current employer document.", included: true, commandId: "draft_2",
-    });
     const final = await service.submitFinalReview({
       caseId: reviewFixture.caseId, resultRevisionId: reviewFixture.resultRevisionId,
-      commandId: "final_1", expectedCaseVersion: 3, action: "request_changes",
-      selectedDraftRevisionIds: [selectedDraft.draftRevisionId], internalNote: "Reviewed synthetic fixture.",
+      commandId: "final_1", expectedCaseVersion: 3, action: "clear_for_downstream",
+      selectedDraftRevisionIds: [], internalNote: "Reviewed synthetic fixture.",
     });
-    expect(final).toMatchObject({ action: "request_changes", caseVersion: 4 });
+    expect(final).toMatchObject({ action: "clear_for_downstream", caseVersion: 4 });
     await expect(service.submitFinalReview({
       caseId: reviewFixture.caseId, resultRevisionId: reviewFixture.resultRevisionId,
-      commandId: "final_1", expectedCaseVersion: 3, action: "request_changes",
-      selectedDraftRevisionIds: [selectedDraft.draftRevisionId],
+      commandId: "final_1", expectedCaseVersion: 3, action: "clear_for_downstream",
+      selectedDraftRevisionIds: [],
     })).resolves.toEqual(final);
     await expect(new PostgresCaseQueryService(connection.db).get(reviewFixture.caseId)).resolves.toMatchObject({
-      lifecycle: "review_complete", finalReviewAction: "request_changes", version: 4,
+      lifecycle: "review_complete", finalReviewAction: "clear_for_downstream", version: 4,
     });
     await expect(service.editIssue({
       caseId: reviewFixture.caseId, issueId: created.issueId, resultRevisionId: reviewFixture.resultRevisionId,
@@ -272,7 +271,7 @@ describe("PostgresCaseCommandService", () => {
     const persistedIssues = await new PostgresCaseQueryService(connection.db).getIssues(reviewFixture.caseId);
     expect(persistedIssues).toEqual(expect.arrayContaining([expect.objectContaining({
       reviewState: "confirmed", version: 2,
-      requestedChange: expect.objectContaining({ draftRevisionId: selectedDraft.draftRevisionId, revision: 2, included: true }),
+      requestedChange: expect.objectContaining({ draftRevisionId: firstDraft.draftRevisionId, revision: 1, included: false }),
     }), expect.objectContaining({
       issueId: created.issueId, origin: "human", title: "Missing document page",
       description: "One supporting document page appears to be missing.", editRevision: 2,
@@ -282,12 +281,20 @@ describe("PostgresCaseCommandService", () => {
     await expect(queries.list("review")).resolves.not.toEqual(expect.arrayContaining([
       expect.objectContaining({ caseId: reviewFixture.caseId }),
     ]));
-    await expect(queries.list("changes_requested")).resolves.toEqual(expect.arrayContaining([
-      expect.objectContaining({ caseId: reviewFixture.caseId, workflowStatus: "changes_requested", issueCount: 2 }),
-    ]));
-    await expect(queries.list("completed")).resolves.not.toEqual(expect.arrayContaining([
+    await expect(queries.list("changes_requested")).resolves.not.toEqual(expect.arrayContaining([
       expect.objectContaining({ caseId: reviewFixture.caseId }),
     ]));
+    await expect(queries.list("completed")).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ caseId: reviewFixture.caseId, workflowStatus: "ready_for_handoff", issueCount: 2 }),
+    ]));
+    await expect(queries.getDownstreamHandoff(reviewFixture.caseId)).resolves.toMatchObject({
+      caseId: reviewFixture.caseId, status: "ready_for_handoff",
+      resultRevision: { id: reviewFixture.resultRevisionId, revision: 1 },
+      finalReview: { action: "clear_for_downstream", reviewerId: "reviewer_1", resultingCaseVersion: 4 },
+      claims: [{ fieldSchemaId: "fixture.field", normalizedValue: "fixture",
+        evidenceReferences: [expect.stringContaining(`/evidence/`)] }],
+      findings: expect.arrayContaining([expect.objectContaining({ ruleId: "VAL_EMPLOYER_CONSISTENCY_001" })]),
+    });
   });
 
   it("routes an unprocessable run to one durable processing exception", async () => {

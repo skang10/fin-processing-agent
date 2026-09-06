@@ -2,7 +2,7 @@
 
 Document ID: `DAT`
 
-Version: 2.1.1
+Version: 2.2.0
 
 Status: Approved
 
@@ -502,6 +502,8 @@ A Claim is a reconciled raw or normalized assertion linked to evidence. A Claim 
 
 `DAT-REQ-196` Reviewer-facing structured application projections may contain synthetic contact preferences and initial-submission, latest-submission, and latest-update times when present in an immutable input revision; protected values must use the security-governed masked projection.
 
+`DAT-REQ-197` A downstream-ready projection must be derived without mutation from exactly one `clear_for_downstream` final review and its reviewed sealed result revision. It must preserve final-review identity, reviewer, completion time, resulting case version, versioned disposition, normalized claims, deterministic findings, and authorized evidence references without representing delivery acknowledgement or a banking decision.
+
 ## 19. Model Invocations and Agent Activity
 
 `DAT-REQ-128` A model invocation record must identify task, provider adapter, model, resolved prompt version and hash, input and output schema versions, routing reason, start and end time, outcome, usage, estimated cost when available, trace identifier, and input/output artifact references or safe hashes.
@@ -637,6 +639,7 @@ The following details are intentionally deferred to later owning specifications:
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.2.0 | 2026-09-06 | Approved | Defined the immutable downstream-ready projection derived from a cleared final document review. |
 | 2.1.1 | 2026-09-05 | Approved | Reserved the previously unassigned `DAT-REQ-187` identifier explicitly for machine-verifiable requirement continuity. |
 | 2.1.0 | 2026-09-04 | Approved | Added review issues, requested-change drafts without delivery authority, final-review action consistency, and structured application review projections for the V1 HTML baseline. |
 | 2.0.0 | 2026-09-04 | Approved | Added Agent session modes and immutable, verified Case Review Brief revisions without making Agent output authoritative workflow state. |

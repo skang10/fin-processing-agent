@@ -2,7 +2,7 @@
 
 Document ID: `API`
 
-Version: 1.1.4
+Version: 1.2.0
 
 Status: Approved
 
@@ -140,7 +140,7 @@ GET  /api/v1/cases/{case_id}/events
 
 `API-REQ-035` `GET /cases` must provide the Review Queue projection: case identifier, applicant display name, concise review summary, issue count, reviewer workflow status, waiting-since time, lifecycle, and version.
 
-`API-REQ-036` `GET /cases/{case_id}` must return the current authorized case projection containing case identity, applicant display data, lifecycle, compact progress, current result availability, and links to separately loadable report, issues, application data, documents, and final review.
+`API-REQ-036` `GET /cases/{case_id}` must return the current authorized case projection containing case identity, applicant display data, lifecycle, compact progress, current result availability, and links to separately loadable report, issues, application data, documents, final review, and downstream handoff.
 
 `API-REQ-037` `POST /cases/{case_id}/runs` must create a new immutable processing run only when its declared input and version preconditions are valid, and must return `202 Accepted` without executing long-running work in the request handler.
 
@@ -162,6 +162,7 @@ GET /api/v1/cases/{case_id}/issues
 GET /api/v1/cases/{case_id}/issues/{issue_id}
 GET /api/v1/cases/{case_id}/final-review
 GET /api/v1/cases/{case_id}/agent-log
+GET /api/v1/cases/{case_id}/downstream-handoff
 ```
 
 `API-REQ-039` `GET /agent-report` must identify report availability as `ready`, `pending`, or `unavailable` and, when ready, return the verified presentation only: concise summary, ordered issue links, checked facts, registered suggested actions, safe references, and bound result revision metadata.
@@ -189,6 +190,8 @@ GET /api/v1/cases/{case_id}/agent-log
 `API-REQ-048` `GET /final-review` must project each issue outcome, requested-change inclusion state, generated message preview, optional internal note, command availability, and blocking reasons without duplicating requested-change text in the issue summary.
 
 `API-REQ-049` `GET /agent-log` must return only model label, estimated cost or explicit unavailability, timestamps, and short allowlisted reviewer-readable activity events including bounded tool-call labels when relevant.
+
+`API-REQ-097` `GET /downstream-handoff` must return a read-only, versioned projection only after `clear_for_downstream`, containing the reviewed result revision, final review identity, reviewer and completion time, recommended document-processing disposition and policy version, normalized claims with authorized evidence references, and deterministic findings. It must return `409 handoff_unavailable` for every other reviewer workflow outcome and must not create a delivery event or claim downstream consumption.
 
 ## 10. Review Command Routes
 
@@ -329,6 +332,7 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.2.0 | 2026-09-06 | Approved | Added the read-only downstream handoff projection for cases cleared after document review. |
 | 1.1.4 | 2026-09-06 | Approved | Selected confirmed issues for the applicant message by default while preserving reviewer opt-out. |
 | 1.1.3 | 2026-09-06 | Approved | Made the internal reviewer note optional when ignoring an issue. |
 | 1.1.2 | 2026-09-06 | Approved | Added the current-run evidence collection used by the reviewer supporting-evidence picker. |

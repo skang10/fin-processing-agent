@@ -43,8 +43,34 @@ export const CaseProjectionSchema = Type.Object({
     findings: Type.String(),
     issues: Type.String(),
     final_review: Type.String(),
+    downstream_handoff: Type.String(),
   }),
 });
+
+export const DownstreamHandoffSchema = Type.Object({
+  case_id: Type.String({ format: "uuid" }),
+  status: Type.Literal("ready_for_handoff"),
+  result_revision: Type.Object({
+    id: Type.String({ format: "uuid" }), revision: Type.Integer({ minimum: 1 }), sealed_at: Type.String(),
+  }, { additionalProperties: false }),
+  final_review: Type.Object({
+    id: Type.String({ format: "uuid" }), action: Type.Literal("clear_for_downstream"),
+    reviewer_id: Type.String(), completed_at: Type.String(), resulting_case_version: Type.Integer({ minimum: 2 }),
+  }, { additionalProperties: false }),
+  recommended_disposition: Type.Object({
+    value: Type.Union([Type.Literal("ready_for_downstream_processing"), Type.Literal("additional_documents_needed"), Type.Literal("human_review_required")]),
+    policy_id: Type.String(), policy_version: Type.String(),
+  }, { additionalProperties: false }),
+  claims: Type.Array(Type.Object({
+    claim_id: Type.String({ format: "uuid" }), field_schema_id: Type.String(), value_type: Type.String(),
+    normalized_value: Type.Unknown(), normalization_version: Type.String(), evidence_references: Type.Array(Type.String()),
+  }, { additionalProperties: false })),
+  findings: Type.Array(Type.Object({
+    finding_id: Type.String({ format: "uuid" }), rule_id: Type.String(), rule_version: Type.String(),
+    status: Type.Union([Type.Literal("passed"), Type.Literal("warning"), Type.Literal("failed"), Type.Literal("inconclusive"), Type.Literal("not_applicable")]),
+    reason_code: Type.String(), references: Type.Array(Type.String()),
+  }, { additionalProperties: false })),
+}, { additionalProperties: false });
 
 export const ProblemDetailsSchema = Type.Object({
   type: Type.String(),
