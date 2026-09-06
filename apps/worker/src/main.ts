@@ -5,6 +5,7 @@ import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
 import { DocumentSandboxClient, classifySyntheticDemoPages, groupLogicalDocuments } from "@findoc/document-processing";
 import { evaluateCaseReviewEligibility, type AgentLedCaseReviewHarness, type CaseReviewContext } from "@findoc/agent";
+import { AgentSessionIncompatibleError } from "@findoc/core";
 import { CASE_REVIEW_TOOL_NAMES, PiAgentLedCaseReviewHarness, policyViolationCaseReviewScript, standardCaseReviewScript } from "@findoc/agent-pi";
 import { buildAgentReviewContext, buildOfflineExtraction, buildOfflineFixture, createOfflineRecoveryPorts, OfflineFixtureUnavailableError, runOfflineReport } from "@findoc/offline";
 import { PostgresAgentSessionLifecycle, PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
@@ -176,29 +177,40 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
     }, randomUUID());
     if (eligibility.decision !== "eligible") throw new Error(`Case Review Agent is ineligible: ${eligibility.reasonCodes.join(",")}`);
     const documentPorts = createOfflineRecoveryPorts(applicationData["demo_fixture_id"], fixtureContext);
-    let deterministicPersisted = false;
-    let persistedResult: Awaited<ReturnType<typeof coordinator.loadOfflineReportInput>> | undefined;
     let outcomeCandidates: readonly import("@findoc/agent").SubmittedExtractionCandidate[] = [];
-    const outcome = await selectAgentHarness(applicationData["demo_fixture_id"]).review({ ...reviewContext, caseId: job.data.case_id }, {
-      ...documentPorts,
-      requestReconciliation: async (candidates) => {
-        outcomeCandidates = candidates;
-        return { reference: `${job.data.run_id}:reconciliation:${candidates.length}` };
-      },
-      requestValidation: async (): Promise<CaseReviewContext> => {
-        const deterministic = buildOfflineFixture(applicationData["demo_fixture_id"], fixtureContext, { candidates: outcomeCandidates, eligibility });
-        await coordinator.persistOfflineDeterministic(job.data.case_id, job.data.run_id, deterministic);
-        deterministicPersisted = true;
-        persistedResult = await coordinator.loadOfflineReportInput(job.data.case_id, job.data.run_id);
-        return {
-          resultRevisionId: persistedResult.resultRevisionId,
-          findings: persistedResult.findings.map((finding) => ({ ruleId: finding.ruleId, ruleVersion: finding.ruleVersion, status: finding.status, reasonCode: finding.reasonCode, references: finding.materialInputRefs })),
-          recommendedDisposition: persistedResult.recommendedDisposition,
-          allowedReferences: new Set(persistedResult.findings.map((finding) => `finding:${finding.ruleId}`)),
-        };
-      },
-    });
-    if (!deterministicPersisted || !persistedResult) throw new Error("Agent session ended before a reviewable deterministic result was committed");
+    let outcome: Awaited<ReturnType<AgentLedCaseReviewHarness["review"]>>;
+    try {
+      outcome = await selectAgentHarness(applicationData["demo_fixture_id"]).review({ ...reviewContext, caseId: job.data.case_id }, {
+        ...documentPorts,
+        requestReconciliation: async (candidates) => {
+          outcomeCandidates = candidates;
+          return { reference: `${job.data.run_id}:reconciliation:${candidates.length}` };
+        },
+        requestValidation: async (): Promise<CaseReviewContext> => {
+          const deterministic = buildOfflineFixture(applicationData["demo_fixture_id"], fixtureContext, { candidates: outcomeCandidates, eligibility });
+          await coordinator.persistOfflineDeterministic(job.data.case_id, job.data.run_id, deterministic);
+          const committed = await coordinator.loadOfflineReportInput(job.data.case_id, job.data.run_id);
+          return {
+            resultRevisionId: committed.resultRevisionId,
+            findings: committed.findings.map((finding) => ({ ruleId: finding.ruleId, ruleVersion: finding.ruleVersion, status: finding.status, reasonCode: finding.reasonCode, references: finding.materialInputRefs })),
+            recommendedDisposition: committed.recommendedDisposition,
+            allowedReferences: new Set(committed.findings.map((finding) => `finding:${finding.ruleId}`)),
+          };
+        },
+      });
+    } catch (error) {
+      if (!(error instanceof AgentSessionIncompatibleError)) throw error;
+      logger.warn({ case_id: job.data.case_id, run_id: job.data.run_id, reason_codes: error.reasonCodes }, "agent session is incompatible with the persisted attempt");
+      await coordinator.failRun(job.data.case_id, job.data.run_id, "agent_session_incompatible");
+      return;
+    }
+    // Durable state, not the in-process session, decides whether a reviewable result exists (AGT-REQ-152).
+    const persistedResult = await coordinator.findOfflineReportInput(job.data.case_id, job.data.run_id);
+    if (!persistedResult) {
+      logger.warn({ case_id: job.data.case_id, run_id: job.data.run_id, terminal_reason: outcome.trace.terminalReason }, "agent session ended before a reviewable deterministic result");
+      await coordinator.failRun(job.data.case_id, job.data.run_id, `agent_session_${outcome.trace.terminalReason}`);
+      return;
+    }
     const report = await runOfflineReport(persistedResult, {
       descriptor: selectAgentHarness(applicationData["demo_fixture_id"]).descriptor,
       generate: async () => ({ ...(outcome.submission !== undefined ? { submission: outcome.submission } : {}), trace: outcome.trace }),

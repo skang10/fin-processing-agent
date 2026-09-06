@@ -1142,6 +1142,16 @@ export class PostgresWorkflowCoordinator {
     });
   }
 
+  /** Durable check for an already committed reviewable result; undefined when the run has none. */
+  async findOfflineReportInput(caseId: string, runId: string): Promise<OfflineReportInput | undefined> {
+    try {
+      return await this.loadOfflineReportInput(caseId, runId);
+    } catch (error) {
+      if (error instanceof CaseNotFoundError) return undefined;
+      throw error;
+    }
+  }
+
   async loadOfflineReportInput(caseId: string, runId: string): Promise<OfflineReportInput> {
     const [revision] = await this.db.select({
       resultRevisionId: resultRevisions.id,

@@ -5,10 +5,11 @@ import { Value } from "typebox/value";
 import type { Static, TSchema } from "typebox";
 import { AGENT_BUDGET_CONFIGURATION_VERSION, DEFAULT_AGENT_BUDGET, InMemoryAgentSessionLifecycle, canonicalJson, hashArguments, type CaseReviewHarnessDescriptor } from "@findoc/agent";
 import {
-  EMPTY_AGENT_CONSUMED_BUDGET, addConsumedBudget,
+  AgentSessionTerminalError, EMPTY_AGENT_CONSUMED_BUDGET, addConsumedBudget,
   type AgentBudgetEnvelope, type AgentCommittedToolResult, type AgentConsumedBudget, type AgentProducedReference,
   type AgentRecoverySnapshot, type AgentSessionConfiguration, type AgentSessionLifecyclePort, type AgentSessionMode,
-  type AgentSessionTrace, type AgentStepOutcome, type AgentStepPhase, type AgentStepTrace, type AgentTerminalReason,
+  type AgentSessionStart, type AgentSessionTrace, type AgentStepOutcome, type AgentStepPhase, type AgentStepTrace,
+  type AgentTerminalReason,
 } from "@findoc/core";
 import { FAKE_MODEL, createFakeStreamFn, type FakeModelScript } from "./fake-model.js";
 
@@ -456,9 +457,17 @@ export class PiSessionRunner {
       contextManifestVersion: spec.contextManifestVersion,
       offeredTools: spec.tools.map((tool) => tool.name), budget: this.budget,
     };
-    const start = await this.lifecycle.beginSession({
-      caseId: spec.caseId, runId: spec.runId, configuration, startedAt: new Date().toISOString(),
-    });
+    let start: AgentSessionStart;
+    try {
+      start = await this.lifecycle.beginSession({
+        caseId: spec.caseId, runId: spec.runId, configuration, startedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      if (!(error instanceof AgentSessionTerminalError)) throw error;
+      // The authoritative session already recorded a terminal reason; replay its committed outcome
+      // instead of opening a second attempt (AGT-REQ-070, AGT-REQ-079).
+      return this.replayTerminalSession(spec);
+    }
     const tools = new Map<string, AnyToolSpec<TScope, TState>>(spec.tools.map((tool) => [tool.name, tool]));
     const control = new SessionControlPlane<TScope, TState>(
       spec.scope, spec.state, this.budget, tools, spec.isComplete,
@@ -533,6 +542,37 @@ export class PiSessionRunner {
       session?.getActiveToolNames() ?? [],
     );
     return this.finish(spec, start, control, terminalReason, session);
+  }
+
+  /** Rebuild the committed outcome of an already terminal session without any model call. */
+  private async replayTerminalSession<TScope, TState>(spec: BoundedSessionSpec<TScope, TState>): Promise<BoundedSessionResult<TState>> {
+    const snapshot = await this.lifecycle.loadSnapshot(spec.runId);
+    if (!snapshot) throw new Error("A terminal Agent session has no durable snapshot");
+    const tools = new Map<string, AnyToolSpec<TScope, TState>>(spec.tools.map((tool) => [tool.name, tool]));
+    for (const result of snapshot.committedToolResults) {
+      if (result.safeOutput === undefined) continue;
+      tools.get(result.toolName)?.restore?.(result.safeOutput, spec.scope, spec.state);
+    }
+    const terminalReason = snapshot.terminalReason ?? spec.incompleteReason;
+    const trace: AgentSessionTrace = {
+      sessionId: snapshot.sessionId, mode: spec.mode,
+      harnessId: this.descriptor.harnessId, harnessVersion: this.descriptor.harnessVersion,
+      modelLabel: this.descriptor.modelLabel, modelRoute: this.descriptor.modelRoute,
+      promptVersion: spec.promptVersion, promptHash: spec.promptHash,
+      configurationVersion: PI_HARNESS_CONFIGURATION_VERSION, toolRegistryVersion: spec.toolRegistryVersion,
+      offeredTools: snapshot.configuration.offeredTools,
+      budget: this.budget, iterations: snapshot.consumed.iterations, toolCalls: snapshot.consumed.toolCalls,
+      usage: { available: snapshot.consumed.usageAvailable, modelCalls: snapshot.consumed.modelCalls, inputTokens: snapshot.consumed.inputTokens, outputTokens: snapshot.consumed.outputTokens },
+      ...(this.options.model.route === "fake" ? { estimatedCost: { amount: "0.0000", currency: "EUR" } } : {}),
+      terminalReason, steps: snapshot.steps,
+      startedAt: snapshot.startedAt, completedAt: new Date().toISOString(),
+      ...(spec.boundGapIds ? { boundGapIds: spec.boundGapIds } : {}),
+    };
+    this.options.onEvent?.({
+      type: "session_ended", sessionId: snapshot.sessionId, mode: spec.mode,
+      attemptNumber: snapshot.attempts, terminalReason, iterations: trace.iterations, toolCalls: trace.toolCalls,
+    });
+    return { trace, state: spec.state, resumed: true, attemptNumber: snapshot.attempts };
   }
 
   /** Build the reviewer-facing trace from durable records rather than an end-of-session blob. */
