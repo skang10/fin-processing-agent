@@ -2,10 +2,10 @@ import { createServer } from "node:http";
 import pino from "pino";
 import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
-import { PdfInspectorAdapter } from "@findoc/document-processing";
+import { PdfInspectorAdapter, PdfiumPageRenderer } from "@findoc/document-processing";
 import { buildOfflineFixture, OfflineFixtureUnavailableError, runOfflineReport } from "@findoc/offline";
 import { PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
-import { createMinioObjectStore, readObjectBytes, storeNativeTextArtifact } from "@findoc/storage";
+import { createMinioObjectStore, readObjectBytes, storeNativeTextArtifact, storePageRenderArtifact } from "@findoc/storage";
 import { CASE_PROCESSING_QUEUE, OutboxRelay } from "./outbox.js";
 
 const logger = pino({ name: "worker" });
@@ -24,6 +24,7 @@ const objectStore = createMinioObjectStore({
 });
 await objectStore.ensureBucket();
 const pdfInspector = new PdfInspectorAdapter();
+const pageRenderer = new PdfiumPageRenderer();
 const boss = new PgBoss(databaseUrl);
 boss.on("error", (error) => logger.error({ error }, "pg-boss error"));
 await boss.start();
@@ -60,15 +61,27 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
     if (document.mediaType === "application/pdf") {
       const source = await readObjectBytes(objectStore, document.objectKey, maximumSourceBytes);
       const inspection = await pdfInspector.inspect(source);
-      const pages = await Promise.all(inspection.pages.map(async (page) => ({
-        ...page,
-        nativeCharacterCount: page.nativeMarkdown.length,
-        nativeTextArtifact: {
-          ...await storeNativeTextArtifact(page.nativeMarkdown, objectStore,
-            `derived/${job.data.case_id}/${document.documentVersionId}/native-text/page-${page.pageNumber}`),
-          caseId: job.data.case_id,
-        },
-      })));
+      const pages = [];
+      for (const page of inspection.pages) {
+        const rendered = await pageRenderer.render(source, {
+          sourceSha256: document.sha256, pageNumber: page.pageNumber, targetDpi: 110,
+          colorMode: "color", outputFormat: "png", maximumPixels: 8_000_000,
+        });
+        pages.push({
+          ...page,
+          nativeCharacterCount: page.nativeMarkdown.length,
+          nativeTextArtifact: {
+            ...await storeNativeTextArtifact(page.nativeMarkdown, objectStore,
+              `derived/${job.data.case_id}/${document.documentVersionId}/native-text/page-${page.pageNumber}`),
+            caseId: job.data.case_id,
+          },
+          renderArtifact: {
+            ...await storePageRenderArtifact(rendered.bytes, rendered, objectStore,
+              `derived/${job.data.case_id}/${document.documentVersionId}/render/page-${page.pageNumber}`),
+            caseId: job.data.case_id,
+          },
+        });
+      }
       await coordinator.persistInspection(job.data.run_id, document, {
         ...inspection,
         pages,

@@ -24,6 +24,17 @@ export interface StoredDerivedArtifact {
   readonly mediaType: "text/markdown";
 }
 
+export interface StoredPageRenderArtifact {
+  readonly objectKey: string;
+  readonly sha256: string;
+  readonly byteSize: number;
+  readonly mediaType: "image/png";
+  readonly width: number;
+  readonly height: number;
+  readonly targetDpi: number;
+  readonly rendererVersion: string;
+}
+
 export interface SourceArtifactIntake {
   store(source: AsyncIterable<Uint8Array>): Promise<StoredSourceArtifact>;
   discard(artifact: StoredSourceArtifact): Promise<void>;
@@ -242,6 +253,7 @@ export interface DocumentPageView {
   readonly hasColumns: boolean;
   readonly nativeCharacterCount: number;
   readonly nativeTextAvailable: boolean;
+  readonly renderAvailable: boolean;
 }
 
 export interface NativeTextArtifactView {
@@ -254,6 +266,12 @@ export interface SourceDocumentArtifactView {
   readonly objectKey: string;
   readonly byteSize: number;
   readonly mediaType: SupportedMediaType;
+}
+
+export interface PageRenderArtifactView {
+  readonly objectKey: string;
+  readonly byteSize: number;
+  readonly mediaType: "image/png";
 }
 
 export interface ReviewIssueView {
@@ -318,6 +336,7 @@ export interface CaseReviewQueryService {
   getSourceDocumentArtifact(caseId: CaseId, documentId: string): Promise<SourceDocumentArtifactView>;
   getDocumentPage(caseId: CaseId, documentId: string, pageNumber: number): Promise<DocumentPageView>;
   getNativeTextArtifact(caseId: CaseId, documentId: string, pageNumber: number): Promise<NativeTextArtifactView>;
+  getPageRenderArtifact(caseId: CaseId, documentId: string, pageNumber: number): Promise<PageRenderArtifactView>;
   getFindings(caseId: CaseId): Promise<readonly FindingView[]>;
   getDownstreamHandoff(caseId: CaseId): Promise<DownstreamHandoffView>;
 }

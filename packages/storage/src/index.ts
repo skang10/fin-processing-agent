@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { Client } from "minio";
-import type { ArtifactMediaType, ObjectStore, StoredDerivedArtifact, StoredSourceArtifact, SupportedMediaType } from "@findoc/core";
+import type { ArtifactMediaType, ObjectStore, StoredDerivedArtifact, StoredPageRenderArtifact, StoredSourceArtifact, SupportedMediaType } from "@findoc/core";
 
 export class UnsupportedDocumentMediaError extends Error {}
 export class DocumentSizeLimitError extends Error {}
@@ -142,6 +142,18 @@ export async function storeNativeTextArtifact(
   const objectKey = `${keyPrefix}/${sha256}`;
   await store.put(objectKey, (async function* () { yield bytes; })(), "text/markdown");
   return { objectKey, sha256, byteSize: bytes.byteLength, mediaType: "text/markdown" };
+}
+
+export async function storePageRenderArtifact(
+  bytes: Buffer,
+  metadata: Pick<StoredPageRenderArtifact, "width" | "height" | "targetDpi" | "rendererVersion">,
+  store: ObjectStore,
+  keyPrefix: string,
+): Promise<StoredPageRenderArtifact> {
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const objectKey = `${keyPrefix}/${sha256}`;
+  await store.put(objectKey, (async function* () { yield bytes; })(), "image/png");
+  return { objectKey, sha256, byteSize: bytes.byteLength, mediaType: "image/png", ...metadata };
 }
 
 export async function readObjectBytes(store: ObjectStore, objectKey: string, maximumBytes: number): Promise<Buffer> {

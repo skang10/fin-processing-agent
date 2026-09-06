@@ -337,7 +337,17 @@ export function buildApp(
       has_table: page.hasTable, has_columns: page.hasColumns,
       native_character_count: page.nativeCharacterCount,
       native_text_available: page.nativeTextAvailable,
+      render_available: page.renderAvailable,
+      ...(page.renderAvailable ? { render_url: `/api/v1/cases/${caseId}/documents/${documentId}/pages/${page.pageNumber}/render` } : {}),
     };
+  });
+
+  app.get("/api/v1/cases/:case_id/documents/:document_id/pages/:page_number/render", async (request, reply) => {
+    if (!artifactStore) throw new Error("Artifact content access is not configured");
+    const { case_id: caseId, document_id: documentId, page_number: rawPageNumber } = request.params as { case_id: string; document_id: string; page_number: string };
+    const artifact = await caseQueries.getPageRenderArtifact(caseId, documentId, Number(rawPageNumber));
+    const content = await readObjectBytes(artifactStore, artifact.objectKey, Math.max(artifact.byteSize, 1));
+    return reply.header("cache-control", "private, no-store").type(artifact.mediaType).send(content);
   });
 
   app.get("/api/v1/cases/:case_id/documents/:document_id/pages/:page_number/native-text", async (request, reply) => {

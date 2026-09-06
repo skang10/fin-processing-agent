@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PdfType } from "@firecrawl/pdf-inspector";
-import { PdfInspectorAdapter, type PdfInspectorEngine } from "./index.js";
+import { PdfInspectorAdapter, PdfiumPageRenderer, type PdfInspectorEngine } from "./index.js";
 
 describe("PdfInspectorAdapter", () => {
   it("translates zero-based native pages into project-owned one-based pages", async () => {
@@ -31,5 +31,14 @@ describe("PdfInspectorAdapter", () => {
     };
     await expect(new PdfInspectorAdapter(engine).inspect(Buffer.from("fixture")))
       .rejects.toThrow("inconsistent page counts");
+  });
+});
+
+describe("PdfiumPageRenderer", () => {
+  it("rejects an invalid request before loading PDFium", async () => {
+    await expect(new PdfiumPageRenderer().render(Buffer.from("not a pdf"), {
+      sourceSha256: "invalid", pageNumber: 0, targetDpi: 600,
+      colorMode: "color", outputFormat: "png", maximumPixels: 0,
+    })).rejects.toThrow("checksum");
   });
 });

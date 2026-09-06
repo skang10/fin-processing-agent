@@ -98,6 +98,11 @@ export const pages = pgTable("pages", {
   hasColumns: boolean("has_columns").notNull(),
   nativeCharacterCount: integer("native_character_count").notNull(),
   nativeTextArtifactId: uuid("native_text_artifact_id").references(() => artifacts.id),
+  renderArtifactId: uuid("render_artifact_id").references(() => artifacts.id),
+  renderWidth: integer("render_width"),
+  renderHeight: integer("render_height"),
+  renderDpi: integer("render_dpi"),
+  rendererVersion: text("renderer_version"),
 }, (table) => [uniqueIndex("page_inspection_number_uq").on(table.documentInspectionId, table.pageNumber)]);
 
 export const processingRuns = pgTable("processing_runs", {

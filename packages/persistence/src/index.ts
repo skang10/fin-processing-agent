@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type SourceDocumentArtifactView, type StoredDerivedArtifact } from "@findoc/core";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type PageRenderArtifactView, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type SourceDocumentArtifactView, type StoredDerivedArtifact, type StoredPageRenderArtifact } from "@findoc/core";
 import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
@@ -645,6 +645,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       hasTable: pages.hasTable,
       hasColumns: pages.hasColumns,
       nativeCharacterCount: pages.nativeCharacterCount, nativeTextArtifactId: pages.nativeTextArtifactId,
+      renderArtifactId: pages.renderArtifactId,
     }).from(cases)
       .innerJoin(processingRuns, eq(cases.currentRunId, processingRuns.id))
       .innerJoin(inputDocumentSelections, eq(processingRuns.inputRevisionId, inputDocumentSelections.inputRevisionId))
@@ -658,6 +659,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       ...(record.ocrReason ? { ocrReason: record.ocrReason } : {}),
       hasTable: record.hasTable, hasColumns: record.hasColumns,
       nativeCharacterCount: record.nativeCharacterCount, nativeTextAvailable: Boolean(record.nativeTextArtifactId),
+      renderAvailable: Boolean(record.renderArtifactId),
     };
   }
 
@@ -670,6 +672,17 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     if (!record) throw new CaseNotFoundError();
     if (record.mediaType !== "text/markdown") throw new Error("Persisted native-text media type is invalid");
     return { objectKey: record.objectKey, byteSize: record.byteSize, mediaType: "text/markdown" };
+  }
+
+  async getPageRenderArtifact(caseId: string, documentId: string, pageNumber: number): Promise<PageRenderArtifactView> {
+    const [record] = await this.db.select({ objectKey: artifacts.objectKey, byteSize: artifacts.byteSize, mediaType: artifacts.detectedMediaType })
+      .from(pages).innerJoin(documentVersions, eq(pages.documentVersionId, documentVersions.id))
+      .innerJoin(physicalDocuments, eq(documentVersions.physicalDocumentId, physicalDocuments.id))
+      .innerJoin(artifacts, eq(pages.renderArtifactId, artifacts.id))
+      .where(and(eq(physicalDocuments.caseId, caseId), eq(documentVersions.id, documentId), eq(pages.pageNumber, pageNumber))).limit(1);
+    if (!record) throw new CaseNotFoundError();
+    if (record.mediaType !== "image/png") throw new Error("Persisted page-render media type is invalid");
+    return { objectKey: record.objectKey, byteSize: record.byteSize, mediaType: "image/png" };
   }
 
   async getFindings(caseId: string): Promise<readonly FindingView[]> {
@@ -833,6 +846,7 @@ export class PostgresWorkflowCoordinator {
     const records = await this.db.select({
       documentVersionId: documentVersions.id,
       objectKey: artifacts.objectKey,
+      sha256: artifacts.sha256,
       mediaType: documentVersions.detectedMediaType,
     }).from(documentVersions)
       .innerJoin(inputDocumentSelections, eq(documentVersions.id, inputDocumentSelections.documentVersionId))
@@ -859,11 +873,18 @@ export class PostgresWorkflowCoordinator {
       const [persisted] = await tx.select({ id: documentInspections.id }).from(documentInspections)
         .where(and(eq(documentInspections.runId, runId), eq(documentInspections.documentVersionId, document.documentVersionId))).limit(1);
       if (!persisted || persisted.id !== inspectionId) return;
-      const derivedArtifacts = inspection.pages.flatMap((page) => page.nativeTextArtifact ? [{
-        id: randomUUID(), caseId: page.nativeTextArtifact.caseId, objectKey: page.nativeTextArtifact.objectKey,
-        sha256: page.nativeTextArtifact.sha256, byteSize: page.nativeTextArtifact.byteSize,
-        detectedMediaType: page.nativeTextArtifact.mediaType, artifactKind: "native_text",
-      }] : []);
+      const derivedArtifacts = inspection.pages.flatMap((page) => [
+        ...(page.nativeTextArtifact ? [{
+          id: randomUUID(), caseId: page.nativeTextArtifact.caseId, objectKey: page.nativeTextArtifact.objectKey,
+          sha256: page.nativeTextArtifact.sha256, byteSize: page.nativeTextArtifact.byteSize,
+          detectedMediaType: page.nativeTextArtifact.mediaType, artifactKind: "native_text",
+        }] : []),
+        ...(page.renderArtifact ? [{
+          id: randomUUID(), caseId: page.renderArtifact.caseId, objectKey: page.renderArtifact.objectKey,
+          sha256: page.renderArtifact.sha256, byteSize: page.renderArtifact.byteSize,
+          detectedMediaType: page.renderArtifact.mediaType, artifactKind: "page_render",
+        }] : []),
+      ]);
       const artifactIds = new Map<string, string>();
       if (derivedArtifacts.length > 0) {
         await tx.insert(artifacts).values(derivedArtifacts).onConflictDoNothing();
@@ -879,6 +900,9 @@ export class PostgresWorkflowCoordinator {
         hasTable: page.hasTable, hasColumns: page.hasColumns,
         nativeCharacterCount: page.nativeCharacterCount,
         nativeTextArtifactId: page.nativeTextArtifact ? artifactIds.get(page.nativeTextArtifact.objectKey) : null,
+        renderArtifactId: page.renderArtifact ? artifactIds.get(page.renderArtifact.objectKey) : null,
+        renderWidth: page.renderArtifact?.width ?? null, renderHeight: page.renderArtifact?.height ?? null,
+        renderDpi: page.renderArtifact?.targetDpi ?? null, rendererVersion: page.renderArtifact?.rendererVersion ?? null,
       })));
       await tx.update(documentVersions).set({ readabilityState: "inspected" })
         .where(eq(documentVersions.id, document.documentVersionId));
@@ -1198,6 +1222,7 @@ function isoTimestamp(value: unknown): string | undefined {
 export interface StoredDocumentReference {
   readonly documentVersionId: string;
   readonly objectKey: string;
+  readonly sha256: string;
   readonly mediaType: string;
 }
 
@@ -1215,6 +1240,7 @@ export interface InspectionRecord {
     hasColumns: boolean;
     nativeCharacterCount: number;
     nativeTextArtifact?: StoredDerivedArtifact & { readonly caseId: string };
+    renderArtifact?: StoredPageRenderArtifact & { readonly caseId: string };
   }[];
 }
 

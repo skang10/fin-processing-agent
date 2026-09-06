@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { PdfInspectorAdapter } from "./index.js";
+import { createHash } from "node:crypto";
+import { PdfInspectorAdapter, PdfiumPageRenderer } from "./index.js";
 
 describe("PDF Inspector native module", () => {
   it("classifies and extracts a one-page synthetic text PDF", async () => {
@@ -11,6 +12,18 @@ describe("PDF Inspector native module", () => {
       pdfType: "text_based",
     });
     expect(result.pages[0]?.nativeMarkdown).toContain("Synthetic demo");
+  });
+});
+
+describe("PDFium renderer", () => {
+  it("renders one bounded synthetic page as PNG", async () => {
+    const source = createSyntheticPdf();
+    const result = await new PdfiumPageRenderer().render(source, {
+      sourceSha256: createHash("sha256").update(source).digest("hex"), pageNumber: 1, targetDpi: 96,
+      colorMode: "color", outputFormat: "png", maximumPixels: 2_000_000,
+    });
+    expect(result).toMatchObject({ width: 816, height: 1056, targetDpi: 96, outputFormat: "png" });
+    expect(result.bytes.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
   });
 });
 

@@ -61,7 +61,7 @@ The implementation spike must prove:
 
 ### BL-003 — PDF Inspector Integration Baseline
 
-**Status:** PDF Inspector adapter, native inspection, immutable native-text persistence, scoped source delivery, and PDF.js reviewer display implemented; dataset evidence and server-side PDFium rendering/OCR spike pending
+**Status:** PDF Inspector, native-text persistence, PDF.js reviewer display, and pinned PDFium full-page rendering are implemented; dataset evidence, restricted renderer isolation, crop rendering, and OCR remain pending
 
 Use `firecrawl/pdf-inspector` as the initial PDF classification, native text and coordinate extraction, layout, table, rendering integration, and selective OCR-routing foundation. Keep PDF rendering and the independent PP-OCRv6-targeted `OcrEngine` behind project interfaces.
 

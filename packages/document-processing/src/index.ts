@@ -4,8 +4,79 @@ import {
   type PdfClassification,
   type PagesExtractionResult,
 } from "@firecrawl/pdf-inspector";
+import { createHash } from "node:crypto";
+import { PDFiumLibrary } from "@hyzyla/pdfium";
+import sharp from "sharp";
 
 export const PDF_INSPECTOR_VERSION = "1.17.0";
+export const PDFIUM_RENDERER_VERSION = "@hyzyla/pdfium-2.1.13";
+
+export interface PageRenderRequest {
+  readonly sourceSha256: string;
+  readonly pageNumber: number;
+  readonly targetDpi: number;
+  readonly colorMode: "color" | "grayscale";
+  readonly outputFormat: "png";
+  readonly maximumPixels: number;
+}
+
+export interface PageRenderResult {
+  readonly bytes: Buffer;
+  readonly width: number;
+  readonly height: number;
+  readonly targetDpi: number;
+  readonly colorMode: "color" | "grayscale";
+  readonly outputFormat: "png";
+  readonly rendererVersion: string;
+}
+
+export interface PageRenderer {
+  render(source: Buffer, request: PageRenderRequest): Promise<PageRenderResult>;
+}
+
+export class PdfiumPageRenderer implements PageRenderer {
+  async render(source: Buffer, request: PageRenderRequest): Promise<PageRenderResult> {
+    validateRenderRequest(request);
+    if (createHash("sha256").update(source).digest("hex") !== request.sourceSha256) {
+      throw new Error("Render source checksum does not match the supplied bytes");
+    }
+    const library = await PDFiumLibrary.init();
+    const document = await library.loadDocument(source);
+    try {
+      if (request.pageNumber > document.getPageCount()) throw new Error("Render page is outside the document");
+      const page = document.getPage(request.pageNumber - 1);
+      const { originalWidth, originalHeight } = page.getOriginalSize();
+      const scale = request.targetDpi / 72;
+      const width = Math.floor(originalWidth * scale);
+      const height = Math.floor(originalHeight * scale);
+      if (width < 1 || height < 1 || width * height > request.maximumPixels) {
+        throw new Error("Render exceeds the configured pixel limit");
+      }
+      const rendered = await page.render({
+        scale,
+        colorSpace: request.colorMode === "grayscale" ? "Gray" : "BGRA",
+        render: async ({ data, width: rawWidth, height: rawHeight }) => sharp(data, {
+          raw: { width: rawWidth, height: rawHeight, channels: request.colorMode === "grayscale" ? 1 : 4 },
+        }).png().toBuffer(),
+      });
+      return {
+        bytes: Buffer.from(rendered.data), width: rendered.width, height: rendered.height,
+        targetDpi: request.targetDpi, colorMode: request.colorMode, outputFormat: "png",
+        rendererVersion: PDFIUM_RENDERER_VERSION,
+      };
+    } finally {
+      document.destroy();
+      library.destroy();
+    }
+  }
+}
+
+function validateRenderRequest(request: PageRenderRequest): void {
+  if (!/^[a-f0-9]{64}$/.test(request.sourceSha256)) throw new Error("Render source checksum is invalid");
+  if (!Number.isInteger(request.pageNumber) || request.pageNumber < 1) throw new Error("Render page number is invalid");
+  if (!Number.isFinite(request.targetDpi) || request.targetDpi < 72 || request.targetDpi > 300) throw new Error("Render DPI is invalid");
+  if (!Number.isSafeInteger(request.maximumPixels) || request.maximumPixels < 1) throw new Error("Render pixel limit is invalid");
+}
 
 export interface InspectedPage {
   readonly pageNumber: number;

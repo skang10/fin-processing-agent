@@ -122,6 +122,11 @@ describe("PostgresCaseCommandService", () => {
           caseId: accepted.caseId, objectKey: "derived/native/page-1", sha256: "b".repeat(64),
           byteSize: 16, mediaType: "text/markdown",
         },
+        renderArtifact: {
+          caseId: accepted.caseId, objectKey: "derived/render/page-1", sha256: "c".repeat(64),
+          byteSize: 8, mediaType: "image/png", width: 935, height: 1210,
+          targetDpi: 110, rendererVersion: "@hyzyla/pdfium-2.1.13",
+        },
       }],
     });
     await coordinator.persistInspection(accepted.runId, document, {
@@ -136,13 +141,16 @@ describe("PostgresCaseCommandService", () => {
     ]);
     expect([inspectionCount?.value, pageCount?.value]).toEqual([1, 1]);
     await expect(queriesBeforeProcessing.getDocumentPage(accepted.caseId, document.documentVersionId, 1)).resolves.toMatchObject({
-      pageNumber: 1, nativeCharacterCount: 42, nativeTextAvailable: true,
+      pageNumber: 1, nativeCharacterCount: 42, nativeTextAvailable: true, renderAvailable: true,
     });
     await expect(queriesBeforeProcessing.getNativeTextArtifact(accepted.caseId, document.documentVersionId, 1)).resolves.toEqual({
       objectKey: "derived/native/page-1", byteSize: 16, mediaType: "text/markdown",
     });
     await expect(queriesBeforeProcessing.getNativeTextArtifact("00000000-0000-4000-8000-000000000000", document.documentVersionId, 1))
       .rejects.toBeInstanceOf(CaseNotFoundError);
+    await expect(queriesBeforeProcessing.getPageRenderArtifact(accepted.caseId, document.documentVersionId, 1)).resolves.toEqual({
+      objectKey: "derived/render/page-1", byteSize: 8, mediaType: "image/png",
+    });
 
     const inputRevisionId = await coordinator.loadInputRevisionId(accepted.caseId, accepted.runId);
     const sourceContext = await coordinator.loadOfflineSourceContext(accepted.caseId, accepted.runId);

@@ -52,6 +52,12 @@ if (!sourceResponse.ok || !Buffer.from(await sourceResponse.arrayBuffer()).subar
 const firstPageUrl = `${apiBaseUrl}/api/v1/cases/${accepted.case_id}/documents/${firstDocument.document_id}/pages/1`;
 const firstPage = await fetch(firstPageUrl).then(requireOk);
 if (!firstPage.native_text_available) throw new Error("Demo result did not retain page native text");
+if (!firstPage.render_available || !firstPage.render_url) throw new Error("Demo result did not retain its page render");
+const renderResponse = await fetch(`${apiBaseUrl}${firstPage.render_url}`);
+if (!renderResponse.ok || !Buffer.from(await renderResponse.arrayBuffer()).subarray(0, 8)
+  .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+  throw new Error("Demo page-render stream was unavailable or invalid");
+}
 const nativeTextResponse = await fetch(`${firstPageUrl}/native-text`);
 if (!nativeTextResponse.ok || !(await nativeTextResponse.text()).trim()) {
   throw new Error("Demo native-text stream was unavailable or empty");

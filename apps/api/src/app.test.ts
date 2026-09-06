@@ -96,9 +96,11 @@ describe("case intake", () => {
     })),
     getDocumentPage: vi.fn(async () => ({
       documentId: "4c816f67-5f2f-4e21-8c17-7eb1e5383998",
-      pageNumber: 1, needsOcr: false, hasTable: true, hasColumns: false, nativeCharacterCount: 42, nativeTextAvailable: true,
+      pageNumber: 1, needsOcr: false, hasTable: true, hasColumns: false, nativeCharacterCount: 42,
+      nativeTextAvailable: true, renderAvailable: true,
     })),
     getNativeTextArtifact: vi.fn(async () => ({ objectKey: "derived/native/page-1", byteSize: 16, mediaType: "text/markdown" as const })),
+    getPageRenderArtifact: vi.fn(async () => ({ objectKey: "derived/render/page-1", byteSize: 8, mediaType: "image/png" as const })),
     getDownstreamHandoff: vi.fn(async () => ({
       caseId: "4c816f67-5f2f-4e21-8c17-7eb1e53838bd",
       status: "ready_for_handoff" as const,
@@ -270,7 +272,10 @@ describe("case intake", () => {
       submitted_filename: "statement.pdf", page_count: 1,
       content_url: `${base}/documents/4c816f67-5f2f-4e21-8c17-7eb1e5383998/content`,
     }] });
-    expect(page.json()).toMatchObject({ page_number: 1, has_table: true, native_character_count: 42 });
+    expect(page.json()).toMatchObject({
+      page_number: 1, has_table: true, native_character_count: 42, render_available: true,
+      render_url: `${base}/documents/4c816f67-5f2f-4e21-8c17-7eb1e5383998/pages/1/render`,
+    });
     await app.close();
   });
 
@@ -288,6 +293,23 @@ describe("case intake", () => {
     expect(response.headers["content-type"]).toContain("text/markdown");
     expect(response.body).toBe("# Synthetic page");
     expect(response.body).not.toContain("derived/native/page-1");
+    await app.close();
+  });
+
+  it("streams an authorized immutable page render", async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const artifactStore = {
+      put: vi.fn(async () => undefined), remove: vi.fn(async () => undefined),
+      get: vi.fn(async () => (async function* () { yield png; })()),
+    };
+    const app = buildApp({ accept: vi.fn() }, caseQueries, undefined, undefined, artifactStore);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/documents/4c816f67-5f2f-4e21-8c17-7eb1e5383998/pages/1/render",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("image/png");
+    expect(response.rawPayload).toEqual(png);
     await app.close();
   });
 
