@@ -6,7 +6,7 @@ import { loadGoldenCase } from "./load-golden.mjs";
 
 export async function captureEvaluationRun(releaseDirectory, runConfiguration, options = {}) {
   const { manifest, cases } = await loadFrozenRelease(releaseDirectory);
-  validateConfiguration(runConfiguration, manifest.version);
+  validateConfiguration(runConfiguration, manifest.version, cases.length);
   const fetcher = options.fetcher ?? fetch; const apiBaseUrl = options.apiBaseUrl ?? process.env.API_BASE_URL ?? "http://127.0.0.1:3000";
   const actualCases = [];
   for (const candidate of cases) {
@@ -52,9 +52,21 @@ function verifierState(failure) {
   return { schema_valid: failure !== "schema_rejected", reference_valid: failure !== "reference_rejected", registered_code_valid: failure !== "registered_code_rejected", prohibited_content_valid: !failure?.startsWith("policy_rejected_") };
 }
 function invalidVerifier() { return { schema_valid: false, reference_valid: false, registered_code_valid: false, prohibited_content_valid: false }; }
-function validateConfiguration(configuration, datasetVersion) {
+function validateConfiguration(configuration, datasetVersion, caseCount) {
   if (!configuration?.run_id || !configuration.executed_at || !configuration.environment || !configuration.source_revision || !configuration.versions) throw new Error("Capture configuration is incomplete");
   if (configuration.versions.dataset !== datasetVersion) throw new Error("Capture dataset version does not match the frozen release");
+  if (configuration.cost_budget !== undefined) validateCostBudget(configuration.cost_budget, caseCount);
+}
+
+export function validateCostBudget(budget, caseCount) {
+  const total = budget?.maximum_total_usd;
+  const perCase = budget?.maximum_per_case_usd;
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(perCase) || perCase <= 0) {
+    throw new Error("Capture cost budget must contain positive maximum_total_usd and maximum_per_case_usd values");
+  }
+  if (perCase * caseCount > total) {
+    throw new Error(`Capture cost budget cannot reserve ${caseCount} cases within the maximum total USD cost`);
+  }
 }
 async function responseJson(response, label) { if (!response.ok) throw new Error(`${label} failed with ${response.status}`); return response.json(); }
 

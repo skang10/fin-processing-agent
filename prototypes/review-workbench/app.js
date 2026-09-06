@@ -1136,7 +1136,9 @@ function renderAgentLog() {
     : (apiAgentLog.model_label || 'Unavailable');
   document.querySelector('.agent-log-meta').innerHTML =
     '<div><span>Model</span><strong title="' + escapeHtml(apiAgentLog.model_label || '') + '">' + escapeHtml(modelLabel) + '</strong></div>' +
-    '<div><span>Cost</span><strong>' + (apiAgentLog.estimated_cost ? '€' + escapeHtml(apiAgentLog.estimated_cost.amount) : 'Unavailable') + '</strong></div>' +
+    '<div><span>Cost</span><strong>' + (apiAgentLog.estimated_cost
+      ? escapeHtml(apiAgentLog.estimated_cost.currency + ' ' + apiAgentLog.estimated_cost.amount)
+      : 'Unavailable') + '</strong></div>' +
     '<div><span>Current step</span><strong>' + escapeHtml(stepLabels[apiAgentLog.current_step] || apiAgentLog.current_step) + '</strong></div>';
 
   const formatEvents = function (events) {

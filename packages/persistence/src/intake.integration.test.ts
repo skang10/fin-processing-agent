@@ -301,7 +301,7 @@ describe("PostgresCaseCommandService", () => {
       currentStep: "awaiting_human_review",
       session: { harnessLabel: "pi-agent-led-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review", terminalReason: "report_submitted", iterations: 2, toolCalls: 2, usageAvailable: true },
       events: [
-        { activity: "Started case review session" },
+        { activity: "Started review using pre-extracted case data" },
         { activity: "Listed deterministic findings", toolLabel: "list_findings" },
         { activity: "Submitted a Case Review Brief", toolLabel: "submit_case_review_brief" },
         { activity: "Session ended: report submitted" },

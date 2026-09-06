@@ -531,12 +531,16 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     return {
       availability: report ? (report.availability === "ready" ? "ready" : "unavailable") : "pending",
       ...(report ? { modelLabel: report.modelLabel } : currentSession ? { modelLabel: currentSession.modelLabel } : {}),
-      ...(report?.estimatedCost != null ? { estimatedCost: { amount: report.estimatedCost, currency: "EUR" } } : {}),
+      ...(report?.estimatedCost != null
+        ? { estimatedCost: { amount: report.estimatedCost, currency: "EUR" as const } }
+        : currentSession && currentSession.usageAvailable
+          ? { estimatedCost: { amount: (currentSession.costMicroUsd / COST_MICRO_SCALE).toFixed(6), currency: "USD" as const } }
+          : {}),
       currentStep,
       ...(currentSession ? { session: view(currentSession) } : {}),
       events: [
         ...sessions.flatMap((session) => [
-          { timestamp: session.startedAt.toISOString(), activity: `Started ${session.mode.replace(/_/g, " ")} session` },
+          { timestamp: session.startedAt.toISOString(), activity: "Started review using pre-extracted case data" },
           ...attempts.filter((attempt) => attempt.sessionId === session.id && attempt.attemptNumber > 1)
             .map((attempt) => ({ timestamp: attempt.startedAt.toISOString(), activity: "Processing resumed from saved progress" })),
           ...steps.filter((step) => step.sessionId === session.id)
@@ -1347,10 +1351,24 @@ function reviewerActivity(
   step: typeof agentSteps.$inferSelect,
   originatingAttempt: ReadonlyMap<string, string | null>,
 ): string {
-  if (!step.reusedInvocationId) return step.summary;
+  if (!step.reusedInvocationId) return reviewerStepSummary(step);
   const origin = originatingAttempt.get(step.reusedInvocationId);
   if (origin && step.attemptId && origin === step.attemptId) return step.summary;
   return REUSED_WORK_LABELS[step.toolName] ?? "Reused previously saved work after processing resumed";
+}
+
+function reviewerStepSummary(step: typeof agentSteps.$inferSelect): string {
+  if (step.toolName === "request_reconciliation" && step.summary.startsWith("Sent 0 Agent-proposed values")) {
+    return "Existing extracted data was sufficient; no additional extraction was needed";
+  }
+  if (step.toolName === "request_validation") {
+    const attention = /; (\d+) findings? requires? attention$/u.exec(step.summary)?.[1];
+    if (attention === "0") return "Completed the validation checks; no issues found";
+  }
+  if (step.toolName === "get_current_result" && step.summary === "Reviewed deterministic findings and document-processing disposition") {
+    return "Reviewed the case results before preparing the report";
+  }
+  return step.summary;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { captureEvaluationRun, captureIssueEvidence } from "./capture-evaluation.mjs";
+import { captureEvaluationRun, captureIssueEvidence, validateCostBudget } from "./capture-evaluation.mjs";
 import * as evaluator from "./evaluate.mjs";
 
 describe("evaluation run capture", () => {
@@ -14,5 +14,17 @@ describe("evaluation run capture", () => {
     const finding = { reason_code: "required_document_missing" };
     expect(captureIssueEvidence(issue, finding, ["page:1", "page:2"], () => ["page:1", "page:2"]))
       .toEqual(["finding:VAL_DOC_COMPLETENESS_001"]);
+  });
+
+  it("refuses a full run whose per-case reservations exceed its total cost cap", () => {
+    expect(() => validateCostBudget({ maximum_total_usd: 1, maximum_per_case_usd: 0.25 }, 6))
+      .toThrow("cannot reserve 6 cases");
+    expect(() => validateCostBudget({ maximum_total_usd: 1.5, maximum_per_case_usd: 0.25 }, 6))
+      .not.toThrow();
+  });
+
+  it("requires finite positive cost limits", () => {
+    expect(() => validateCostBudget({ maximum_total_usd: 2, maximum_per_case_usd: 0 }, 6))
+      .toThrow("positive");
   });
 });

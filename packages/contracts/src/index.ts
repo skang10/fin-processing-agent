@@ -170,7 +170,9 @@ export const AgentLogSessionSchema = Type.Object(AgentLogSessionFields, { additi
 export const AgentLogSchema = Type.Object({
   availability: Type.Union([Type.Literal("pending"), Type.Literal("ready"), Type.Literal("unavailable")]),
   model_label: Type.Optional(Type.String()),
-  estimated_cost: Type.Optional(Type.Object({ amount: Type.String(), currency: Type.Literal("EUR") }, { additionalProperties: false })),
+  estimated_cost: Type.Optional(Type.Object({
+    amount: Type.String(), currency: Type.Union([Type.Literal("EUR"), Type.Literal("USD")]),
+  }, { additionalProperties: false })),
   current_step: Type.Union([Type.Literal("processing"), Type.Literal("awaiting_human_review"), Type.Literal("review_completed")]),
   session: Type.Optional(AgentLogSessionSchema),
   events: Type.Array(Type.Object({

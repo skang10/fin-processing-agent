@@ -654,7 +654,7 @@ export interface AgentLogSessionView {
 export interface AgentLogView {
   readonly availability: "pending" | "ready" | "unavailable";
   readonly modelLabel?: string;
-  readonly estimatedCost?: { readonly amount: string; readonly currency: "EUR" };
+  readonly estimatedCost?: { readonly amount: string; readonly currency: "EUR" | "USD" };
   readonly currentStep: "processing" | "awaiting_human_review" | "review_completed";
   readonly session?: AgentLogSessionView;
   readonly events: readonly { readonly timestamp: string; readonly activity: string; readonly toolLabel?: string }[];

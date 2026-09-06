@@ -57,7 +57,12 @@ const requestReconciliationTool: Tool = {
   execute: async (_args, scope, state) => {
     const result = await scope.ports.requestReconciliation(state.candidates);
     state.reconciliationReference = result.reference;
-    return { summary: `Sent ${state.candidates.length} Agent-proposed ${state.candidates.length === 1 ? "value" : "values"} to deterministic reconciliation`, output: { reference: result.reference } };
+    return {
+      summary: state.candidates.length === 0
+        ? "Existing extracted data was sufficient; no additional extraction was needed"
+        : `Submitted ${state.candidates.length} recovered ${state.candidates.length === 1 ? "value" : "values"} for verification`,
+      output: { reference: result.reference },
+    };
   },
   restore: (output, _scope, state) => { state.reconciliationReference = (output as { reference: string }).reference; },
   producedReferences: (output) => [{ kind: "reconciliation", id: (output as { reference: string }).reference }],
@@ -73,7 +78,9 @@ const requestValidationTool: Tool = {
     state.result = await scope.ports.requestValidation();
     const attentionCount = state.result.findings.filter((finding) => finding.status !== "passed" && finding.status !== "not_applicable").length;
     return {
-      summary: `Ran registered validation checks; ${attentionCount} ${attentionCount === 1 ? "finding requires" : "findings require"} attention`,
+      summary: attentionCount === 0
+        ? `Checked ${state.result.findings.length} validation rules; no issues found`
+        : `Checked ${state.result.findings.length} validation rules; ${attentionCount} ${attentionCount === 1 ? "issue requires" : "issues require"} review`,
       output: projectResult(state.result),
     };
   },
@@ -115,7 +122,7 @@ const getCurrentResultTool: Tool = {
   authorize: (_args, _scope, state) => state.result ? undefined : "validation_required",
   execute: async (_args, _scope, state) => {
     if (!state.result) throw new Error("Validated result is unavailable");
-    return { summary: "Reviewed deterministic findings and document-processing disposition", output: projectResult(state.result) };
+    return { summary: "Reviewed the case results before preparing the report", output: projectResult(state.result) };
   },
 };
 

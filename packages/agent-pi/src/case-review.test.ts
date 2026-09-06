@@ -46,6 +46,12 @@ describe("PiAgentLedCaseReviewHarness", () => {
     const outcome = await new PiAgentLedCaseReviewHarness({ model: { route: "fake", script: policyViolationCaseReviewScript, scriptLabel: "policy_violation" } }).review(context(false), ports());
     expect(outcome.trace.terminalReason).toBe("report_submitted");
     expect(outcome.submission).toMatchObject({ summary: "Approve the loan." });
+    expect(outcome.trace.steps.find((step) => step.toolName === "request_reconciliation")?.summary)
+      .toBe("Existing extracted data was sufficient; no additional extraction was needed");
+    expect(outcome.trace.steps.find((step) => step.toolName === "request_validation")?.summary)
+      .toBe("Checked 0 validation rules; no issues found");
+    expect(outcome.trace.steps.find((step) => step.toolName === "get_current_result")?.summary)
+      .toBe("Reviewed the case results before preparing the report");
   });
 
   it("rejects unknown coding tools without granting extra authority", async () => {

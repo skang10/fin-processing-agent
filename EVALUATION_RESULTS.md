@@ -60,7 +60,7 @@ pnpm evaluate:offline -- datasets/golden/releases/v0.1.1 ACTUAL_RUN_JSON
 
 **Purpose:** Verify the authorized OpenAI route and bounded Pi harness on one synthetic clean case
 
-`golden-001-native-clear` completed in the local Docker Compose environment with `openai/gpt-5.6-terra`, `pi-coding-agent@0.85.1`, fake OCR, and the existing per-case `USD 0.25` hard cost limit. The session submitted a verifier-accepted report with no Agent issues.
+`golden-001-native-clear` completed in the local Docker Compose environment with `openai/gpt-5.6-terra`, `pi-coding-agent@0.85.1`, fixture-backed structured extraction, fake OCR, and the existing per-case `USD 0.25` hard cost limit. PDF Inspector performed pre-Agent native-text inspection and rendering; the live model reviewed the resulting preprocessed case and submitted a verifier-accepted report with no Agent issues. This run did not measure general PDF-to-structured-data extraction.
 
 | Observation | Result |
 |---|---:|
@@ -72,4 +72,4 @@ pnpm evaluate:offline -- datasets/golden/releases/v0.1.1 ACTUAL_RUN_JSON
 | Tool calls | 4 |
 | Terminal reason | `report_submitted` |
 
-This single-case observation proves route and harness acceptance only. It is not the formal measured baseline, a model comparison, or an OCR-quality result. The provider-reported token counts require reconciliation before use in a published baseline. The reviewer projection also requires a currency-correct cost presentation because persisted live usage is USD while its current optional UI field is EUR-only.
+This single-case observation proves route and harness acceptance only. It is not the formal measured baseline, a model comparison, or an OCR-quality result. The provider-reported token counts require reconciliation before use in a published baseline. The reviewer projection now presents the persisted live cost explicitly in USD rather than omitting it or labeling it as EUR.
