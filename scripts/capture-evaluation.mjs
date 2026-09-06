@@ -21,9 +21,11 @@ export async function captureEvaluationRun(releaseDirectory, runConfiguration, o
     const references = (values) => [...new Set(values.map((value) => canonical.get(value.split("/").at(-1))).filter(Boolean))].sort();
     const report = runtime.report;
     const failure = report.failure_reason;
+    const findingEvidence = new Map(runtime.findings.findings.map((finding) => [finding.finding_id, references(finding.references)]));
+    const issueEvidence = (values) => [...new Set(values.flatMap((value) => findingEvidence.get(value.split("/").at(-1)) ?? references([value])))].sort();
     actualCases.push({
       case_id: candidate.case_id, processable: true,
-      issues: runtime.issues.issues.filter((item) => item.origin === "agent").map((item) => ({ code: item.code, evidence: references(item.supporting_references) })),
+      issues: runtime.issues.issues.filter((item) => item.origin === "agent").map((item) => ({ code: item.code, evidence: issueEvidence(item.supporting_references) })),
       checked_facts: report.checked_facts.map((item) => ({ code: item.rule_id, evidence: references(item.references) })),
       report: { availability: report.availability, verified: report.availability === "ready", ...(failure ? { failure_reason: failure } : {}), verifier: verifierState(failure) },
       operations: {},
