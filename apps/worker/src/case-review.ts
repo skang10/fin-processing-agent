@@ -104,7 +104,9 @@ export async function processAgentLedCaseReview(
             resultRevisionId: committed.resultRevisionId,
             findings: committed.findings.map((finding) => ({ ruleId: finding.ruleId, ruleVersion: finding.ruleVersion, status: finding.status, reasonCode: finding.reasonCode, references: finding.materialInputRefs })),
             recommendedDisposition: committed.recommendedDisposition,
-            allowedReferences: new Set(committed.findings.map((finding) => `finding:${finding.ruleId}`)),
+            allowedReferences: new Set(committed.findings
+              .filter((finding) => finding.status !== "passed" && finding.status !== "not_applicable")
+              .map((finding) => `finding:${finding.ruleId}`)),
           };
         },
       });

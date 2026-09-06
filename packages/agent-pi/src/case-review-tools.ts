@@ -23,7 +23,7 @@ import {
   type RecoveryToolState,
 } from "./recovery-tools.js";
 
-export const CASE_REVIEW_TOOL_REGISTRY_VERSION = "case-review-tools-3.2.0";
+export const CASE_REVIEW_TOOL_REGISTRY_VERSION = "case-review-tools-3.3.0";
 
 export interface AgentLedScope extends RecoveryScope {
   readonly context: AgentLedCaseReviewContext;
@@ -111,7 +111,9 @@ function restoreResult(output: unknown): CaseReviewContext {
       ruleId: finding.rule_id, ...(finding.rule_version ? { ruleVersion: finding.rule_version } : {}),
       status: finding.status, reasonCode: finding.reason_code, references: finding.references,
     })),
-    allowedReferences: new Set(committed.findings.map((finding) => finding.reference_key)),
+    allowedReferences: new Set(committed.findings
+      .filter((finding) => finding.status !== "passed" && finding.status !== "not_applicable")
+      .map((finding) => finding.reference_key)),
   };
 }
 
@@ -133,12 +135,19 @@ const getCurrentResultTool: Tool = {
 const SubmitBrief = Type.Object({ brief: CaseReviewBriefCandidateSchema }, { additionalProperties: false });
 
 const submitBriefTool: Tool = {
-  name: "submit_case_review_brief", version: "1.0.0", label: "Submit Case Review Brief", costClass: "submit",
+  name: "submit_case_review_brief", version: "2.0.0", label: "Submit Case Review Brief", costClass: "submit",
   description: "Submit one Case Review Brief for deterministic verification.", promptSnippet: "submit the report after reading the current result",
   parameters: SubmitBrief,
-  authorize: (args, _scope, state) => !state.result ? "validation_required"
-    : (args as SubmitBriefArguments).brief.result_revision_id !== state.result.resultRevisionId ? "result_revision_mismatch"
-      : state.submission !== undefined ? "report_already_submitted" : undefined,
+  authorize: (args, _scope, state) => {
+    if (!state.result) return "validation_required";
+    const brief = (args as SubmitBriefArguments).brief;
+    if (brief.result_revision_id !== state.result.resultRevisionId) return "result_revision_mismatch";
+    if (state.submission !== undefined) return "report_already_submitted";
+    if ((brief.attention_items as { references: string[] }[]).some((item) => item.references.some((reference) => !state.result?.allowedReferences.has(reference)))) {
+      return "report_reference_outside_current_result";
+    }
+    return undefined;
+  },
   execute: async (args, _scope, state) => {
     state.submission = (args as SubmitBriefArguments).brief;
     return { summary: "Submitted a Case Review Brief", output: { accepted: true, brief: state.submission }, terminate: true };

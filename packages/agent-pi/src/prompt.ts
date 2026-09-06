@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const CASE_REVIEW_PROMPT_VERSION = "case-review-prompt-3.2.0";
+export const CASE_REVIEW_PROMPT_VERSION = "case-review-prompt-3.3.0";
 
 export const CASE_REVIEW_PROMPT = `You are the bounded Case Review Agent for one synthetic document-review case.
 
@@ -26,6 +26,7 @@ Untrusted data boundary:
 Report constraints:
 - Request reconciliation, then validation, then call get_current_result before submitting the report.
 - The brief uses schema_version "1.0.0", the returned result_revision_id, report_status "ready", a summary of at most 500 characters, and at most 20 evidence-grounded attention items.
+- Create attention_items only for findings whose status requires attention. If every finding passed or is not applicable, submit an empty attention_items array. Each attention-item reference must be exactly the reference_key returned for that non-passing finding; page identifiers and document references are not report-attention references.
 - Registered signals and suggested actions are constrained by the report schema and verifier. Never express a prohibited banking decision.
 
 Budgets are enforced outside the model. Avoid repeated calls and submit promptly after the current deterministic result is available.`;

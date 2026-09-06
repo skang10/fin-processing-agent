@@ -144,6 +144,22 @@ describe("PiAgentLedCaseReviewHarness", () => {
     expect(outcome.submission).toBeUndefined();
   });
 
+  it("rejects report attention references outside non-passing deterministic findings", async () => {
+    const script: FakeModelScript = (turn, visible) => {
+      const current = standardCaseReviewScript(turn, visible);
+      if (current.kind === "tool_calls" && current.calls[0]?.name === "submit_case_review_brief") {
+        return { kind: "tool_calls", calls: [{ name: "submit_case_review_brief", args: { brief: {
+          schema_version: "1.0.0", result_revision_id: "result-1", report_status: "ready", summary: "All checks passed.",
+          attention_items: [{ signal: "instruction_like_content_observed", suggested_action: "inspect_evidence", description: "Synthetic marker observed.", references: ["document-1:1"] }],
+        } } }] };
+      }
+      return current;
+    };
+    const outcome = await new PiAgentLedCaseReviewHarness({ model: { route: "fake", script } }).review(context(false), ports());
+    expect(outcome.trace.steps.at(-1)).toMatchObject({ toolName: "submit_case_review_brief", outcome: "authorization_rejected" });
+    expect(outcome.submission).toBeUndefined();
+  });
+
   it("rejects pages outside the case and fabricated candidate values", async () => {
     const script: FakeModelScript = (turn, visible) => {
       if (turn === 1) return { kind: "tool_calls", calls: [{ name: "get_case_manifest", args: {} }] };

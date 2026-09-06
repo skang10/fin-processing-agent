@@ -94,7 +94,9 @@ export async function runOfflineReport(result: OfflineReportInput, harness?: Cas
     resultRevisionId: result.resultRevisionId,
     findings: result.findings.map((finding) => ({ ruleId: finding.ruleId, ruleVersion: finding.ruleVersion, status: finding.status, reasonCode: finding.reasonCode, references: finding.materialInputRefs })),
     recommendedDisposition: result.recommendedDisposition,
-    allowedReferences: new Set(result.findings.map((finding) => `finding:${finding.ruleId}`)),
+    allowedReferences: new Set(result.findings
+      .filter((finding) => finding.status !== "passed" && finding.status !== "not_applicable")
+      .map((finding) => `finding:${finding.ruleId}`)),
   });
   return {
     reportAvailability: report.verified ? "ready" : "unavailable",

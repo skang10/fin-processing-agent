@@ -2,7 +2,7 @@
 
 Document ID: `AGT`
 
-Version: 3.3.0
+Version: 3.4.0
 
 Status: Approved
 
@@ -318,6 +318,8 @@ flowchart LR
 
 `AGT-REQ-181` The `submit_case_review_brief` tool boundary and deterministic Report Verifier must validate the same versioned report-candidate schema, including the closed signal and suggested-action vocabularies. A value outside that vocabulary must be rejected as a repairable tool-call schema error before session termination.
 
+`AGT-REQ-183` Before report submission terminates the session, the tool boundary must reject any attention-item reference that is not the returned reference key of a non-passing deterministic finding. Passed or not-applicable results produce no allowed attention references; document, page, artifact, and raw evidence identifiers are not report-attention references.
+
 `AGT-REQ-165` The control plane must enforce tool prerequisites. In particular, OCR requires an authorized renderable page or region; VLM extraction requires an unresolved structured need after approved local paths are insufficient or explicitly failed; reconciliation requires committed candidates; validation requires a committed reconciliation projection; and report submission requires a current result revision.
 
 `AGT-REQ-166` Native text must be attempted or its inapplicability established before OCR for the same target, and approved local extraction must be attempted or its insufficiency established before VLM extraction. The Agent chooses targets and whether further eligible work is useful, but it cannot bypass these ordering constraints.
@@ -589,6 +591,7 @@ Version 3.0.0 resolves Agent authority but creates dependent specification work 
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.4.0 | 2026-09-07 | Approved | Moved dynamic attention-reference authorization to the report tool boundary and limited report attention references to non-passing deterministic findings, allowing a live model to repair an invalid reference before session termination. |
 | 3.3.0 | 2026-09-07 | Approved | Unified the report-submission tool and Report Verifier on the same closed schema, and exposed stable semantic roles and extraction guidance for declared requirements so a salary-payment counterparty cannot be confused with the account-holding bank. |
 | 3.2.0 | 2026-09-07 | Approved | Made an authorized page render visible to the multimodal Pi model as transient tool content while persisting only its safe artifact reference, integrity metadata, and step summary. Source paths, object-store credentials, arbitrary files, and image bytes remain outside durable Agent state. |
 | 3.1.0 | 2026-09-07 | Approved | Made the Agent the source of document-derived values: replaced `get_extraction_gaps` with `get_case_manifest`, required session work to be derived from a versioned declared field-requirement set and the committed document inventory rather than evaluation truth, scoped a gap to its logical document rather than a single page, required verbatim tool evidence and deterministic normalization for every submitted value, and added acceptance criteria for local-first routing and reviewer-facing actor attribution. No authority, budget, or workflow-ownership semantics changed. |
