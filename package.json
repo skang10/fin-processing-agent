@@ -28,6 +28,7 @@
     "dataset:external": "node scripts/dataset.mjs external",
     "dataset:confirm": "node scripts/dataset.mjs confirm",
     "dataset:build": "node scripts/dataset.mjs build",
+    "evaluate:offline": "node scripts/evaluate.mjs",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc -b --pretty false"
