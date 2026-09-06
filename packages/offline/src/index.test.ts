@@ -32,7 +32,17 @@ describe("offline fixture", () => {
     expect(result.claims).toHaveLength(9);
     expect(result.candidates).toHaveLength(9);
     expect(result.reconciliations).toHaveLength(9);
-    expect(result.claims.every((claim) => claim.supportingCandidateIds?.length === 1)).toBe(true);
+    expect(result.claims.every((claim) => claim.supportingCandidateIds.length === 1)).toBe(true);
+    for (const claim of result.claims) {
+      const reconciliation = result.reconciliations.find((item) => item.resultingClaimId === claim.claimId);
+      expect(reconciliation).toMatchObject({ status: "selected", selectedCandidateId: claim.supportingCandidateIds[0] });
+      const candidate = result.candidates.find((item) => item.candidateId === reconciliation?.selectedCandidateId);
+      expect(candidate?.evidenceIds.every((evidenceId) => claim.evidenceIds.includes(evidenceId))).toBe(true);
+      expect(result.evidence.some((evidence) => candidate?.evidenceIds.includes(evidence.evidenceId))).toBe(true);
+    }
+    expect(result.findings.every((finding) => finding.materialInputRefs.every((reference) =>
+      result.claims.some((claim) => claim.claimId === reference) || result.evidence.some((evidence) => evidence.evidenceId === reference),
+    ))).toBe(true);
     expect(result.recommendedDisposition).toBe("human_review_required");
   });
 

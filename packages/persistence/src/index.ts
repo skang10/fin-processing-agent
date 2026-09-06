@@ -1027,7 +1027,7 @@ export class PostgresWorkflowCoordinator {
         documentVersionId: item.documentVersionId, pageNumber: item.pageNumber,
         extractionMethod: item.extractionMethod, processorVersion: item.processorVersion,
       })));
-      if (result.candidates?.length) {
+      if (result.candidates.length) {
         await tx.insert(extractionCandidates).values(result.candidates.map((item) => ({
           id: item.candidateId, runId, fieldSchemaId: item.fieldSchemaId, fieldSchemaVersion: item.fieldSchemaVersion,
           valueType: item.valueType, rawValue: item.rawValue, normalizedValue: item.normalizedValue,
@@ -1048,11 +1048,11 @@ export class PostgresWorkflowCoordinator {
       await tx.insert(claimEvidenceLinks).values(result.claims.flatMap((claim) => claim.evidenceIds.map((evidenceId) => ({
         id: randomUUID(), claimId: claim.claimId, evidenceId, relationship: "direct_support",
       }))));
-      const claimCandidateRows = result.claims.flatMap((claim) => (claim.supportingCandidateIds ?? []).map((candidateId) => ({
+      const claimCandidateRows = result.claims.flatMap((claim) => claim.supportingCandidateIds.map((candidateId) => ({
         id: randomUUID(), claimId: claim.claimId, candidateId, relationship: "selected_source",
       })));
       if (claimCandidateRows.length) await tx.insert(claimCandidateLinks).values(claimCandidateRows);
-      if (result.reconciliations?.length) {
+      if (result.reconciliations.length) {
         await tx.insert(reconciliationDecisions).values(result.reconciliations.map((item) => ({
           id: item.reconciliationId, runId, fieldSchemaId: item.fieldSchemaId, method: item.method,
           methodVersion: item.version, status: item.status, reason: item.reason,
@@ -1189,9 +1189,9 @@ function validateOfflineProvenance(
     if (page && !allowedPages.has(`${evidence.documentVersionId}:${evidence.pageNumber}`)) throw new Error("Offline page evidence is outside the run input");
   }
   if (result.claims.some((claim) => claim.evidenceIds.length === 0 || claim.evidenceIds.some((id) => !evidenceIds.has(id)))) throw new Error("Offline claim evidence is invalid");
-  const candidateIds = new Set(result.candidates?.map((item) => item.candidateId) ?? []);
-  if (candidateIds.size !== (result.candidates?.length ?? 0)) throw new Error("Duplicate extraction candidate identity");
-  for (const candidate of result.candidates ?? []) {
+  const candidateIds = new Set(result.candidates.map((item) => item.candidateId));
+  if (candidateIds.size !== result.candidates.length) throw new Error("Duplicate extraction candidate identity");
+  for (const candidate of result.candidates) {
     if (candidate.evidenceIds.length === 0 || candidate.evidenceIds.some((id) => !evidenceIds.has(id))) throw new Error("Extraction candidate evidence is invalid");
     if (candidate.source.type === "structured_input") {
       if (candidate.source.applicationSnapshotId !== applicationSnapshotId || !jsonPointerExists(applicationContent, candidate.source.jsonPointer)) {
@@ -1201,12 +1201,27 @@ function validateOfflineProvenance(
       throw new Error("Document candidate is outside the run logical documents");
     }
   }
-  if (result.claims.some((claim) => (claim.supportingCandidateIds ?? []).some((id) => !candidateIds.has(id)))) throw new Error("Claim candidate lineage is invalid");
-  for (const reconciliation of result.reconciliations ?? []) {
+  if (result.claims.some((claim) => claim.supportingCandidateIds.length === 0 || claim.supportingCandidateIds.some((id) => !candidateIds.has(id)))) throw new Error("Claim candidate lineage is invalid");
+  const reconciliationIds = new Set(result.reconciliations.map((item) => item.reconciliationId));
+  if (reconciliationIds.size !== result.reconciliations.length) throw new Error("Duplicate reconciliation identity");
+  const consideredCandidateIds = new Set<string>();
+  const reconciledClaimIds = new Set<string>();
+  for (const reconciliation of result.reconciliations) {
     if (reconciliation.candidates.length === 0 || reconciliation.candidates.some((item) => !candidateIds.has(item.candidateId))) throw new Error("Reconciliation candidate lineage is invalid");
-    if (reconciliation.selectedCandidateId && !candidateIds.has(reconciliation.selectedCandidateId)) throw new Error("Reconciliation selection is invalid");
-    if (reconciliation.resultingClaimId && !claimIds.has(reconciliation.resultingClaimId)) throw new Error("Reconciliation claim lineage is invalid");
+    for (const item of reconciliation.candidates) consideredCandidateIds.add(item.candidateId);
+    const selectedLinks = reconciliation.candidates.filter((item) => item.status === "selected");
+    if (reconciliation.status === "selected") {
+      if (!reconciliation.selectedCandidateId || selectedLinks.length !== 1 || selectedLinks[0]?.candidateId !== reconciliation.selectedCandidateId) throw new Error("Reconciliation selection is invalid");
+      if (!reconciliation.resultingClaimId || !claimIds.has(reconciliation.resultingClaimId)) throw new Error("Reconciliation claim lineage is invalid");
+      const claim = result.claims.find((item) => item.claimId === reconciliation.resultingClaimId)!;
+      if (!claim.supportingCandidateIds.includes(reconciliation.selectedCandidateId)) throw new Error("Selected candidate does not support the resulting claim");
+      reconciledClaimIds.add(reconciliation.resultingClaimId);
+    } else if (reconciliation.selectedCandidateId || reconciliation.resultingClaimId || selectedLinks.length > 0) {
+      throw new Error("Unresolved reconciliation cannot select a candidate or produce a claim");
+    }
   }
+  if (consideredCandidateIds.size !== candidateIds.size || [...candidateIds].some((id) => !consideredCandidateIds.has(id))) throw new Error("Every candidate must be considered by reconciliation");
+  if (reconciledClaimIds.size !== claimIds.size || [...claimIds].some((id) => !reconciledClaimIds.has(id))) throw new Error("Every claim must result from reconciliation");
   if (result.findings.some((item) => item.materialInputRefs.length === 0 || item.materialInputRefs.some((id) => !evidenceIds.has(id) && !claimIds.has(id)))) {
     throw new Error("Offline finding reference is invalid");
   }
