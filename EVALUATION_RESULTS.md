@@ -2,7 +2,8 @@
 
 ## Offline deterministic regression baseline — v0.1.1
 
-**Recorded:** 2026-09-06  
+**Recorded:** 2026-09-06
+
 **Purpose:** Demonstration acceptance and deterministic regression only
 
 This result uses six manually confirmed, visibly synthetic cases, the deterministic fake Case Review Agent model, and fixture OCR output. It is not a live-model baseline, OCR-quality measurement, real-data result, lending metric, or production-performance claim.
@@ -52,3 +53,23 @@ pnpm demo:up
 pnpm evaluate:capture -- datasets/golden/releases/v0.1.1 CONFIGURATION_JSON ACTUAL_RUN_JSON
 pnpm evaluate:offline -- datasets/golden/releases/v0.1.1 ACTUAL_RUN_JSON
 ```
+
+## Initial live-model acceptance observation
+
+**Recorded:** 2026-09-06
+
+**Purpose:** Verify the authorized OpenAI route and bounded Pi harness on one synthetic clean case
+
+`golden-001-native-clear` completed in the local Docker Compose environment with `openai/gpt-5.6-terra`, `pi-coding-agent@0.85.1`, fake OCR, and the existing per-case `USD 0.25` hard cost limit. The session submitted a verifier-accepted report with no Agent issues.
+
+| Observation | Result |
+|---|---:|
+| Session duration | 7.718 seconds |
+| Model calls | 4 |
+| Input tokens reported | 12 |
+| Output tokens reported | 150 |
+| Estimated model cost | USD 0.010538 |
+| Tool calls | 4 |
+| Terminal reason | `report_submitted` |
+
+This single-case observation proves route and harness acceptance only. It is not the formal measured baseline, a model comparison, or an OCR-quality result. The provider-reported token counts require reconciliation before use in a published baseline. The reviewer projection also requires a currency-correct cost presentation because persisted live usage is USD while its current optional UI field is EUR-only.
