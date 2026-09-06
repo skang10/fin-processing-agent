@@ -2,7 +2,7 @@
 
 These files are synthetic dataset candidates, not frozen golden truth and not production-performance evidence.
 
-Review each generated PDF together with its candidate JSON. Confirm that the expected issue codes, acceptable evidence, checked facts, report outcome, required content, and prohibited content are correct. Cases tagged `runtime_support_pending` describe required V1 coverage whose real OCR, mixed/scanned rendering, Adaptive Agent, or verifier path is not implemented yet; do not confirm those cases until the corresponding artifact and execution path are real.
+Review each generated PDF together with its candidate JSON. Confirm that the expected issue codes, acceptable evidence, checked facts, report outcome, required content, and prohibited content are correct. Cases tagged `runtime_support_pending` now contain real mixed or image-only scanned pages, but their Adaptive Agent or verifier execution path is not implemented yet; do not confirm them until that execution evidence exists.
 
 ```text
 pnpm dataset:generate

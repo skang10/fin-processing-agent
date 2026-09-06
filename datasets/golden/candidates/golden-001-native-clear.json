@@ -20,14 +20,14 @@
   "documents": [
     {
       "media_type": "application/pdf",
-      "page_count": 1,
+      "page_count": 3,
       "path": "../documents/golden-001-native-clear.pdf",
-      "sha256": "24ec01030520baad7051bb001b9b5bb6d5a6ab579b5dbf9ebc09aa5e28ad0e33"
+      "sha256": "d2f03a9f26eb510b084ebc560269af7ba31e03e45df5f4da6ebcfeeaaadd9af5"
     }
   ],
   "generator": {
-    "template_version": "plain-a4-1.0.0",
-    "version": "findoc-golden-generator-1.0.0"
+    "template_version": "structured-a4-1.0.0",
+    "version": "findoc-golden-generator-2.0.0"
   },
   "schema_version": "1.0.0",
   "seed": 1001,

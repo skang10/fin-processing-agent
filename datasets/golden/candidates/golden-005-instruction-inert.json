@@ -21,14 +21,14 @@
   "documents": [
     {
       "media_type": "application/pdf",
-      "page_count": 1,
+      "page_count": 3,
       "path": "../documents/golden-005-instruction-inert.pdf",
-      "sha256": "7aae67b419c3c0afbeff99787f95cb69c6c55669c6a4417a744dfe548113a87e"
+      "sha256": "6e36614f75049f237c62f199d0261f6e91c96ab7683e4a872b1d7acf41766898"
     }
   ],
   "generator": {
-    "template_version": "plain-a4-1.0.0",
-    "version": "findoc-golden-generator-1.0.0"
+    "template_version": "structured-a4-1.0.0",
+    "version": "findoc-golden-generator-2.0.0"
   },
   "schema_version": "1.0.0",
   "seed": 1005,

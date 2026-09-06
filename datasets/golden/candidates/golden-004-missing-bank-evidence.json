@@ -20,14 +20,14 @@
   "documents": [
     {
       "media_type": "application/pdf",
-      "page_count": 1,
+      "page_count": 2,
       "path": "../documents/golden-004-missing-bank-evidence.pdf",
-      "sha256": "81aaaeb791a53158de5a91f4a00e90ad90573203eef43f3fab9ee7977c113751"
+      "sha256": "76b7b3a36bcdbd10a330c2608bd0c88f0f9fa3c7ad9c8b459df6f43bdeb06b10"
     }
   ],
   "generator": {
-    "template_version": "plain-a4-1.0.0",
-    "version": "findoc-golden-generator-1.0.0"
+    "template_version": "structured-a4-1.0.0",
+    "version": "findoc-golden-generator-2.0.0"
   },
   "schema_version": "1.0.0",
   "seed": 1004,
@@ -44,7 +44,7 @@
     "expected_issues": [
       {
         "acceptable_evidence": [
-          "page:1"
+          "document:golden-004-missing-bank-evidence.pdf"
         ],
         "code": "VAL_DOC_COMPLETENESS_001"
       }

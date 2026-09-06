@@ -22,14 +22,14 @@
   "documents": [
     {
       "media_type": "application/pdf",
-      "page_count": 1,
+      "page_count": 3,
       "path": "../documents/golden-006-scanned-adaptive-unavailable.pdf",
-      "sha256": "90654b1b6d06a1e731c363c5143b89ea037328e13c6d3e1d6c7386e522aa42e8"
+      "sha256": "0748bad3389b942300eaec41aac65b00a24d1b3e5a4edcbdc18bab329bf92c32"
     }
   ],
   "generator": {
-    "template_version": "plain-a4-1.0.0",
-    "version": "findoc-golden-generator-1.0.0"
+    "template_version": "structured-a4-1.0.0",
+    "version": "findoc-golden-generator-2.0.0"
   },
   "schema_version": "1.0.0",
   "seed": 1006,
@@ -39,7 +39,8 @@
     "expected_issues": [
       {
         "acceptable_evidence": [
-          "page:1"
+          "page:2",
+          "page:3"
         ],
         "code": "VAL_INCOME_CONSISTENCY_001"
       }

@@ -24,12 +24,12 @@
       "media_type": "application/pdf",
       "page_count": 4,
       "path": "../documents/golden-003-multiple-review-issues.pdf",
-      "sha256": "1c089786128af1ae42bb743f881e5830a32b71d9476c44dfa3f773f242659b5c"
+      "sha256": "4e321ddf8e9f2c59ad45de1e4042a7b2c00d209087d800444bc3a0c01e1e25cd"
     }
   ],
   "generator": {
-    "template_version": "plain-a4-1.0.0",
-    "version": "findoc-golden-generator-1.0.0"
+    "template_version": "structured-a4-1.0.0",
+    "version": "findoc-golden-generator-2.0.0"
   },
   "schema_version": "1.0.0",
   "seed": 1003,

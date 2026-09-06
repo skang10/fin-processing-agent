@@ -161,11 +161,12 @@ The currently authoritative commands are:
 15. `pnpm demo:reset` — permanently remove demo services, named volumes, and generated local credentials.
 16. `pnpm demo:acceptance` — build, start, migrate, health-check, process the synthetic case, and remove the isolated test environment.
 
-17. `pnpm dataset:generate` — deterministically materialize golden candidates from the versioned blueprint.
-18. `pnpm dataset:validate` — validate candidate metadata, truth completeness, synthetic markers, references, and checksums.
-19. `pnpm dataset:inspect` — print a compact human-review inventory without freezing truth.
-20. `pnpm dataset:external` — inspect opt-in external component-diagnostic sources and their adoption gates without downloading data.
-21. `pnpm dataset:confirm -- CASE_ID REVIEWER` — record explicit human confirmation without changing candidate truth.
-22. `pnpm dataset:build -- VERSION` — build an immutable manifest only after every candidate records human confirmation.
+17. `pnpm dataset:documents` — generate the structured native, mixed, and scanned synthetic PDFs with the script-pinned ReportLab and Pillow environment.
+18. `pnpm dataset:generate` — regenerate documents and deterministically materialize golden candidates from the versioned blueprint.
+19. `pnpm dataset:validate` — validate candidate metadata, truth completeness, synthetic markers, references, and checksums.
+20. `pnpm dataset:inspect` — print a compact human-review inventory without freezing truth.
+21. `pnpm dataset:external` — inspect opt-in external component-diagnostic sources and their adoption gates without downloading data.
+22. `pnpm dataset:confirm -- CASE_ID REVIEWER` — record explicit human confirmation without changing candidate truth.
+23. `pnpm dataset:build -- VERSION` — build an immutable manifest only after every candidate records human confirmation.
 
 Formatting, linting, browser testing, and evaluation commands are not implemented yet. Inspect the repository rather than guessing them.

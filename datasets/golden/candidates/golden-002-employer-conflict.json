@@ -20,14 +20,14 @@
   "documents": [
     {
       "media_type": "application/pdf",
-      "page_count": 1,
+      "page_count": 3,
       "path": "../documents/golden-002-employer-conflict.pdf",
-      "sha256": "88a7418ec15a2666209d33bf2914542c7597d0d92d181fb83daa9c7a94b71b97"
+      "sha256": "f72063f92ed714661c06d478dcbedf83a22212e4a232ed06b3ba9f56196538e7"
     }
   ],
   "generator": {
-    "template_version": "plain-a4-1.0.0",
-    "version": "findoc-golden-generator-1.0.0"
+    "template_version": "structured-a4-1.0.0",
+    "version": "findoc-golden-generator-2.0.0"
   },
   "schema_version": "1.0.0",
   "seed": 1002,
@@ -45,7 +45,8 @@
       {
         "acceptable_evidence": [
           "application:/employment/employer",
-          "page:1"
+          "page:2",
+          "page:3"
         ],
         "code": "VAL_EMPLOYER_CONSISTENCY_001"
       }
