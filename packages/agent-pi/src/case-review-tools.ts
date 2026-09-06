@@ -22,7 +22,7 @@ import {
   type RecoveryToolState,
 } from "./recovery-tools.js";
 
-export const CASE_REVIEW_TOOL_REGISTRY_VERSION = "case-review-tools-3.0.0";
+export const CASE_REVIEW_TOOL_REGISTRY_VERSION = "case-review-tools-3.1.0";
 
 export interface AgentLedScope extends RecoveryScope {
   readonly context: AgentLedCaseReviewContext;

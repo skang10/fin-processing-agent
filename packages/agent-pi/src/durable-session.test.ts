@@ -67,10 +67,10 @@ describe("durable case-review checkpoints", () => {
 
     expect(observed.atReconciliation?.status).toBe("running");
     expect(observed.atReconciliation?.steps.map((step) => step.toolName)).toEqual([
-      "get_case_manifest", "inspect_page", "run_ocr", "extract_with_vlm", "submit_extraction_candidates",
+      "get_case_manifest", "inspect_page", "render_page_region", "run_ocr", "extract_with_vlm", "submit_extraction_candidates",
     ]);
     expect(observed.atValidation?.steps.at(-1)?.toolName).toBe("request_reconciliation");
-    expect(observed.atValidation?.consumed.toolCalls).toBe(6);
+    expect(observed.atValidation?.consumed.toolCalls).toBe(7);
     expect(outcome.trace.terminalReason).toBe("report_submitted");
   });
 
@@ -111,6 +111,7 @@ describe("durable case-review checkpoints", () => {
     expect(byTool.get("run_ocr")?.outputHash).toMatch(/^[0-9a-f]{64}$/);
     expect(byTool.get("extract_with_vlm")?.safeOutput).toMatchObject({ value: { raw_value: "2980.00" } });
     expect(JSON.stringify(snapshot?.committedToolResults)).not.toContain("untrusted_document_text");
+    expect(JSON.stringify(snapshot?.committedToolResults)).not.toContain("image/png");
   });
 
   it("durably records rejected requests without granting authority", async () => {

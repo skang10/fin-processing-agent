@@ -1,5 +1,5 @@
 import { Agent, type StreamFn } from "@earendil-works/pi-agent-core";
-import { InMemoryCredentialStore, type Model } from "@earendil-works/pi-ai";
+import { InMemoryCredentialStore, type ImageContent, type Model, type TextContent } from "@earendil-works/pi-ai";
 import { AgentSession, ModelRuntime, SessionManager, SettingsManager, VERSION, convertToLlm, createExtensionRuntime, type LoadExtensionsResult, type ResourceLoader, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Value } from "typebox/value";
 import type { Static, TSchema } from "typebox";
@@ -14,7 +14,11 @@ import {
 import { FAKE_MODEL, createFakeStreamFn, type FakeModelScript } from "./fake-model.js";
 
 export const PI_HARNESS_VERSION = `pi-coding-agent@${VERSION}`;
-export const PI_HARNESS_CONFIGURATION_VERSION = `pi-harness-2.0.0;${AGENT_BUDGET_CONFIGURATION_VERSION}`;
+export const PI_HARNESS_CONFIGURATION_VERSION = `pi-harness-2.1.0;${AGENT_BUDGET_CONFIGURATION_VERSION}`;
+
+function textContent(value: unknown): TextContent {
+  return { type: "text", text: JSON.stringify(value) };
+}
 
 export type ToolCostClass = "read" | "ocr" | "render" | "vlm" | "submit";
 
@@ -31,6 +35,8 @@ export interface ToolExecutionOutput {
   readonly output: unknown;
   readonly summary: string;
   readonly terminate?: boolean;
+  /** Transient content delivered to the model after the safe output is durably committed. */
+  readonly modelContent?: readonly (TextContent | ImageContent)[];
 }
 
 /** One registered tool: stable name, version, schemas, authorization policy, cost class, and implementation (AGT-REQ-030). */
@@ -193,26 +199,26 @@ export class SessionControlPlane<TScope, TState> {
   }
 
   /** Registry lookup, schema validation, scope authorization, reuse, budget reservation, execution, durable commit. */
-  async execute(toolCallId: string, toolName: string, args: unknown): Promise<{ content: string; isError: boolean; terminate: boolean }> {
+  async execute(toolCallId: string, toolName: string, args: unknown): Promise<{ content: readonly (TextContent | ImageContent)[]; isError: boolean; terminate: boolean }> {
     this.handledToolCallIds.add(toolCallId);
     const spec = this.tools.get(toolName);
     const phase = phaseForTool(toolName);
     if (!spec) {
       await this.commit(toolCallId, toolName, args, "unknown_tool_rejected", `Rejected unregistered tool ${toolName}`, undefined, phase);
-      return { content: JSON.stringify({ error: "unknown_tool" }), isError: true, terminate: false };
+      return { content: [textContent({ error: "unknown_tool" })], isError: true, terminate: false };
     }
     if (!Value.Check(spec.parameters, args)) {
       this.consecutiveNoProgress += 1;
       this.checkNoProgress();
       await this.commit(toolCallId, toolName, args, "schema_rejected", `Rejected schema-invalid arguments for ${toolName}`, spec.version, phase);
-      return { content: JSON.stringify({ error: "schema_invalid" }), isError: true, terminate: false };
+      return { content: [textContent({ error: "schema_invalid" })], isError: true, terminate: false };
     }
     const authorization = spec.authorize(args, this.scope, this.state);
     if (authorization) {
       this.consecutiveNoProgress += 1;
       this.checkNoProgress();
       await this.commit(toolCallId, toolName, args, "authorization_rejected", `Rejected ${toolName}: ${authorization.replace(/_/g, " ")}`, spec.version, phase);
-      return { content: JSON.stringify({ error: "not_authorized", reason: authorization }), isError: true, terminate: false };
+      return { content: [textContent({ error: "not_authorized", reason: authorization })], isError: true, terminate: false };
     }
     const idempotencyKey = `${toolName}@${spec.version}:${hashArguments(args)}`;
     const committed = this.committedByKey.get(idempotencyKey);
@@ -221,7 +227,7 @@ export class SessionControlPlane<TScope, TState> {
     const budgetRejection = this.reserve(spec.costClass);
     if (budgetRejection) {
       await this.commit(toolCallId, toolName, args, "budget_rejected", `Rejected ${toolName}: ${budgetRejection.replace(/_/g, " ")} budget exhausted`, spec.version, phase);
-      return { content: JSON.stringify({ error: "budget_exhausted", budget: budgetRejection }), isError: true, terminate: true };
+      return { content: [textContent({ error: "budget_exhausted", budget: budgetRejection })], isError: true, terminate: true };
     }
     let result: ToolExecutionOutput;
     try {
@@ -230,7 +236,7 @@ export class SessionControlPlane<TScope, TState> {
       this.consecutiveNoProgress += 1;
       this.checkNoProgress();
       await this.commit(toolCallId, toolName, args, "failed", `${toolName} failed`, spec.version, phase);
-      return { content: JSON.stringify({ error: "tool_failed" }), isError: true, terminate: false };
+      return { content: [textContent({ error: "tool_failed" })], isError: true, terminate: false };
     }
     this.consecutiveNoProgress = 0;
     const reuse = spec.reuse ?? "safe_output";
@@ -253,7 +259,7 @@ export class SessionControlPlane<TScope, TState> {
       authorizedInputVersions: invocation.authorizedInputVersions, terminatesSession: invocation.terminatesSession,
     });
     this.replayedKeys.add(idempotencyKey);
-    return { content: JSON.stringify(result.output), isError: false, terminate: result.terminate ?? false };
+    return { content: [textContent(result.output), ...(result.modelContent ?? [])], isError: false, terminate: result.terminate ?? false };
   }
 
   /**
@@ -264,14 +270,17 @@ export class SessionControlPlane<TScope, TState> {
   private async resolveCommitted(
     toolCallId: string, spec: AnyToolSpec<TScope, TState>, args: unknown,
     phase: AgentStepPhase, committed: AgentCommittedToolResult,
-  ): Promise<{ content: string; isError: boolean; terminate: boolean }> {
+  ): Promise<{ content: readonly (TextContent | ImageContent)[]; isError: boolean; terminate: boolean }> {
     const sameAttempt = this.replayedKeys.has(committed.idempotencyKey);
     const reuse = spec.reuse ?? "safe_output";
     let output = committed.safeOutput;
+    let modelContent: readonly (TextContent | ImageContent)[] = [];
     let integrityCheck: "hash_match" | "hash_mismatch" = "hash_match";
     if (reuse === "reexecute" && !sameAttempt) {
       try {
-        output = (await spec.execute(args, this.scope, this.state)).output;
+        const replayed = await spec.execute(args, this.scope, this.state);
+        output = replayed.output;
+        modelContent = replayed.modelContent ?? [];
       } catch {
         integrityCheck = "hash_mismatch";
       }
@@ -283,7 +292,7 @@ export class SessionControlPlane<TScope, TState> {
       this.flags.integrity = true;
       await this.commit(toolCallId, spec.name, args, "failed", `Rejected ${spec.name}: the committed result failed its integrity check`, spec.version, phase,
         { reusedInvocationId: committed.invocationId, integrityCheck });
-      return { content: JSON.stringify({ error: "committed_result_integrity_failed" }), isError: true, terminate: true };
+      return { content: [textContent({ error: "committed_result_integrity_failed" })], isError: true, terminate: true };
     }
     if (sameAttempt) {
       this.consecutiveNoProgress += 1;
@@ -300,7 +309,7 @@ export class SessionControlPlane<TScope, TState> {
         : `Reused the committed ${spec.name} result after processing resumed`,
       spec.version, phase, { reusedInvocationId: committed.invocationId, integrityCheck });
     return {
-      content: JSON.stringify(output ?? { reused: true }),
+      content: [textContent(output ?? { reused: true }), ...modelContent],
       isError: false,
       terminate: committed.terminatesSession || this.flags.noProgress,
     };
@@ -521,14 +530,14 @@ export class PiSessionRunner {
         parameters: tool.parameters, executionMode: "sequential",
         execute: async (toolCallId, params) => {
           const result = await control.execute(toolCallId, tool.name, params);
-          return { content: [{ type: "text", text: result.content }], details: { outcome: result.isError ? "error" : "ok" }, ...(result.terminate ? { terminate: true } : {}) };
+          return { content: [...result.content], details: { outcome: result.isError ? "error" : "ok" }, ...(result.terminate ? { terminate: true } : {}) };
         },
       }));
       const toolNames = spec.tools.map((tool) => tool.name);
       session = new AgentSession({
         agent, cwd: "/",
         sessionManager: SessionManager.inMemory("/"),
-        settingsManager: SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false }, images: { blockImages: true } }),
+        settingsManager: SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false }, images: { blockImages: false } }),
         resourceLoader: new BoundedResourceLoader(spec.systemPrompt),
         customTools, modelRuntime: runtime,
         initialActiveToolNames: toolNames, allowedToolNames: toolNames, baseToolsOverride: {},

@@ -2,7 +2,7 @@
 
 Document ID: `AGT`
 
-Version: 3.1.0
+Version: 3.2.0
 
 Status: Approved
 
@@ -12,7 +12,7 @@ Last updated: 2026-09-07
 
 This specification defines the bounded Pi-based Case Review Agent that pre-screens every processable case and leads document extraction within it. Within one durable case-review session, the Agent may select registered PDF Inspector and extraction tools, submit evidence-linked extraction candidates, request deterministic reconciliation and validation, and submit a Case Review Brief.
 
-Deterministic processing inspects, renders, and selectively recognizes pages before the session, but V1 has no deterministic field parser. Every document-derived value therefore reaches the deterministic pipeline as an Agent candidate produced through a registered, scoped tool. Normalization, reconciliation, claims, entity matching, validation findings, dispositions, report verification, and workflow state remain deterministic and are never produced by the model.
+Deterministic processing currently inspects, renders, and selectively recognizes pages before the session, but V1 has no deterministic field parser. The Agent can visually inspect an authorized uploaded-document page or region through `render_page_region`; it never receives a source path, object-store credential, or unrestricted file capability. Every document-derived value therefore reaches the deterministic pipeline as an Agent candidate produced through a registered, scoped tool. Normalization, reconciliation, claims, entity matching, validation findings, dispositions, report verification, and workflow state remain deterministic and are never produced by the model.
 
 The Agent acts like a junior document-review employee: it assembles evidence-grounded observations and suggests registered reviewer actions. It is not the workflow engine, a general coding agent, a validator, a disposition authority, or a banking decision-maker.
 
@@ -280,7 +280,9 @@ flowchart LR
 
 `AGT-REQ-040` `run_ocr` must invoke the approved OCR boundary for an authorized page or region and must retain OCR provenance and raw confidence semantics.
 
-`AGT-REQ-041` `render_page_region` must require an authorized page and validated bounded region and must return an immutable derived-artifact reference.
+`AGT-REQ-041` `render_page_region` must require an authorized page and validated bounded region, return the rendered image as transient multimodal tool content to the Agent, and return an immutable derived-artifact reference as its durable result.
+
+`AGT-REQ-178` Page-image bytes returned to the Agent must not be persisted in Agent steps, invocation safe output, logs, traces, or resumed-progress context. Durable state retains the authorized source parameters, integrity hash, safe artifact reference, and reviewer-readable summary instead.
 
 `AGT-REQ-042` `classify_page` must invoke only the configured classifier operation and must return constrained classification candidates, not workflow commands.
 
@@ -525,6 +527,8 @@ The Agent component is acceptable for implementation when automated tests demons
 
 `AGT-REQ-176` The ordering constraint of `AGT-REQ-166` is exercised end to end: a case whose recognition output already contains the required values resolves without any model-extraction call, and a partially readable case escalates only the requirements local processing did not resolve.
 
+`AGT-REQ-179` A multimodal harness test must prove that an authorized page render reaches the model as image content while the corresponding durable session snapshot contains no image bytes.
+
 `AGT-REQ-093` An unresolved or exhausted session preserves committed state and routes control back to durable workflow for human review, configured fallback, or technical exception handling according to whether a reviewable result exists.
 
 `AGT-REQ-094` Every registered tool rejects cross-case, cross-run, cross-document, cross-page, cross-region, and unsupported-field access.
@@ -579,6 +583,7 @@ Version 3.0.0 resolves Agent authority but creates dependent specification work 
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.2.0 | 2026-09-07 | Approved | Made an authorized page render visible to the multimodal Pi model as transient tool content while persisting only its safe artifact reference, integrity metadata, and step summary. Source paths, object-store credentials, arbitrary files, and image bytes remain outside durable Agent state. |
 | 3.1.0 | 2026-09-07 | Approved | Made the Agent the source of document-derived values: replaced `get_extraction_gaps` with `get_case_manifest`, required session work to be derived from a versioned declared field-requirement set and the committed document inventory rather than evaluation truth, scoped a gap to its logical document rather than a single page, required verbatim tool evidence and deterministic normalization for every submitted value, and added acceptance criteria for local-first routing and reviewer-facing actor attribution. No authority, budget, or workflow-ownership semantics changed. |
 | 3.0.0 | 2026-09-06 | Approved | Replaced separate adaptive-recovery and report sessions with one bounded Agent-led case review, exposed PDF Inspector and deterministic processing through an exact registered tool ceiling, and defined prerequisites, durable re-entry, failure routing, and report finalization. |
 | 2.1.1 | 2026-09-06 | Approved | Registered the report-mode terminal reasons `report_submitted` and `report_not_submitted` used by the implemented Pi harness; no authority or budget semantics changed. |

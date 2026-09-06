@@ -2,11 +2,11 @@
 
 Document ID: `ARC`
 
-Version: 3.0.0
+Version: 3.1.0
 
 Status: Approved
 
-Last updated: 2026-09-06
+Last updated: 2026-09-07
 
 ## 1. Purpose
 
@@ -357,6 +357,8 @@ The Pi Case Review Agent is the mandatory-attempt pre-screening orchestrator for
 
 `ARC-REQ-054` Submitted Agent candidates must pass the same schema, evidence, and reconciliation boundaries as non-Agent extraction candidates.
 
+`ARC-REQ-174` The bounded Agent may visually inspect an uploaded document only through an authorized page or region rendering tool. The model receives transient image content plus a safe artifact reference; it must not receive source filesystem paths, object-store credentials, or arbitrary file access, and image bytes must not enter durable Agent state or telemetry.
+
 `ARC-REQ-055` Agent-session state must not be the authoritative record of durable workflow progress.
 
 `ARC-REQ-164` Report submission must occur only after the control plane makes committed reconciliation, findings, and recommended disposition available; report generation must not expose a tool that can mutate those authoritative outputs.
@@ -695,6 +697,7 @@ These decisions may refine adapters, versions, thresholds, and budgets. They mus
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.1.0 | 2026-09-07 | Approved | Allowed the bounded multimodal Agent to inspect authorized uploaded-document page renders as transient tool content while retaining document sandboxing, artifact authorization, and non-persistence of page-image bytes. |
 | 3.0.0 | 2026-09-06 | Approved | Made bounded Pi the case-review orchestrator after deterministic file preflight, exposed PDF Inspector through registered case-scoped tools, folded adaptive recovery into the main session, and retained deterministic persistence, reconciliation, validation, disposition, and report verification authority. |
 | 2.2.0 | 2026-09-04 | Approved | Reduced V1 browser integration to polling and a bounded case Agent log; deferred SSE and aggregate Agent monitoring. |
 | 2.1.0 | 2026-09-04 | Approved | Aligned Review Web with the V1 HTML baseline, separated Agent monitoring from case review, and limited requested changes to recorded drafts without customer delivery. |

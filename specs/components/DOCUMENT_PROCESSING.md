@@ -2,11 +2,11 @@
 
 Document ID: `DOC`
 
-Version: 2.0.0
+Version: 2.1.0
 
 Status: Approved
 
-Last updated: 2026-09-06
+Last updated: 2026-09-07
 
 ## 1. Purpose
 
@@ -138,6 +138,10 @@ flowchart LR
 `DOC-REQ-126` Each Agent-requested document operation must resolve persisted case, run, document version, page or bounded region, source checksum, tool version, operation configuration, prerequisites, resource limits, and an idempotency key before sandbox execution.
 
 `DOC-REQ-127` The document-processing component, not Pi, must authorize source access, translate a tool request into one bounded sandbox task, validate the response, persist immutable outputs, and return a bounded project-owned result reference.
+
+`DOC-REQ-134` When an authorized Agent render tool requests visual inspection, the component may return bounded page or region image bytes as transient model content only after the immutable render artifact and safe reference exist. It must not expose a source path, object-store credential, unrestricted object key, or unrelated page content.
+
+`DOC-REQ-135` Transient model image content must be read through the case-scoped artifact capability, must obey configured byte and pixel limits, and must not be copied into Agent persistence, logs, traces, or resumed-progress payloads.
 
 `DOC-REQ-128` The same document operation must preserve identical processing semantics whether requested by deterministic workflow policy or by the Agent; Agent selection must not weaken schemas, provenance, isolation, routing, or quality-state semantics.
 
@@ -392,6 +396,7 @@ No unresolved document-processing boundary decision blocks review of this docume
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.1.0 | 2026-09-07 | Approved | Added the bounded visual-inspection boundary: an authorized immutable page render may be returned transiently to the multimodal Agent while only its safe artifact reference and integrity metadata are durable. |
 | 2.0.0 | 2026-09-06 | Approved | Exposed PDF Inspector-backed operations through registered Agent tools while preserving component-owned authorization, sandboxing, prerequisites, schemas, provenance, and idempotent reuse. |
 | 1.2.0 | 2026-09-06 | Approved | Adopted PDF Inspector 1.17.0's local PP-OCRv6 Small execution path behind the project-owned OCR contract while retaining explicit offline runtime verification. |
 | 1.1.0 | 2026-09-05 | Approved | Clarified that PDF Inspector owns inspection and OCR routing while PP-OCRv6 is an independently verified `OcrEngine` target. |

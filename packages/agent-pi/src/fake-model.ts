@@ -145,6 +145,7 @@ interface CaseManifest {
 
 interface NativeTextResult { document_version_id: string; page_number: number; available: boolean; untrusted_document_text: string }
 interface OcrResultView { document_version_id: string; page_number: number; untrusted_lines: { text: string }[] }
+interface RenderResultView { artifactReference: string; width: number; height: number }
 interface VlmResultView { document_version_id: string; page_number: number; field_schema_id: string; value: { raw_value: string; region: { x: number; y: number; width: number; height: number } } | null }
 
 interface CurrentResult {
@@ -227,6 +228,17 @@ export const standardCaseReviewScript: FakeModelScript = (_turn, context) => {
   const uninspected = manifest.pages.filter((page) => !inspected.has(pageKey(page)));
   if (uninspected.length > 0) {
     return { kind: "tool_calls", calls: uninspected.map((page) => ({ name: "inspect_page", args: { document_version_id: page.document_version_id, page_number: page.page_number } })) };
+  }
+
+  // The offline policy exercises the same visual-document boundary offered to a live multimodal
+  // model. Image bytes are transient tool content; only these safe artifact references are durable.
+  const renderedCount = readAllToolResults<RenderResultView>(context, "render_page_region").length;
+  const renderPending = manifest.pages.slice(renderedCount);
+  if (renderPending.length > 0) {
+    return { kind: "tool_calls", calls: renderPending.map((page) => ({
+      name: "render_page_region",
+      args: { document_version_id: page.document_version_id, page_number: page.page_number, region: { x: 0, y: 0, width: 1, height: 1 } },
+    })) };
   }
 
   const nativeCalls = readAllToolResults<NativeTextResult>(context, "get_native_text");

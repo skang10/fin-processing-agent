@@ -65,25 +65,25 @@ describe("durable re-entry after Worker loss", () => {
     expect(outcome).toMatchObject({ resumed: true, attemptNumber: 2 });
     expect(resumed).toMatchObject({ status: "terminal", terminalReason: "report_submitted", attempts: 2 });
     expect(toolNames(resumed?.steps ?? [])).toEqual([
-      "get_case_manifest", "inspect_page", "run_ocr", "extract_with_vlm", "submit_extraction_candidates",
+      "get_case_manifest", "inspect_page", "render_page_region", "run_ocr", "extract_with_vlm", "submit_extraction_candidates",
       "request_reconciliation", "request_validation", "get_current_result", "submit_case_review_brief",
     ]);
   });
 
   it("reuses committed OCR and model extraction without charging their budgets twice", async () => {
     const ports = reviewPorts();
-    const { outcome, resumed } = await crashThenResume(4, ports);
+    const { outcome, resumed } = await crashThenResume(5, ports);
     expect(calls(ports, "extractWithVlm")).toBe(1);
     expect(resumed?.consumed).toMatchObject({ ocrPages: 1, vlmCalls: 1 });
     const reused = resumed?.steps.filter((step) => step.summary.startsWith("Reused the committed")) ?? [];
-    expect(toolNames(reused)).toEqual(["run_ocr"]);
+    expect(toolNames(reused)).toEqual(["render_page_region", "run_ocr"]);
     expect(outcome.trace.terminalReason).toBe("report_submitted");
     expect(resumed?.committedToolResults.filter((result) => result.toolName === "run_ocr")).toHaveLength(1);
   });
 
   it("does not submit a second extraction candidate after re-entry", async () => {
     const ports = reviewPorts();
-    const { outcome, resumed } = await crashThenResume(5, ports);
+    const { outcome, resumed } = await crashThenResume(6, ports);
     expect(outcome.candidates).toHaveLength(1);
     expect(outcome.candidates[0]).toMatchObject({ gapId: "gap-1", rawValue: "2980.00", extractionMethod: "agent_vlm_extraction" });
     expect(resumed?.committedToolResults.filter((result) => result.toolName === "submit_extraction_candidates")).toHaveLength(1);
@@ -96,11 +96,11 @@ describe("durable re-entry after Worker loss", () => {
 
   it("does not request deterministic reconciliation or validation twice", async () => {
     const reconciliationPorts = reviewPorts();
-    await crashThenResume(6, reconciliationPorts);
+    await crashThenResume(7, reconciliationPorts);
     expect(calls(reconciliationPorts, "requestReconciliation")).toBe(1);
 
     const validationPorts = reviewPorts();
-    const { outcome, resumed } = await crashThenResume(7, validationPorts);
+    const { outcome, resumed } = await crashThenResume(8, validationPorts);
     expect(calls(validationPorts, "requestReconciliation")).toBe(1);
     expect(calls(validationPorts, "requestValidation")).toBe(1);
     expect(outcome.result).toMatchObject({ resultRevisionId: "result-1", recommendedDisposition: "human_review_required" });
@@ -109,12 +109,12 @@ describe("durable re-entry after Worker loss", () => {
 
   it("does not resubmit a report that was already committed, and starts no model turn", async () => {
     const ports = reviewPorts();
-    const { outcome, resumed } = await crashThenResume(9, ports);
+    const { outcome, resumed } = await crashThenResume(10, ports);
     expect(outcome).toMatchObject({ resumed: true, attemptNumber: 2 });
     expect(outcome.submission).toMatchObject({ schema_version: "1.0.0", result_revision_id: "result-1" });
     expect(calls(ports, "requestValidation")).toBe(1);
     expect(resumed?.committedToolResults.filter((result) => result.toolName === "submit_case_review_brief")).toHaveLength(1);
-    expect(toolNames(resumed?.steps ?? [])).toHaveLength(9);
+    expect(toolNames(resumed?.steps ?? [])).toHaveLength(10);
     expect(resumed?.terminalReason).toBe("report_submitted");
   });
 

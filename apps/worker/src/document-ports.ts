@@ -74,7 +74,11 @@ export function createRuntimeDocumentPorts(options: RuntimeDocumentPortOptions):
     renderPageRegion: async (reference) => {
       const page = find(reference);
       if (!page.render) throw new Error("Page has no committed render");
-      return { artifactReference: page.render.objectKey, width: page.render.width, height: page.render.height };
+      const bytes = await options.readArtifact(page.render.objectKey, MAXIMUM_ARTIFACT_BYTES);
+      return {
+        artifactReference: page.render.objectKey, width: page.render.width, height: page.render.height,
+        image: { data: bytes.toString("base64"), mimeType: "image/png" },
+      };
     },
 
     classifyPage: async (reference) => {

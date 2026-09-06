@@ -32,7 +32,7 @@ describe("PiAgentLedCaseReviewHarness", () => {
     expect(outcome.trace).toMatchObject({ mode: "case_review", terminalReason: "report_submitted" });
     expect(outcome.candidates).toHaveLength(1);
     expect(outcome.trace.steps.map((step) => step.toolName)).toEqual([
-      "get_case_manifest", "inspect_page", "run_ocr", "extract_with_vlm", "submit_extraction_candidates",
+      "get_case_manifest", "inspect_page", "render_page_region", "run_ocr", "extract_with_vlm", "submit_extraction_candidates",
       "request_reconciliation", "request_validation", "get_current_result", "submit_case_review_brief",
     ]);
     expect(service.requestReconciliation).toHaveBeenCalledOnce();
@@ -61,6 +61,27 @@ describe("PiAgentLedCaseReviewHarness", () => {
     const outcome = await new PiAgentLedCaseReviewHarness({ model: { route: "fake", script }, budget: { ...DEFAULT_AGENT_BUDGET, maxConsecutiveNoProgressSteps: 5 } }).review(context(true), ports());
     expect(outcome.trace.steps.slice(0, 2).map((step) => `${step.toolName}:${step.outcome}`)).toEqual(["bash:unknown_tool_rejected", "read:unknown_tool_rejected"]);
     expect(outcome.trace.terminalReason).toBe("report_submitted");
+  });
+
+  it("delivers an authorized uploaded-document render to the model without putting image bytes in the durable trace", async () => {
+    let sawImage = false;
+    const service = ports();
+    service.renderPageRegion = vi.fn(async () => ({
+      artifactReference: "render-1", width: 100, height: 50,
+      image: { data: "aW1hZ2UtYnl0ZXM=", mimeType: "image/png" as const },
+    }));
+    const script: FakeModelScript = (turn, visible) => {
+      if (turn === 1) return { kind: "tool_calls", calls: [{ name: "inspect_page", args: { document_version_id: "document-1", page_number: 1 } }] };
+      if (turn === 2) return { kind: "tool_calls", calls: [{ name: "render_page_region", args: { document_version_id: "document-1", page_number: 1, region: { x: 0, y: 0, width: 1, height: 1 } } }] };
+      sawImage ||= visible.messages.some((message) => message.role === "toolResult" && message.toolName === "render_page_region"
+        && message.content.some((part) => part.type === "image" && part.data === "aW1hZ2UtYnl0ZXM="));
+      return standardCaseReviewScript(turn - 2, visible);
+    };
+    const outcome = await new PiAgentLedCaseReviewHarness({ model: { route: "fake", script }, budget: { ...DEFAULT_AGENT_BUDGET, maxConsecutiveNoProgressSteps: 6 } }).review(context(true), service);
+    expect(sawImage).toBe(true);
+    expect(JSON.stringify(outcome.trace)).not.toContain("aW1hZ2UtYnl0ZXM=");
+    expect(outcome.trace.steps.find((step) => step.toolName === "render_page_region")?.summary)
+      .toBe("Viewed the uploaded document on page 1");
   });
 
   it("enforces OCR and VLM budgets in the unified session", async () => {
@@ -230,7 +251,7 @@ describe("local-first extraction routing", () => {
     const outcome = await new PiAgentLedCaseReviewHarness({ model: { route: "fake", script: standardCaseReviewScript } }).review(twoPagePayslip(), service);
 
     expect(outcome.trace.steps.map((step) => step.toolName)).toEqual([
-      "get_case_manifest", "inspect_page", "inspect_page", "get_native_text", "run_ocr",
+      "get_case_manifest", "inspect_page", "inspect_page", "render_page_region", "render_page_region", "get_native_text", "run_ocr",
       "submit_extraction_candidates", "request_reconciliation", "request_validation", "get_current_result", "submit_case_review_brief",
     ]);
     expect(service.extractWithVlm).not.toHaveBeenCalled();

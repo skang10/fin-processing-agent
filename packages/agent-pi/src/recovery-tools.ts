@@ -121,6 +121,11 @@ function validRegion(region: NormalizedRegion): boolean {
   return region.width > 0 && region.height > 0 && region.x + region.width <= 1 + 1e-9 && region.y + region.height <= 1 + 1e-9;
 }
 
+function sameRegion(left: NormalizedRegion | undefined, right: NormalizedRegion | undefined): boolean {
+  return left === undefined ? right === undefined : right !== undefined
+    && left.x === right.x && left.y === right.y && left.width === right.width && left.height === right.height;
+}
+
 function fieldLabel(fieldSchemaId: string): string {
   return fieldSchemaId === "income.monthly_net" ? "monthly net income" : fieldSchemaId.replace(/[._]/g, " ");
 }
@@ -215,12 +220,19 @@ export const runOcrTool: Tool<typeof PageOnly> = {
 };
 
 export const renderPageRegionTool: Tool<typeof PageWithRegion> = {
-  name: "render_page_region", version: "1.0.0", label: "Render page region", costClass: "render",
-  description: "Render a bounded normalized region of one authorized page and return an immutable derived-artifact reference.",
-  promptSnippet: "render a bounded region of one authorized page",
+  name: "render_page_region", version: "2.0.0", label: "View page region", costClass: "render", reuse: "reexecute",
+  description: "Render and visually inspect a bounded normalized region of one authorized uploaded-document page. Returns the image to the model and a safe immutable artifact reference for audit.",
+  promptSnippet: "visually inspect an authorized uploaded-document page or region",
   parameters: PageWithRegion,
   authorize: (args, scope) => authorizePage(args, scope) ?? (validRegion(args.region) ? undefined : "region_invalid"),
-  execute: async (args, scope) => ({ summary: `Rendered a region of page ${args.page_number}`, output: await scope.ports.renderPageRegion(toPage(args), args.region) }),
+  execute: async (args, scope) => {
+    const { image, ...safe } = await scope.ports.renderPageRegion(toPage(args), args.region);
+    return {
+      summary: `Viewed the uploaded document on page ${args.page_number}`,
+      output: safe,
+      ...(image ? { modelContent: [{ type: "image" as const, data: image.data, mimeType: image.mimeType }] } : {}),
+    };
+  },
   producedReferences: (output) => [{ kind: "artifact", id: (output as { artifactReference: string }).artifactReference }],
 };
 
@@ -248,7 +260,7 @@ export const extractLocalTableTool: Tool<typeof PageOnly> = {
 };
 
 export const extractWithVlmTool: Tool<typeof VlmParameters> = {
-  name: "extract_with_vlm", version: "1.0.0", label: "Extract with VLM", costClass: "vlm",
+  name: "extract_with_vlm", version: "2.0.0", label: "Extract with VLM", costClass: "vlm",
   description: "Invoke the configured schema-constrained VLM extraction operation for one field on one authorized page or region. The invocation has no tools.",
   promptSnippet: "run schema-constrained VLM extraction for one field on one authorized page",
   parameters: VlmParameters,
@@ -294,7 +306,7 @@ export const extractWithVlmTool: Tool<typeof VlmParameters> = {
 };
 
 export const submitExtractionCandidatesTool: Tool<typeof SubmitParameters> = {
-  name: "submit_extraction_candidates", version: "2.0.0", label: "Submit extraction candidates", costClass: "submit",
+  name: "submit_extraction_candidates", version: "3.0.0", label: "Submit extraction candidates", costClass: "submit",
   description: "Submit candidates for the declared extraction requirements. Each candidate must cite a value an authorized tool returned for the same page; candidates enter deterministic reconciliation and never become claims directly.",
   promptSnippet: "submit evidence-backed candidates for the declared extraction requirements",
   parameters: SubmitParameters,
@@ -305,7 +317,9 @@ export const submitExtractionCandidatesTool: Tool<typeof SubmitParameters> = {
       if (!gap) return "gap_outside_session_scope";
       if (!pageWithinGapScope(gap, scope, toPage(candidate))) return "page_outside_gap_scope";
       if (candidate.region && !validRegion(candidate.region)) return "region_invalid";
-      if (!resolveEvidenceSource(state, toPage(candidate), gap.fieldSchemaId, candidate.raw_value)) return "value_without_tool_evidence";
+      const source = resolveEvidenceSource(state, toPage(candidate), gap.fieldSchemaId, candidate.raw_value);
+      if (!source) return "value_without_tool_evidence";
+      if (candidate.region !== undefined && !sameRegion(candidate.region, source.region)) return "region_without_tool_evidence";
       if (state.candidates.some((item) => item.gapId === candidate.gap_id) || proposed.has(candidate.gap_id)) return "gap_already_has_candidate";
       proposed.add(candidate.gap_id);
     }
@@ -317,7 +331,7 @@ export const submitExtractionCandidatesTool: Tool<typeof SubmitParameters> = {
       if (!gap) throw new Error("Authorized gap is missing");
       const source = resolveEvidenceSource(state, toPage(candidate), gap.fieldSchemaId, candidate.raw_value);
       if (!source) throw new Error("Authorized candidate has no tool evidence");
-      const region = candidate.region ?? source.region;
+      const region = source.region;
       state.candidates.push({
         gapId: gap.gapId, fieldSchemaId: gap.fieldSchemaId, fieldSchemaVersion: gap.fieldSchemaVersion, valueType: gap.valueType,
         rawValue: candidate.raw_value, page: toPage(candidate),
