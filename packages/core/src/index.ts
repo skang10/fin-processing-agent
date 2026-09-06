@@ -155,6 +155,253 @@ export interface AgentSessionTrace {
   readonly submittedCandidateIds?: readonly string[];
 }
 
+// ---------------------------------------------------------------------------
+// Durable Agent session lifecycle (AGT-REQ-072 to AGT-REQ-079, DAT-REQ-199 to DAT-REQ-206)
+// ---------------------------------------------------------------------------
+
+export type AgentSessionStatus = "running" | "terminal";
+
+export type AgentAttemptStartReason = "initial" | "recovery";
+
+export type AgentStepPhase =
+  | "planning" | "document_inspection" | "extraction" | "reconciliation"
+  | "validation" | "report_submission" | "terminal";
+
+/** Versioned controlled phase vocabulary; phase is diagnostic provenance, never workflow state (DAT-REQ-200). */
+export const AGENT_STEP_PHASE_VOCABULARY_VERSION = "agent-step-phase-1.0.0";
+export const AGENT_STEP_PHASES: readonly AgentStepPhase[] = Object.freeze([
+  "planning", "document_inspection", "extraction", "reconciliation", "validation", "report_submission", "terminal",
+]);
+
+/** Immutable domain records a committed Agent step produced (DAT-REQ-132). */
+export type AgentProducedReferenceKind =
+  | "artifact" | "evidence" | "extraction_candidate" | "gap_resolution"
+  | "claim" | "reconciliation" | "result_revision" | "report_submission";
+
+export interface AgentProducedReference {
+  readonly kind: AgentProducedReferenceKind;
+  readonly id: string;
+}
+
+/** Cumulative budget consumption that must survive recovery (AGT-REQ-136). */
+export interface AgentConsumedBudget {
+  readonly iterations: number;
+  readonly toolCalls: number;
+  readonly modelCalls: number;
+  readonly vlmCalls: number;
+  readonly ocrPages: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly costUsd: number;
+  readonly usageAvailable: boolean;
+}
+
+export const EMPTY_AGENT_CONSUMED_BUDGET: AgentConsumedBudget = Object.freeze({
+  iterations: 0, toolCalls: 0, modelCalls: 0, vlmCalls: 0, ocrPages: 0,
+  inputTokens: 0, outputTokens: 0, costUsd: 0, usageAvailable: true,
+});
+
+export function addConsumedBudget(left: AgentConsumedBudget, right: Partial<AgentConsumedBudget>): AgentConsumedBudget {
+  return {
+    iterations: left.iterations + (right.iterations ?? 0),
+    toolCalls: left.toolCalls + (right.toolCalls ?? 0),
+    modelCalls: left.modelCalls + (right.modelCalls ?? 0),
+    vlmCalls: left.vlmCalls + (right.vlmCalls ?? 0),
+    ocrPages: left.ocrPages + (right.ocrPages ?? 0),
+    inputTokens: left.inputTokens + (right.inputTokens ?? 0),
+    outputTokens: left.outputTokens + (right.outputTokens ?? 0),
+    costUsd: left.costUsd + (right.costUsd ?? 0),
+    usageAvailable: left.usageAvailable && (right.usageAvailable ?? true),
+  };
+}
+
+/** Identity a session is bound to; a change here requires a new run rather than a hidden retry (AGT-REQ-138). */
+export interface AgentSessionConfiguration {
+  readonly mode: AgentSessionMode;
+  readonly harnessId: string;
+  readonly harnessVersion: string;
+  readonly modelLabel: string;
+  readonly modelRoute: "fake" | "live";
+  readonly promptVersion: string;
+  readonly promptHash: string;
+  readonly configurationVersion: string;
+  readonly toolRegistryVersion: string;
+  readonly contextManifestVersion: string;
+  readonly offeredTools: readonly string[];
+  readonly budget: AgentBudgetEnvelope;
+}
+
+/** Immutable committed tool invocation result available for compatible reuse (DAT-REQ-201, DAT-REQ-202). */
+export interface AgentCommittedToolResult {
+  readonly invocationId: string;
+  readonly idempotencyKey: string;
+  readonly toolName: string;
+  readonly toolVersion: string;
+  readonly outcome: AgentStepOutcome;
+  readonly outputSchemaVersion: string;
+  readonly outputHash: string;
+  /** Bounded structured payload retained only when the registered tool declares it safe to reuse. */
+  readonly safeOutput?: unknown;
+  readonly producedReferences: readonly AgentProducedReference[];
+  readonly authorizedInputVersions: Readonly<Record<string, string>>;
+  readonly terminatesSession: boolean;
+}
+
+export interface AgentRecoverySnapshot {
+  readonly sessionId: string;
+  readonly caseId: CaseId;
+  readonly runId: RunId;
+  readonly status: AgentSessionStatus;
+  readonly terminalReason?: AgentTerminalReason;
+  readonly configuration: AgentSessionConfiguration;
+  readonly consumed: AgentConsumedBudget;
+  readonly attempts: number;
+  readonly lastSequence: number;
+  readonly steps: readonly AgentStepTrace[];
+  readonly committedToolResults: readonly AgentCommittedToolResult[];
+  readonly startedAt: string;
+}
+
+export type AgentSessionCompatibility =
+  | { readonly compatible: true }
+  | { readonly compatible: false; readonly reasonCodes: readonly string[] };
+
+const BUDGET_KEYS: readonly (keyof AgentBudgetEnvelope)[] = Object.freeze([
+  "maxIterations", "maxToolCalls", "maxModelCalls", "maxInputTokens", "maxOutputTokens",
+  "maxWallClockMs", "maxEstimatedCostUsd", "maxVlmCalls", "maxOcrPages", "maxConsecutiveNoProgressSteps",
+]);
+
+/**
+ * Deterministic re-entry compatibility over versioned identity only (AGT-REQ-077, AGT-REQ-138).
+ * It never inspects model narrative or exception text.
+ */
+export function evaluateAgentSessionCompatibility(
+  persisted: AgentSessionConfiguration,
+  requested: AgentSessionConfiguration,
+): AgentSessionCompatibility {
+  const reasonCodes: string[] = [];
+  if (persisted.mode !== requested.mode) reasonCodes.push("session_mode_changed");
+  if (persisted.harnessId !== requested.harnessId) reasonCodes.push("harness_changed");
+  if (persisted.harnessVersion !== requested.harnessVersion) reasonCodes.push("harness_version_changed");
+  if (persisted.configurationVersion !== requested.configurationVersion) reasonCodes.push("harness_configuration_changed");
+  if (persisted.toolRegistryVersion !== requested.toolRegistryVersion) reasonCodes.push("tool_registry_changed");
+  if (persisted.contextManifestVersion !== requested.contextManifestVersion) reasonCodes.push("context_manifest_changed");
+  if (persisted.promptVersion !== requested.promptVersion || persisted.promptHash !== requested.promptHash) reasonCodes.push("prompt_changed");
+  if (persisted.modelRoute !== requested.modelRoute) reasonCodes.push("model_route_changed");
+  if (persisted.modelLabel !== requested.modelLabel) reasonCodes.push("model_changed");
+  if (BUDGET_KEYS.some((key) => persisted.budget[key] !== requested.budget[key])) reasonCodes.push("budget_changed");
+  return reasonCodes.length === 0 ? { compatible: true } : { compatible: false, reasonCodes };
+}
+
+export class AgentSessionIncompatibleError extends Error {
+  constructor(readonly reasonCodes: readonly string[]) {
+    super("The persisted Agent session is incompatible with the requested configuration");
+    this.name = "AgentSessionIncompatibleError";
+  }
+}
+
+export class AgentStepConflictError extends Error {
+  constructor(readonly sessionId: string, readonly sequence: number) {
+    super("A different Agent step is already committed at this sequence");
+    this.name = "AgentStepConflictError";
+  }
+}
+
+export class AgentSessionTerminalError extends Error {
+  constructor(readonly terminalReason: AgentTerminalReason) {
+    super("The Agent session already recorded a terminal reason");
+    this.name = "AgentSessionTerminalError";
+  }
+}
+
+export interface BeginAgentSessionInput {
+  readonly caseId: CaseId;
+  readonly runId: RunId;
+  readonly configuration: AgentSessionConfiguration;
+  readonly startedAt: string;
+}
+
+export interface AgentSessionStart {
+  readonly sessionId: string;
+  readonly attemptId: string;
+  readonly attemptNumber: number;
+  readonly startReason: AgentAttemptStartReason;
+  readonly resumed: boolean;
+  /** Trusted state committed before this attempt began. */
+  readonly snapshot: AgentRecoverySnapshot;
+}
+
+export interface AgentToolInvocationCommit {
+  readonly idempotencyKey: string;
+  readonly outputSchemaVersion: string;
+  readonly outputHash: string;
+  readonly safeOutput?: unknown;
+  readonly producedReferences: readonly AgentProducedReference[];
+  readonly authorizedInputVersions: Readonly<Record<string, string>>;
+  readonly terminatesSession: boolean;
+}
+
+export interface CommitAgentStepInput {
+  readonly sessionId: string;
+  readonly attemptId: string;
+  readonly sequence: number;
+  readonly phase: AgentStepPhase;
+  readonly toolName: string;
+  readonly toolVersion?: string;
+  readonly argumentHash: string;
+  readonly outcome: AgentStepOutcome;
+  readonly summary: string;
+  readonly startedAt: string;
+  readonly completedAt: string;
+  readonly budgetDelta: Partial<AgentConsumedBudget>;
+  readonly budgetState: { readonly iterationsUsed: number; readonly toolCallsUsed: number };
+  /** Present when this step committed a new immutable invocation result. */
+  readonly invocation?: AgentToolInvocationCommit;
+  /** Present when this step reused an earlier compatible invocation result. */
+  readonly reusedInvocationId?: string;
+  readonly integrityCheck?: "hash_match" | "hash_mismatch" | "not_applicable";
+}
+
+export interface CommitAgentStepResult {
+  readonly stepId: string;
+  readonly sequence: number;
+  readonly invocationId?: string;
+  /** True when an equal step was already durable, so this call changed nothing. */
+  readonly alreadyCommitted: boolean;
+  readonly consumed: AgentConsumedBudget;
+}
+
+export interface TerminalizeAgentSessionInput {
+  readonly sessionId: string;
+  readonly attemptId: string;
+  readonly terminalReason: AgentTerminalReason;
+  readonly completedAt: string;
+  readonly offeredTools: readonly string[];
+  readonly budgetDelta: Partial<AgentConsumedBudget>;
+}
+
+export interface AgentSessionTerminalResult {
+  /** False when a terminal reason was already recorded; the persisted reason wins (AGT-REQ-070). */
+  readonly applied: boolean;
+  readonly terminalReason: AgentTerminalReason;
+  readonly consumed: AgentConsumedBudget;
+}
+
+/**
+ * Durable lifecycle boundary for one Agent session. PostgreSQL implements it; the harness
+ * depends only on this port so Pi conversation memory never becomes workflow state (AGT-REQ-073).
+ */
+export interface AgentSessionLifecyclePort {
+  /** Create-or-get the one authoritative session for a run and open an execution attempt (DAT-REQ-199). */
+  beginSession(input: BeginAgentSessionInput): Promise<AgentSessionStart>;
+  /** Append one committed step, its invocation result or reuse lineage, and cumulative budget, exactly once. */
+  commitStep(input: CommitAgentStepInput): Promise<CommitAgentStepResult>;
+  /** Record exactly one terminal reason and close the attempt. */
+  terminalizeSession(input: TerminalizeAgentSessionInput): Promise<AgentSessionTerminalResult>;
+  /** Read the trusted snapshot without opening an attempt. */
+  loadSnapshot(runId: RunId): Promise<AgentRecoverySnapshot | undefined>;
+}
+
 export interface OfflineIssueResult {
   readonly origin: "agent" | "system";
   readonly code: string;

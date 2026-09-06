@@ -1,7 +1,15 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Value } from "@sinclair/typebox/value";
 import { CaseReviewBriefCandidateSchema, type CaseReviewBriefCandidate } from "@findoc/contracts";
-import type { AgentBudgetEnvelope, AgentEligibilityDecision, AgentSessionTrace, AgentStepTrace, AgentTerminalReason, ExtractionGap } from "@findoc/core";
+import {
+  AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError,
+  EMPTY_AGENT_CONSUMED_BUDGET, addConsumedBudget, evaluateAgentSessionCompatibility,
+  type AgentAttemptStartReason, type AgentBudgetEnvelope, type AgentCommittedToolResult, type AgentConsumedBudget,
+  type AgentEligibilityDecision, type AgentRecoverySnapshot, type AgentSessionConfiguration,
+  type AgentSessionLifecyclePort, type AgentSessionStart, type AgentSessionStatus, type AgentSessionTerminalResult,
+  type AgentSessionTrace, type AgentStepTrace, type AgentTerminalReason, type BeginAgentSessionInput,
+  type CommitAgentStepInput, type CommitAgentStepResult, type ExtractionGap, type TerminalizeAgentSessionInput,
+} from "@findoc/core";
 
 export interface ReportFindingView {
   readonly ruleId: string;
@@ -334,4 +342,141 @@ export function evaluateCaseReviewEligibility(input: CaseReviewEligibilityInput,
     decision: reasonCodes.length === 0 ? "eligible" : "ineligible",
     reasonCodes: reasonCodes.length === 0 ? ["processable_case"] : reasonCodes,
   };
+}
+
+// ---------------------------------------------------------------------------
+// In-memory durable-lifecycle double (AGT-REQ-102)
+// ---------------------------------------------------------------------------
+
+interface InMemorySession {
+  sessionId: string;
+  caseId: string;
+  runId: string;
+  status: AgentSessionStatus;
+  terminalReason?: AgentTerminalReason;
+  configuration: AgentSessionConfiguration;
+  consumed: AgentConsumedBudget;
+  startedAt: string;
+  attempts: { attemptId: string; attemptNumber: number; startReason: AgentAttemptStartReason; status: "running" | "terminal" }[];
+  steps: (AgentStepTrace & { stepId: string; attemptId: string; invocationId?: string; reusedInvocationId?: string })[];
+  invocations: AgentCommittedToolResult[];
+}
+
+/**
+ * Deterministic in-process implementation of the durable lifecycle port. It enforces the same
+ * identity, idempotency, budget, and terminal invariants as PostgreSQL so harness tests can run
+ * offline without a database. It is not durable and must never back a delivered deployment.
+ */
+export class InMemoryAgentSessionLifecycle implements AgentSessionLifecyclePort {
+  private readonly byRun = new Map<string, InMemorySession>();
+  private counter = 0;
+
+  constructor(private readonly newId: () => string = () => randomUUID()) {}
+
+  async beginSession(input: BeginAgentSessionInput): Promise<AgentSessionStart> {
+    let session = this.byRun.get(input.runId);
+    if (!session) {
+      session = {
+        sessionId: this.newId(), caseId: input.caseId, runId: input.runId, status: "running",
+        configuration: input.configuration, consumed: EMPTY_AGENT_CONSUMED_BUDGET, startedAt: input.startedAt,
+        attempts: [], steps: [], invocations: [],
+      };
+      this.byRun.set(input.runId, session);
+    } else {
+      const compatibility = evaluateAgentSessionCompatibility(session.configuration, input.configuration);
+      if (!compatibility.compatible) throw new AgentSessionIncompatibleError(compatibility.reasonCodes);
+      if (session.status === "terminal") throw new AgentSessionTerminalError(session.terminalReason ?? "internal_error");
+    }
+    const snapshot = this.snapshotOf(session);
+    const attemptNumber = session.attempts.length + 1;
+    const attempt = {
+      attemptId: this.newId(), attemptNumber,
+      startReason: attemptNumber === 1 ? "initial" as const : "recovery" as const,
+      status: "running" as const,
+    };
+    for (const previous of session.attempts) previous.status = "terminal";
+    session.attempts.push(attempt);
+    return {
+      sessionId: session.sessionId, attemptId: attempt.attemptId, attemptNumber: attempt.attemptNumber,
+      startReason: attempt.startReason, resumed: attemptNumber > 1, snapshot,
+    };
+  }
+
+  async commitStep(input: CommitAgentStepInput): Promise<CommitAgentStepResult> {
+    const session = this.requireSession(input.sessionId);
+    if (session.status === "terminal") throw new AgentSessionTerminalError(session.terminalReason ?? "internal_error");
+    const existing = session.steps.find((step) => step.sequence === input.sequence);
+    if (existing) {
+      if (existing.toolName !== input.toolName || existing.argumentHash !== input.argumentHash || existing.outcome !== input.outcome) {
+        throw new AgentStepConflictError(input.sessionId, input.sequence);
+      }
+      return { stepId: existing.stepId, sequence: existing.sequence, ...(existing.invocationId ? { invocationId: existing.invocationId } : {}), alreadyCommitted: true, consumed: session.consumed };
+    }
+    let invocationId = input.reusedInvocationId;
+    if (input.invocation) {
+      const committed = session.invocations.find((item) => item.idempotencyKey === input.invocation!.idempotencyKey);
+      if (committed) invocationId = committed.invocationId;
+      else {
+        invocationId = this.newId();
+        session.invocations.push({
+          invocationId, idempotencyKey: input.invocation.idempotencyKey, toolName: input.toolName,
+          toolVersion: input.toolVersion ?? "unknown", outcome: input.outcome,
+          outputSchemaVersion: input.invocation.outputSchemaVersion, outputHash: input.invocation.outputHash,
+          ...(input.invocation.safeOutput === undefined ? {} : { safeOutput: input.invocation.safeOutput }),
+          producedReferences: input.invocation.producedReferences,
+          authorizedInputVersions: input.invocation.authorizedInputVersions,
+          terminatesSession: input.invocation.terminatesSession,
+        });
+      }
+    }
+    const stepId = this.newId();
+    this.counter += 1;
+    session.steps.push({
+      stepId, attemptId: input.attemptId, sequence: input.sequence, phase: input.phase, toolName: input.toolName,
+      ...(input.toolVersion ? { toolVersion: input.toolVersion } : {}),
+      argumentHash: input.argumentHash, outcome: input.outcome, summary: input.summary,
+      startedAt: input.startedAt, completedAt: input.completedAt, budgetState: input.budgetState,
+      ...(invocationId ? { invocationId } : {}),
+      ...(input.reusedInvocationId ? { reusedInvocationId: input.reusedInvocationId } : {}),
+    });
+    session.consumed = addConsumedBudget(session.consumed, input.budgetDelta);
+    return { stepId, sequence: input.sequence, ...(invocationId ? { invocationId } : {}), alreadyCommitted: false, consumed: session.consumed };
+  }
+
+  async terminalizeSession(input: TerminalizeAgentSessionInput): Promise<AgentSessionTerminalResult> {
+    const session = this.requireSession(input.sessionId);
+    const attempt = session.attempts.find((item) => item.attemptId === input.attemptId);
+    if (attempt) attempt.status = "terminal";
+    if (session.status === "terminal") {
+      return { applied: false, terminalReason: session.terminalReason ?? "internal_error", consumed: session.consumed };
+    }
+    session.consumed = addConsumedBudget(session.consumed, input.budgetDelta);
+    session.status = "terminal";
+    session.terminalReason = input.terminalReason;
+    session.configuration = { ...session.configuration, offeredTools: input.offeredTools };
+    return { applied: true, terminalReason: input.terminalReason, consumed: session.consumed };
+  }
+
+  async loadSnapshot(runId: string): Promise<AgentRecoverySnapshot | undefined> {
+    const session = this.byRun.get(runId);
+    return session ? this.snapshotOf(session) : undefined;
+  }
+
+  private requireSession(sessionId: string): InMemorySession {
+    for (const session of this.byRun.values()) if (session.sessionId === sessionId) return session;
+    throw new Error("Agent session is unknown");
+  }
+
+  private snapshotOf(session: InMemorySession): AgentRecoverySnapshot {
+    const steps = [...session.steps].sort((left, right) => left.sequence - right.sequence);
+    return {
+      sessionId: session.sessionId, caseId: session.caseId, runId: session.runId, status: session.status,
+      ...(session.terminalReason ? { terminalReason: session.terminalReason } : {}),
+      configuration: session.configuration, consumed: session.consumed,
+      attempts: session.attempts.length, lastSequence: steps.at(-1)?.sequence ?? 0,
+      steps: steps.map(({ stepId: _stepId, attemptId: _attemptId, invocationId: _invocationId, reusedInvocationId: _reused, ...step }) => step),
+      committedToolResults: [...session.invocations],
+      startedAt: session.startedAt,
+    };
+  }
 }
