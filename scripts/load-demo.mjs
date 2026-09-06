@@ -45,6 +45,10 @@ if (report.availability !== "ready" || findings.findings.length !== 5 || issues.
 }
 const firstDocument = documents.documents[0];
 if (!firstDocument) throw new Error("Demo result did not expose its processed document");
+const sourceResponse = await fetch(`${apiBaseUrl}${firstDocument.content_url}`);
+if (!sourceResponse.ok || !Buffer.from(await sourceResponse.arrayBuffer()).subarray(0, 5).equals(Buffer.from("%PDF-"))) {
+  throw new Error("Demo source-document stream was unavailable or invalid");
+}
 const firstPageUrl = `${apiBaseUrl}/api/v1/cases/${accepted.case_id}/documents/${firstDocument.document_id}/pages/1`;
 const firstPage = await fetch(firstPageUrl).then(requireOk);
 if (!firstPage.native_text_available) throw new Error("Demo result did not retain page native text");

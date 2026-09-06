@@ -1,4 +1,8 @@
 import { createIssue, editIssue, loadCaseBundle, loadCaseQueue, loadDemoCase, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
+import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 let cases = [
   { name: 'Anna Beispiel', id: 'FD-2026-0042', summary: 'Employer information differs', status: 'ready', statusLabel: 'Ready for review', issues: 3, waiting: '18 min' },
@@ -62,6 +66,8 @@ let apiCaseRecord = null;
 let apiReport = null;
 let activeApplicationPointer = null;
 let caseReadOnly = false;
+const pdfDocuments = new Map();
+let documentRenderSequence = 0;
 const reviewNotes = {};
 const includedRequests = {};
 let internalReviewNote = '';
@@ -210,7 +216,61 @@ function renderSource(issue) {
   document.querySelector('.document-body').classList.toggle('application-mode', application);
   document.querySelectorAll('[data-source-view]').forEach(function (button) { button.classList.toggle('active', button.dataset.sourceView === sourceView); });
   paper.className = application ? 'application-data' : 'paper';
-  paper.innerHTML = application ? applicationData(current) : documentPaper(sourceOverride ? sourceOverride.kind : issue.paper);
+  if (application) {
+    paper.innerHTML = applicationData(current);
+    return;
+  }
+  const source = selectedDocumentSource(issue);
+  if (!source.document || !source.document.content_url) {
+    paper.innerHTML = documentPaper(sourceOverride ? sourceOverride.kind : issue.paper);
+    return;
+  }
+  paper.style.setProperty('--paper-scale', '1');
+  paper.innerHTML = '<div class="document-loading">Loading page…</div>';
+  void renderDocumentPage(source.document, source.pageNumber, ++documentRenderSequence);
+}
+
+function selectedDocumentSource(issue) {
+  const documentRecord = sourceOverride?.document || apiDocuments[0];
+  return { document: documentRecord, pageNumber: sourceOverride?.pageNumber || issue.pageNumber || 1 };
+}
+
+async function loadPdf(documentRecord) {
+  if (!pdfDocuments.has(documentRecord.document_id)) {
+    pdfDocuments.set(documentRecord.document_id, (async function () {
+      const response = await fetch(documentRecord.content_url);
+      if (!response.ok) throw new Error('Document could not be loaded');
+      return getDocument({ data: new Uint8Array(await response.arrayBuffer()) }).promise;
+    })());
+  }
+  return pdfDocuments.get(documentRecord.document_id);
+}
+
+async function renderDocumentPage(documentRecord, pageNumber, sequence) {
+  const paper = document.querySelector('#paper');
+  try {
+    if (documentRecord.media_type !== 'application/pdf') {
+      if (sequence === documentRenderSequence) paper.innerHTML = '<img class="source-image" src="' + escapeHtml(documentRecord.content_url) + '" alt="Submitted document">';
+      return;
+    }
+    const pdf = await loadPdf(documentRecord);
+    const page = await pdf.getPage(Math.min(Math.max(pageNumber, 1), pdf.numPages));
+    const viewport = page.getViewport({ scale: zoom / 100 });
+    const outputScale = window.devicePixelRatio || 1;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'pdf-page';
+    canvas.width = Math.floor(viewport.width * outputScale);
+    canvas.height = Math.floor(viewport.height * outputScale);
+    canvas.style.width = Math.floor(viewport.width) + 'px';
+    canvas.style.height = Math.floor(viewport.height) + 'px';
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas is unavailable');
+    await page.render({ canvasContext: context, viewport, transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0] }).promise;
+    if (sequence !== documentRenderSequence) return;
+    paper.replaceChildren(canvas);
+  } catch {
+    if (sequence === documentRenderSequence) paper.innerHTML = '<div class="document-loading error">Document preview unavailable</div>';
+  }
 }
 
 function applicationData(activeIssue) {
@@ -267,9 +327,15 @@ function renderThumbnails(activePage) {
   }).join('');
   document.querySelectorAll('.thumbnail').forEach(function (button) {
     button.addEventListener('click', function () {
-      document.querySelectorAll('.thumbnail').forEach(function (item) { item.classList.remove('active'); });
-      button.classList.add('active');
-      toast('Page ' + button.querySelector('small').textContent + ' selected');
+      const pageNumber = Number(button.querySelector('small').textContent);
+      const documentRecord = sourceOverride?.document || apiDocuments[0];
+      sourceOverride = {
+        name: documentRecord ? documentRecord.submitted_filename : issues[current].doc,
+        page: 'Page ' + pageNumber + (documentRecord ? ' of ' + documentRecord.page_count : ''),
+        pageNumber, document: documentRecord, kind: pagePaperKind(pageNumber),
+      };
+      renderSource(issues[current]);
+      renderThumbnails(pageNumber);
     });
   });
 }
@@ -528,7 +594,7 @@ function openEvidenceReference(reference) {
   sourceOverride = {
     name: documentRecord ? documentRecord.submitted_filename : 'Submitted document',
     page: 'Page ' + pageNumber + (documentRecord ? ' of ' + documentRecord.page_count : ''),
-    kind: pagePaperKind(pageNumber),
+    pageNumber, document: documentRecord, kind: pagePaperKind(pageNumber),
   };
   renderSource(issues[current]);
   renderThumbnails(pageNumber);
@@ -758,7 +824,12 @@ panelResizer.addEventListener('keydown', function (event) {
 function updateZoom(delta) {
   zoom = Math.max(68, Math.min(124, zoom + delta));
   document.querySelector('#zoom-label').textContent = zoom + '%';
-  document.querySelector('#paper').style.setProperty('--paper-scale', zoom / 92);
+  const source = selectedDocumentSource(issues[current]);
+  if (sourceView === 'document' && source.document?.content_url) {
+    void renderDocumentPage(source.document, source.pageNumber, ++documentRenderSequence);
+  } else {
+    document.querySelector('#paper').style.setProperty('--paper-scale', zoom / 92);
+  }
 }
 document.querySelector('#refresh-queue').addEventListener('click', async function (event) {
   const button = event.currentTarget;

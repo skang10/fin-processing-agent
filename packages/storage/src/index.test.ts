@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ObjectStore } from "@findoc/core";
-import { DocumentSizeLimitError, UnsupportedDocumentMediaError, storeNativeTextArtifact, storeSourceArtifact } from "./index.js";
+import { DocumentSizeLimitError, MinioObjectStore, UnsupportedDocumentMediaError, storeNativeTextArtifact, storeSourceArtifact } from "./index.js";
 
 async function* chunks(...values: Uint8Array[]) { yield* values; }
 
@@ -62,5 +62,16 @@ describe("derived native-text storage", () => {
     expect(storedKey).toBe(result.objectKey);
     expect(storedMediaType).toBe("text/markdown");
     expect(stored.toString("utf8")).toBe("# Synthetic page");
+  });
+});
+
+describe("MinIO bucket initialization", () => {
+  it("treats a concurrent already-owned bucket creation as success", async () => {
+    const client = {
+      bucketExists: async () => false,
+      makeBucket: async () => { throw Object.assign(new Error("already created"), { code: "BucketAlreadyOwnedByYou" }); },
+    };
+    const store = new MinioObjectStore({ client: client as never, bucket: "artifacts" });
+    await expect(store.ensureBucket()).resolves.toBeUndefined();
   });
 });

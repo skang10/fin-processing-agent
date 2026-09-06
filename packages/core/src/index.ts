@@ -250,6 +250,12 @@ export interface NativeTextArtifactView {
   readonly mediaType: "text/markdown";
 }
 
+export interface SourceDocumentArtifactView {
+  readonly objectKey: string;
+  readonly byteSize: number;
+  readonly mediaType: SupportedMediaType;
+}
+
 export interface ReviewIssueView {
   readonly issueId: string;
   readonly origin: "agent" | "human";
@@ -309,6 +315,7 @@ export interface CaseReviewQueryService {
   listEvidence(caseId: CaseId): Promise<readonly EvidenceView[]>;
   getApplicationData(caseId: CaseId): Promise<ApplicationDataView>;
   getDocuments(caseId: CaseId): Promise<readonly DocumentView[]>;
+  getSourceDocumentArtifact(caseId: CaseId, documentId: string): Promise<SourceDocumentArtifactView>;
   getDocumentPage(caseId: CaseId, documentId: string, pageNumber: number): Promise<DocumentPageView>;
   getNativeTextArtifact(caseId: CaseId, documentId: string, pageNumber: number): Promise<NativeTextArtifactView>;
   getFindings(caseId: CaseId): Promise<readonly FindingView[]>;

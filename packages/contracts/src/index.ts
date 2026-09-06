@@ -214,6 +214,7 @@ export const DocumentsProjectionSchema = Type.Object({
     submitted_filename: Type.String(),
     media_type: Type.String(),
     page_count: Type.Integer({ minimum: 0 }),
+    content_url: Type.String(),
   }, { additionalProperties: false })),
 }, { additionalProperties: false });
 

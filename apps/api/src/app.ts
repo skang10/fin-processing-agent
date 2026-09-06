@@ -314,7 +314,16 @@ export function buildApp(
       document_id: document.documentId, physical_document_id: document.physicalDocumentId,
       version: document.version, submitted_filename: document.submittedFilename,
       media_type: document.mediaType, page_count: document.pageCount,
+      content_url: `/api/v1/cases/${caseId}/documents/${document.documentId}/content`,
     })) };
+  });
+
+  app.get("/api/v1/cases/:case_id/documents/:document_id/content", async (request, reply) => {
+    if (!artifactStore) throw new Error("Artifact content access is not configured");
+    const { case_id: caseId, document_id: documentId } = request.params as { case_id: string; document_id: string };
+    const artifact = await caseQueries.getSourceDocumentArtifact(caseId, documentId);
+    const content = await readObjectBytes(artifactStore, artifact.objectKey, Math.max(artifact.byteSize, 1));
+    return reply.header("cache-control", "private, no-store").type(artifact.mediaType).send(content);
   });
 
   app.get("/api/v1/cases/:case_id/documents/:document_id/pages/:page_number", {

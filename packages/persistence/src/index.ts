@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type StoredDerivedArtifact } from "@findoc/core";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type SourceDocumentArtifactView, type StoredDerivedArtifact } from "@findoc/core";
 import { agentReports, applicationSnapshots, artifacts, cases, caseStateTransitions, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, outboxEvents, pages, physicalDocuments, processingRuns, processingRunTransitions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
@@ -618,6 +618,22 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       .orderBy(asc(documentVersions.createdAt));
     await this.assertCaseExists(caseId);
     return records.map((record) => ({ ...record, pageCount: Number(record.pageCount) }));
+  }
+
+  async getSourceDocumentArtifact(caseId: string, documentId: string): Promise<SourceDocumentArtifactView> {
+    const [record] = await this.db.select({
+      objectKey: artifacts.objectKey, byteSize: artifacts.byteSize, mediaType: artifacts.detectedMediaType,
+    }).from(cases)
+      .innerJoin(processingRuns, eq(cases.currentRunId, processingRuns.id))
+      .innerJoin(inputDocumentSelections, eq(processingRuns.inputRevisionId, inputDocumentSelections.inputRevisionId))
+      .innerJoin(documentVersions, eq(inputDocumentSelections.documentVersionId, documentVersions.id))
+      .innerJoin(artifacts, eq(documentVersions.sourceArtifactId, artifacts.id))
+      .where(and(eq(cases.id, caseId), eq(documentVersions.id, documentId))).limit(1);
+    if (!record) throw new CaseNotFoundError();
+    if (record.mediaType !== "application/pdf" && record.mediaType !== "image/jpeg" && record.mediaType !== "image/png") {
+      throw new Error("Persisted source-document media type is invalid");
+    }
+    return { objectKey: record.objectKey, byteSize: record.byteSize, mediaType: record.mediaType };
   }
 
   async getDocumentPage(caseId: string, documentId: string, pageNumber: number): Promise<DocumentPageView> {

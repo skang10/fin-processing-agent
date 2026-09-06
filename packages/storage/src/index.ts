@@ -101,7 +101,11 @@ export class MinioObjectStore implements ObjectStore {
 
   async ensureBucket(): Promise<void> {
     if (!(await this.options.client.bucketExists(this.options.bucket))) {
-      await this.options.client.makeBucket(this.options.bucket);
+      try {
+        await this.options.client.makeBucket(this.options.bucket);
+      } catch (error) {
+        if (!isAlreadyOwnedBucketError(error)) throw error;
+      }
     }
   }
 
@@ -122,6 +126,10 @@ export class MinioObjectStore implements ObjectStore {
   async get(objectKey: string): Promise<AsyncIterable<Uint8Array>> {
     return this.options.client.getObject(this.options.bucket, objectKey);
   }
+}
+
+function isAlreadyOwnedBucketError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "BucketAlreadyOwnedByYou";
 }
 
 export async function storeNativeTextArtifact(

@@ -108,6 +108,11 @@ describe("PostgresCaseCommandService", () => {
     const [document] = await coordinator.loadUninspectedDocuments(accepted.caseId, accepted.runId);
     expect(document).toMatchObject({ mediaType: "application/pdf" });
     if (!document) throw new Error("Expected document fixture");
+    await expect(queriesBeforeProcessing.getSourceDocumentArtifact(accepted.caseId, document.documentVersionId)).resolves.toMatchObject({
+      objectKey: command.documents[0]?.artifact.objectKey, mediaType: "application/pdf",
+    });
+    await expect(queriesBeforeProcessing.getSourceDocumentArtifact("00000000-0000-4000-8000-000000000000", document.documentVersionId))
+      .rejects.toBeInstanceOf(CaseNotFoundError);
     await coordinator.persistInspection(accepted.runId, document, {
       processor: "firecrawl/pdf-inspector", processorVersion: "1.17.0",
       pdfType: "text_based", routingSignal: 0.99, isComplex: false,

@@ -379,6 +379,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   transform-origin: top center;
   transition: transform .15s ease;
 }
+.paper:has(.pdf-page), .paper:has(.source-image) { width: auto; min-height: 0; padding: 0; background: transparent; box-shadow: none; }
+.pdf-page, .source-image { display: block; max-width: 100%; height: auto; background: #fff; box-shadow: 0 12px 30px rgba(23,33,40,.13); }
+.document-loading { min-width: 280px; padding: 48px; color: var(--muted); text-align: center; }
+.document-loading.error { color: var(--danger); }
 .application-data { width: 620px; padding: 28px; background: #fff; box-shadow: 0 7px 22px rgba(35,45,52,.12); }
 .application-data h2 { margin: 0 0 22px; font-size: 18px; }
 .application-section { margin-top: 22px; }
