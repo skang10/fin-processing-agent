@@ -6,12 +6,10 @@ This section is the operational starting point for the next implementation agent
 
 ### Repository and runtime state
 
-1. The repository is on `main`. The latest committed change is `bf2bac3 fix: expose safe dataset load failures`.
+1. The repository is on `main`. The latest committed change before this handoff update is `be06755 fix: handle scanned pages without native text`.
 2. The Docker Compose API, Worker, Review Web, PostgreSQL, and MinIO services were healthy after the latest restart. The local Review Workbench is available at `http://localhost:5173` and the API at `http://localhost:3000` while those services remain running.
-3. The working tree contains this handoff update plus an uncommitted change in `apps/worker/src/main.ts`:
-   - do not attempt to upload a zero-byte native-text artifact for an image-only page;
-   - log a safe job identifier and error when a case-processing attempt fails, then rethrow so pg-boss retains retry behavior.
-4. `pnpm check`, `pnpm build`, and `git diff --check` passed after that Worker change. The complete Docker-backed six-case rerun and commit still need to be completed.
+3. The Worker now avoids zero-byte native-text uploads for image-only pages and safely logs failed job attempts before pg-boss retry behavior takes over.
+4. The Docker-backed six-case runtime pass completed before candidate confirmation. `pnpm dataset:validate`, `pnpm check`, `pnpm build`, and `git diff --check` passed after the candidate metadata update.
 5. Docker Compose currently warns when shell-level `POSTGRES_PASSWORD` and `MINIO_SECRET_KEY` are absent even though the running demo uses its generated local configuration. Treat removal of this warning as cleanup, not as evidence that a service is unhealthy.
 
 ### Implemented baseline
@@ -28,15 +26,15 @@ The implemented baseline is summarized in `AGENTS.md`. In practical terms, the r
 
 ### Golden candidate status
 
-All six candidates currently remain `pending_human_review`; no frozen release exists yet. Do not edit truth merely to make evaluation pass, and do not record confirmation without explicit human authorization.
+Candidates 001–005 were confirmed by `sulmae` on 2026-09-06 after explicit human review. Candidate 006 remains `pending_human_review`, so no frozen release exists yet. Do not edit truth merely to make evaluation pass, and do not record confirmation without explicit human authorization.
 
 | Candidate | Latest runtime result | Current conclusion |
 |---|---|---|
-| `golden-001-native-clear` | Report ready; no issues; five findings | Runtime behavior matches candidate truth. Human PDF/truth confirmation remains. |
-| `golden-002-employer-conflict` | Report ready; employer-consistency issue; five findings | Runtime behavior matches candidate truth. Human PDF/truth confirmation remains. |
-| `golden-003-multiple-review-issues` | Report ready; completeness, employer, and income issues; five findings | Runtime behavior matches candidate truth. Human PDF/truth confirmation remains. |
-| `golden-004-missing-bank-evidence` | Report ready; document-completeness issue; five findings | Runtime behavior matches candidate truth. Human PDF/truth confirmation remains. |
-| `golden-005-instruction-inert` | Report ready; no issues; five findings after the zero-byte artifact fix | The mixed native/scanned safety path now runs, but its `runtime_support_pending` coverage marker must be reconciled before confirmation. |
+| `golden-001-native-clear` | Report ready; no issues; five findings | Confirmed by `sulmae`. |
+| `golden-002-employer-conflict` | Report ready; employer-consistency issue; five findings | Confirmed by `sulmae`. |
+| `golden-003-multiple-review-issues` | Report ready; completeness, employer, and income issues; five findings | Confirmed by `sulmae`. |
+| `golden-004-missing-bank-evidence` | Report ready; document-completeness issue; five findings | Confirmed by `sulmae`. |
+| `golden-005-instruction-inert` | Report ready; no issues; five findings after the zero-byte artifact fix | Confirmed by `sulmae`; mixed-PDF coverage now records `implemented_offline_path`. |
 | `golden-006-scanned-adaptive-unavailable` | Processing reaches review with the report unavailable; deterministic findings exist | Keep pending. The real bounded adaptive extraction path is not implemented, so this candidate must not be used to claim that acceptance path is complete. |
 
 The most recent successfully submitted runtime case identifiers were:
@@ -54,15 +52,11 @@ These identifiers belong to the preserved local demo database and may disappear 
 
 ### Immediate next task
 
-Finish the interrupted golden-candidate verification without bypassing the lifecycle guard:
+Continue golden-candidate verification without bypassing the lifecycle guard:
 
-1. Review the uncommitted Worker diff and keep or improve its formatting without changing the behavior described above.
-2. Run `pnpm check`, `pnpm build`, `git diff --check`, and the relevant Docker-backed integration or six-case runtime checks.
-3. Verify the report failure reason and deterministic income finding for `golden-006-scanned-adaptive-unavailable`; do not infer correctness only from the absent issue projection.
-4. Visually inspect every generated PDF page and compare it with `datasets/golden/blueprints.json` and each candidate truth file. The PDF skill workflow requires rendered-page inspection, not text extraction alone.
-5. If evidence supports it, replace `runtime_support_pending` for candidate 005 with an accurate implemented-path marker, regenerate and validate candidates, and review the resulting diff. Keep candidate 006 marked pending.
-6. On the user's explicit confirmation authority, run `pnpm dataset:confirm -- CASE_ID REVIEWER` only for candidates whose document, truth, and implemented runtime behavior have all been reviewed. Record the actual human reviewer identity; do not identify an AI agent as the human reviewer.
-7. Commit the Worker fix and directly related candidate metadata only after all checks pass.
+1. Verify the report failure reason and deterministic income finding for `golden-006-scanned-adaptive-unavailable`; do not infer correctness only from the absent issue projection.
+2. Keep candidate 006 pending until the real bounded adaptive extraction path is implemented and its PDF, truth, and runtime behavior receive human review.
+3. Run `pnpm check`, `pnpm build`, `git diff --check`, and the relevant Docker-backed checks after implementation changes.
 
 Do not run `pnpm dataset:build` while any candidate remains pending. In particular, do not remove candidate 006's runtime gate simply to create a release.
 

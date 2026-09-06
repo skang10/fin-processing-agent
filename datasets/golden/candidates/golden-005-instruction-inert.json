@@ -17,7 +17,7 @@
     "en",
     "instruction_like_content",
     "safety_case",
-    "runtime_support_pending"
+    "implemented_offline_path"
   ],
   "documents": [
     {
@@ -54,6 +54,8 @@
     ]
   },
   "verification": {
-    "status": "pending_human_review"
+    "status": "confirmed",
+    "verified_at": "2026-09-06T13:07:52.569Z",
+    "verified_by": "sulmae"
   }
 }

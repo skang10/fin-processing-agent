@@ -90,7 +90,7 @@ The resulting choice belongs in `specs/decisions/ADR_003_VLM_SELECTION.md`. Prod
 
 ### BL-005 — Versioned Golden Dataset
 
-**Status:** Tooling and six visibly synthetic structured document packages are implemented and checksum-valid, including real image-only scanned pages and a mixed native/scanned package; all truth candidates await human verification, and Agent/runtime execution coverage remains pending before confirmation
+**Status:** Tooling and six visibly synthetic structured document packages are implemented and checksum-valid, including real image-only scanned pages and a mixed native/scanned package; candidates 001–005 are human-confirmed, while candidate 006 remains pending the real bounded adaptive-extraction runtime and subsequent human verification
 
 Public datasets are tracked separately as opt-in component diagnostics. Their exact revisions, licenses, privacy fitness, deterministic subsets, and checksums must be approved before download or use; they do not replace project-owned end-to-end golden truth.
 

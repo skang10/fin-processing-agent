@@ -54,6 +54,8 @@
     ]
   },
   "verification": {
-    "status": "pending_human_review"
+    "status": "confirmed",
+    "verified_at": "2026-09-06T13:07:51.156Z",
+    "verified_by": "sulmae"
   }
 }
