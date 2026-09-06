@@ -44,7 +44,7 @@ Runtime case identifiers are intentionally not recorded here because each captur
 
 ### Immediate next task
 
-The six-case golden release and deterministic offline regression baseline are complete. The next human-dependent milestone is selecting credentials and an explicit Euro-denominated budget for one live-model Pi case-review acceptance run. Before treating that run as the formal measured baseline, capture latency, model calls, token usage, and estimated cost rather than leaving operations unavailable.
+The six-case golden release and deterministic offline regression baseline are complete. `openai/gpt-5.6-terra` is selected as the first live-acceptance candidate because it supports the required tool calling and structured output at a moderate price; this does not make it the final ADR-003 default model. The user approved a EUR 2 ceiling, but the current Pi budget meter is USD-denominated, so a pinned conversion policy must be implemented before the live run. The remaining human dependency is an OpenAI API key supplied only through an uncommitted local `.env`. Before treating that run as the formal measured baseline, capture latency, model calls, token usage, and estimated cost rather than leaving operations unavailable.
 
 A Review Workbench defect found during that review was fixed separately: a case with no Agent-raised issue never called `render()`, so its document panel kept the prototype's bundled five-page sample instead of the case's own PDF. `golden-001-native-clear` now shows `golden-001-native-clear.pdf`, page 1 of 3, with three thumbnails and an explicit empty-issue panel, and a case with issues is unchanged.
 
@@ -60,7 +60,7 @@ After the immediate task, proceed in this order:
 6. **Expand from six to twenty golden cases**, prioritizing meaningful document variation over nearly identical templates.
 7. **Finish V1 hardening and demonstration evidence**: crop rendering, JPEG/PNG execution, OS resource and network isolation, observability evidence, browser acceptance coverage, README/demo limitations, and a reproducible Docker acceptance run.
 
-The next human decision is the live-model provider route, credentials, and explicit Euro budget. No live benchmark should start before those are supplied and approved.
+The provider route, first candidate model, and EUR 2 ceiling are selected. No live benchmark should start until the user supplies the OpenAI API key and the USD-denominated runtime enforces that Euro ceiling through a pinned conversion policy.
 
 Real OCR and VLM recognition, live-model acceptance, crop rendering, and hardened operating-system and network isolation all remain pending.
 
