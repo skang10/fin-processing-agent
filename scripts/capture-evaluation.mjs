@@ -22,16 +22,14 @@ export async function captureEvaluationRun(releaseDirectory, runConfiguration, o
     const report = runtime.report;
     const failure = report.failure_reason;
     const findingEvidence = new Map(runtime.findings.findings.map((finding) => [finding.finding_id, references(finding.references)]));
+    const findingsByRule = new Map(runtime.findings.findings.map((finding) => [finding.rule_id, finding]));
     const findingEvidenceByRule = new Map(runtime.findings.findings.map((finding) => [finding.rule_id, references(finding.references)]));
     const issueEvidence = (values) => [...new Set(values.flatMap((value) => findingEvidence.get(value.split("/").at(-1)) ?? references([value])))].sort();
     actualCases.push({
       case_id: candidate.case_id, processable: true,
       issues: runtime.issues.issues.filter((item) => item.origin === "agent").map((item) => ({
         code: item.code,
-        evidence: [...new Set([
-          ...(item.supporting_references.length ? issueEvidence(item.supporting_references) : (findingEvidenceByRule.get(item.code) ?? [])),
-          ...(findingEvidenceByRule.has(item.code) ? [`finding:${item.code}`] : []),
-        ])].sort(),
+        evidence: captureIssueEvidence(item, findingsByRule.get(item.code), findingEvidenceByRule.get(item.code) ?? [], issueEvidence),
       })),
       checked_facts: report.checked_facts.map((item) => ({ code: item.rule_id, evidence: references(item.references) })),
       report: { availability: report.availability, verified: report.availability === "ready", ...(failure ? { failure_reason: failure } : {}), verifier: verifierState(failure) },
@@ -39,6 +37,15 @@ export async function captureEvaluationRun(releaseDirectory, runConfiguration, o
     });
   }
   return { schema_version: "1.0.0", run_id: runConfiguration.run_id, executed_at: runConfiguration.executed_at, environment: runConfiguration.environment, source_revision: runConfiguration.source_revision, versions: runConfiguration.versions, cases: actualCases };
+}
+
+export function captureIssueEvidence(issue, finding, fallbackEvidence, resolveIssueEvidence) {
+  if (!finding) return issue.supporting_references.length ? resolveIssueEvidence(issue.supporting_references) : [];
+  if (finding.reason_code === "required_document_missing") return [`finding:${issue.code}`];
+  return [...new Set([
+    ...(issue.supporting_references.length ? resolveIssueEvidence(issue.supporting_references) : fallbackEvidence),
+    `finding:${issue.code}`,
+  ])].sort();
 }
 
 function verifierState(failure) {
