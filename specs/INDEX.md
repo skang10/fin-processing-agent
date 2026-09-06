@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 3.0.4
+Version: 3.0.6
 
 Status: Approved
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-All owning specifications in the catalog are approved, including `SYSTEM_ARCHITECTURE.md` version 3.0.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.0.0, and `operations/DEPLOYMENT.md`. `ADR_001_PI_AGENT_HARNESS.md`, `ADR_002_PDF_INSPECTOR.md`, and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
+All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.0, `SYSTEM_ARCHITECTURE.md` version 3.0.0, and `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.0.0. `ADR_001_PI_AGENT_HARNESS.md`, `ADR_002_PDF_INSPECTOR.md`, and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
 
 ## 3. Product Baseline
 
@@ -367,6 +367,8 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.0.6 | 2026-09-06 | Approved | Approved Product and Scope 4.0.0 for the Agent-led case review product flow. |
+| 3.0.5 | 2026-09-06 | Approved | Registered Product and Scope 4.0.0 as In Review for alignment with the Agent-led case review architecture. |
 | 3.0.4 | 2026-09-06 | Approved | Approved Agent component 3.0.0 as the single-session Agent-led document review contract. |
 | 3.0.3 | 2026-09-06 | Approved | Registered Agent component 3.0.0 as In Review for the single-session Agent-led document review architecture. |
 | 3.0.2 | 2026-09-06 | Approved | Approved System Architecture 3.0.0 as the bounded Agent-led document-tool architecture. |

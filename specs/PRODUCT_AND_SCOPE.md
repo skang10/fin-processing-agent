@@ -2,11 +2,11 @@
 
 Document ID: `PRD`
 
-Version: 3.1.1
+Version: 4.0.0
 
 Status: Approved
 
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 
 ## 1. Purpose
 
@@ -37,7 +37,7 @@ The [migration source specification](../Intelligent_Document_Processing_Agent_Sp
 
 ## 3. Product Statement
 
-Financial Document AI Agent converts a synthetic personal-loan document package into structured, evidence-linked claims, deterministic findings, and a Pi-generated Case Review Brief for a human reviewer. Pi acts as a bounded junior document reviewer: it pre-screens every processable case, may recover eligible extraction gaps, flags evidence-grounded review signals, and suggests registered next review actions without making a banking decision.
+Financial Document AI Agent converts a synthetic personal-loan document package into structured, evidence-linked claims, deterministic findings, and a Pi-generated Case Review Brief for a human reviewer. Pi acts as a bounded junior document reviewer: for every processable case it selects from registered inspection and extraction capabilities, requests deterministic reconciliation and validation, flags evidence-grounded review issues, and suggests registered next review actions without making a banking decision.
 
 The product answers:
 
@@ -229,11 +229,15 @@ Structured application data is a source of claims and does not require an applic
 
 `PRD-REQ-062` Every processable case must attempt a bounded Agent-in-the-Loop pre-screening step before Human-in-the-Loop review.
 
-`PRD-REQ-063` The Agent must operate in one declared mode and within a mode-specific tool and execution budget: `adaptive_recovery` for an eligible extraction gap or `case_review_report` for the complete processable case result.
+`PRD-REQ-063` The Agent must operate in one bounded `case_review` session for a processable run and within a versioned tool and execution budget. Separately scheduled `adaptive_recovery` and `case_review_report` modes are not part of the V1 product flow.
 
-`PRD-REQ-064` The Agent may submit extraction candidates in recovery mode and a non-authoritative Case Review Brief in report mode, but must not determine or change a validation finding, recommended disposition, or business action.
+`PRD-REQ-064` Within that session, the Agent may select registered document-inspection and extraction operations, submit evidence-linked extraction candidates, request deterministic reconciliation and validation, consume their committed results, and submit a non-authoritative Case Review Brief. It must not determine or change an authoritative claim, validation finding, recommended disposition, workflow transition, or business action through model output.
 
-`PRD-REQ-065` An unresolved or budget-exhausted extraction gap must be visible to the reviewer.
+`PRD-REQ-065` An unresolved extraction gap, exhausted Agent budget, or unavailable Agent report must remain explicit and visible to the reviewer when a reviewable deterministic result exists.
+
+`PRD-REQ-147` PDF Inspector and related local document-processing capabilities made available to the Agent must be exposed only through registered, case-scoped product tools; the Agent must not receive Shell, arbitrary filesystem, unrestricted network, raw SDK, or dynamic-tool authority.
+
+`PRD-REQ-148` The Agent may adapt which authorized documents, pages, regions, and eligible tools it uses, but local native processing must precede OCR when adequate, and VLM processing must remain selective and follow insufficient or failed approved local processing for the same task.
 
 `PRD-REQ-131` A Case Review Brief must summarize the processed document package, identify registered document-review signals, cite persisted claims, evidence, gaps, or findings, suggest only registered review actions, and may include a verified signal-bound applicant-readable requested-change draft without delivery authority.
 
@@ -405,11 +409,11 @@ Structured application data is a source of claims and does not require an applic
 
 `PRD-REQ-124` A fixed native-text golden case must complete without a VLM extraction call and display claims, evidence, findings, disposition, a verified Case Review Brief, and processing history.
 
-### 20.2 Adaptive extraction path
+### 20.2 Agent-led difficult-document path
 
-`PRD-REQ-125` A fixed scanned or complex-table golden case must create an explicit extraction gap and invoke the bounded Agent with only approved recovery capabilities.
+`PRD-REQ-125` A fixed scanned or complex-table golden case must invoke the bounded Agent, demonstrate Agent selection of approved PDF Inspector or extraction tools, and preserve an explicit gap when the selected processing cannot establish a required claim.
 
-`PRD-REQ-126` The adaptive path must display the recovery actions, resulting candidate and evidence, model usage, latency, and estimated cost.
+`PRD-REQ-126` The difficult-document path must display the Agent's selected tool actions, resulting candidates and evidence, deterministic result requests, model usage, latency, and estimated-cost availability.
 
 `PRD-REQ-136` Each primary demonstration path must attempt Case Review Brief generation and expose whether the brief was verified, rejected, or unavailable.
 
@@ -419,7 +423,7 @@ Structured application data is a source of claims and does not require an applic
 
 `PRD-REQ-128` The review and safety path must demonstrate that document instructions do not change tools, rules, permissions, or disposition semantics.
 
-`PRD-REQ-129` The review and safety path must allow a reviewer to inspect evidence, correct a field with a reason, and observe the corresponding audit event.
+`PRD-REQ-129` The review and safety path must allow a reviewer to inspect evidence, confirm, ignore, or edit an Agent-raised issue, create a human-raised issue, and observe the persisted human-review state without rewriting the extracted claim.
 
 ### 20.4 Offline reproducibility
 
@@ -433,7 +437,7 @@ The initial product is successful when:
 2. The three primary demonstration paths execute reproducibly.
 3. The golden evaluation report identifies its dataset and component versions.
 4. Evidence can be inspected for every material claim used by a validation rule.
-5. Every processable case progresses through bounded Agent pre-screening to human review, while difficult cases may additionally use bounded recovery, without granting the model business authority.
+5. Every processable case progresses through one bounded Agent-led pre-screening session to human review, with difficult cases using additional eligible tools inside that session without granting the model durable workflow, deterministic-result, or business authority.
 6. The documentation clearly distinguishes demonstrated behavior from production gaps.
 
 These criteria do not establish production fitness or a numeric model-quality threshold.
@@ -460,6 +464,7 @@ The following evidence-dependent choices are intentionally owned elsewhere and r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 4.0.0 | 2026-09-06 | Approved | Replaced the two-mode recovery-and-report product flow with one bounded Agent-led case review that selects registered PDF Inspector and extraction tools while retaining deterministic results and mandatory human review; aligned the safety-path acceptance test with the V1 issue-review workflow. |
 | 3.1.1 | 2026-09-05 | Approved | Added the removed `PRD-REQ-102` tombstone so the published identifier remains machine-verifiable. |
 | 3.1.0 | 2026-09-04 | Approved | Reduced the first vertical slice to six golden cases and deferred the separate aggregate Agent-monitoring surface while retaining the bounded case Agent log. |
 | 3.0.0 | 2026-09-04 | Approved | Adopted the V1 HTML UX baseline: Agent Report entry, issue review, applicant-readable request drafts without delivery, compact case progress, and separate Agent monitoring; deferred direct field and boundary correction from the V1 reviewer surface. |
