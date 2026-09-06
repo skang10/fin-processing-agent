@@ -171,6 +171,33 @@ export function groupLogicalDocuments(
   return groups;
 }
 
+export function classifySyntheticDemoPages(
+  pages: readonly Pick<InspectedPage, "pageNumber" | "nativeMarkdown">[],
+): { readonly classifications: readonly PageClassification[]; readonly boundaries: readonly BoundaryPrediction[] } {
+  const ordered = [...pages].sort((left, right) => left.pageNumber - right.pageNumber);
+  if (ordered.some((page, index) => page.pageNumber !== index + 1)) throw new Error("Demo pages must form one ordered inventory");
+  const classifications = ordered.map((page): PageClassification => {
+    const text = page.nativeMarkdown.toLocaleLowerCase("en-US");
+    let selectedType: BusinessPageType = "unknown";
+    if (text.includes("synthetic demo - identity document")) selectedType = "identity_document";
+    else if (text.includes("synthetic demo - payslip") || text.includes("synthetic demo - document boundary")) selectedType = "payslip";
+    else if (text.includes("synthetic demo - bank statement")) selectedType = "bank_statement";
+    return {
+      pageNumber: page.pageNumber, selectedType, method: "synthetic-demo-heading-classifier", version: "1.0.0",
+      qualityStatus: selectedType === "unknown" ? "uncertain" : "accepted",
+      rawConfidence: { value: selectedType === "unknown" ? 0 : 1, scale: "zero_to_one", producer: "deterministic-demo-rule" },
+      alternatives: [],
+    };
+  });
+  const boundaries = classifications.slice(1).map((page, index): BoundaryPrediction => ({
+    pageNumber: page.pageNumber,
+    startsNewDocument: page.selectedType !== classifications[index]!.selectedType,
+    method: "synthetic-demo-contiguous-boundary", version: "1.0.0",
+    rawConfidence: { value: 1, scale: "zero_to_one", producer: "deterministic-demo-rule" },
+  }));
+  return { classifications, boundaries };
+}
+
 function toLogicalGroup(pages: readonly PageClassification[]): LogicalDocumentGroup {
   const first = pages[0]!;
   return {

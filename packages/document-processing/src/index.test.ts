@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import { PageContentSource, PdfType } from "@firecrawl/pdf-inspector";
-import { DocumentSandboxClient, FakeOcrEngine, PdfInspectorAdapter, PdfInspectorOcrAdapter, PdfiumPageRenderer, groupLogicalDocuments, runSelectiveOcr, type BoundaryPrediction, type OcrEngine, type PageClassification, type PdfInspectorEngine } from "./index.js";
+import { DocumentSandboxClient, FakeOcrEngine, PdfInspectorAdapter, PdfInspectorOcrAdapter, PdfiumPageRenderer, classifySyntheticDemoPages, groupLogicalDocuments, runSelectiveOcr, type BoundaryPrediction, type OcrEngine, type PageClassification, type PdfInspectorEngine } from "./index.js";
 
 describe("PdfInspectorAdapter", () => {
   it("translates zero-based native pages into project-owned one-based pages", async () => {
@@ -118,6 +118,21 @@ describe("PdfInspectorOcrAdapter", () => {
 });
 
 describe("groupLogicalDocuments", () => {
+  it("classifies only visibly synthetic demo headings", () => {
+    const result = classifySyntheticDemoPages([
+      { pageNumber: 1, nativeMarkdown: "SYNTHETIC DEMO - Identity document" },
+      { pageNumber: 2, nativeMarkdown: "SYNTHETIC DEMO - Payslip" },
+      { pageNumber: 3, nativeMarkdown: "SYNTHETIC DEMO - Document boundary" },
+      { pageNumber: 4, nativeMarkdown: "SYNTHETIC DEMO - Bank statement" },
+    ]);
+    expect(result.classifications.map((item) => item.selectedType)).toEqual([
+      "identity_document", "payslip", "payslip", "bank_statement",
+    ]);
+    expect(result.boundaries.map((item) => item.startsNewDocument)).toEqual([true, false, true]);
+    expect(classifySyntheticDemoPages([{ pageNumber: 1, nativeMarkdown: "Identity document" }]).classifications[0])
+      .toMatchObject({ selectedType: "unknown", qualityStatus: "uncertain" });
+  });
+
   it("creates deterministic contiguous groups and preserves uncertainty", () => {
     const classification = (pageNumber: number, selectedType: PageClassification["selectedType"], qualityStatus: PageClassification["qualityStatus"] = "accepted"): PageClassification => ({
       pageNumber, selectedType, method: "deterministic-fixture", version: "1.0.0",
