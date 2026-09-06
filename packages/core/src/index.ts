@@ -473,7 +473,8 @@ export interface OfflineEvidenceResult {
   readonly jsonPointer?: string;
   readonly documentVersionId?: string;
   readonly pageNumber?: number;
-  readonly extractionMethod: "structured_input" | "offline_fixture" | "agent_vlm_extraction" | "agent_ocr_reading";
+  readonly extractionMethod: "structured_input" | "offline_fixture" | "pdf_inspector_inspection"
+    | "agent_native_text_reading" | "agent_ocr_reading" | "agent_vlm_extraction";
   readonly processorVersion: string;
 }
 
@@ -657,7 +658,13 @@ export interface AgentLogView {
   readonly estimatedCost?: { readonly amount: string; readonly currency: "EUR" | "USD" };
   readonly currentStep: "processing" | "awaiting_human_review" | "review_completed";
   readonly session?: AgentLogSessionView;
-  readonly events: readonly { readonly timestamp: string; readonly activity: string; readonly toolLabel?: string }[];
+  readonly events: readonly {
+    readonly timestamp: string;
+    readonly activity: string;
+    readonly toolLabel?: string;
+    /** Who performed the activity: the system before the session, the Agent, or an Agent document tool. */
+    readonly actor?: "system" | "agent" | "agent_document_tool";
+  }[];
 }
 
 export type EvidenceView =

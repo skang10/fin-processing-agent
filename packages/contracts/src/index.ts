@@ -177,6 +177,7 @@ export const AgentLogSchema = Type.Object({
   session: Type.Optional(AgentLogSessionSchema),
   events: Type.Array(Type.Object({
     timestamp: Type.String(), activity: Type.String(), tool_label: Type.Optional(Type.String()),
+    actor: Type.Optional(Type.Union([Type.Literal("system"), Type.Literal("agent"), Type.Literal("agent_document_tool")])),
   }, { additionalProperties: false })),
 }, { additionalProperties: false });
 

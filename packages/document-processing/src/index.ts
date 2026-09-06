@@ -171,21 +171,45 @@ export function groupLogicalDocuments(
   return groups;
 }
 
+/** Normalize a heading for matching: PDF Inspector may collapse the separators the generator drew. */
+function normalizedHeading(markdown: string): string {
+  return markdown.toLocaleLowerCase("en-US").replace(/[^a-z0-9]+/gu, " ").trim();
+}
+
+const DEMO_HEADINGS: readonly { readonly phrase: string; readonly type: BusinessPageType }[] = Object.freeze([
+  { phrase: "synthetic demo identity document", type: "identity_document" },
+  { phrase: "synthetic demo payslip", type: "payslip" },
+  { phrase: "synthetic demo document boundary", type: "payslip" },
+  { phrase: "synthetic demo bank statement", type: "bank_statement" },
+]);
+
+export interface SyntheticDemoClassificationOptions {
+  /**
+   * Declared page type for a page that carries no native text. The delivered OCR adapter is a
+   * deterministic fixture, so an image-only page cannot be classified from its own content; the
+   * caller may supply the synthetic fixture's declared type instead. It is recorded with its own
+   * method identity so the reviewer can see that the type came from a fixture, not from the page.
+   */
+  readonly fixturePageType?: (pageNumber: number) => BusinessPageType | undefined;
+}
+
 export function classifySyntheticDemoPages(
   pages: readonly Pick<InspectedPage, "pageNumber" | "nativeMarkdown">[],
+  options: SyntheticDemoClassificationOptions = {},
 ): { readonly classifications: readonly PageClassification[]; readonly boundaries: readonly BoundaryPrediction[] } {
   const ordered = [...pages].sort((left, right) => left.pageNumber - right.pageNumber);
   if (ordered.some((page, index) => page.pageNumber !== index + 1)) throw new Error("Demo pages must form one ordered inventory");
   const classifications = ordered.map((page): PageClassification => {
-    const text = page.nativeMarkdown.toLocaleLowerCase("en-US");
-    let selectedType: BusinessPageType = "unknown";
-    if (text.includes("synthetic demo - identity document")) selectedType = "identity_document";
-    else if (text.includes("synthetic demo - payslip") || text.includes("synthetic demo - document boundary")) selectedType = "payslip";
-    else if (text.includes("synthetic demo - bank statement")) selectedType = "bank_statement";
+    const text = normalizedHeading(page.nativeMarkdown);
+    const matched = DEMO_HEADINGS.find((heading) => text.includes(heading.phrase))?.type;
+    const declared = matched ?? (page.nativeMarkdown.length === 0 ? options.fixturePageType?.(page.pageNumber) : undefined);
+    const selectedType: BusinessPageType = declared ?? "unknown";
     return {
-      pageNumber: page.pageNumber, selectedType, method: "synthetic-demo-heading-classifier", version: "1.0.0",
+      pageNumber: page.pageNumber, selectedType,
+      method: matched ? "synthetic-demo-heading-classifier" : declared ? "synthetic-demo-fixture-page-adapter" : "synthetic-demo-heading-classifier",
+      version: "1.0.0",
       qualityStatus: selectedType === "unknown" ? "uncertain" : "accepted",
-      rawConfidence: { value: selectedType === "unknown" ? 0 : 1, scale: "zero_to_one", producer: "deterministic-demo-rule" },
+      rawConfidence: { value: selectedType === "unknown" ? 0 : 1, scale: "zero_to_one", producer: matched ? "deterministic-demo-rule" : declared ? "synthetic-fixture-declaration" : "deterministic-demo-rule" },
       alternatives: [],
     };
   });

@@ -67,7 +67,7 @@ describe("durable case-review checkpoints", () => {
 
     expect(observed.atReconciliation?.status).toBe("running");
     expect(observed.atReconciliation?.steps.map((step) => step.toolName)).toEqual([
-      "get_extraction_gaps", "inspect_page", "run_ocr", "extract_with_vlm", "submit_extraction_candidates",
+      "get_case_manifest", "inspect_page", "run_ocr", "extract_with_vlm", "submit_extraction_candidates",
     ]);
     expect(observed.atValidation?.steps.at(-1)?.toolName).toBe("request_reconciliation");
     expect(observed.atValidation?.consumed.toolCalls).toBe(6);

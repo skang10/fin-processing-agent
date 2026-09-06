@@ -337,6 +337,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .agent-log-event > span { min-width: 0; display: grid; gap: 4px; }
 .agent-log-event strong { color: var(--ink); font-size: 11px; font-weight: 600; overflow-wrap: anywhere; }
 .agent-log-event small { color: var(--muted); font-size: 9px; }
+.agent-log-event.system { background: #f7f9fb; }
 .agent-log-outcome { min-height: 52px; padding: 10px 14px; border-top: 1px solid var(--line); display: grid; align-content: center; gap: 3px; }
 .agent-log-outcome span { font-size: 11px; font-weight: 700; }
 .agent-log-outcome small { color: var(--muted); font-size: 9px; text-transform: capitalize; }

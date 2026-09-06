@@ -8,7 +8,7 @@ import type {
 import type { RegisteredToolSpec } from "./session.js";
 import {
   createRecoveryToolState,
-  getExtractionGapsTool,
+  getCaseManifestTool,
   inspectPageTool,
   getNativeTextTool,
   runOcrTool,
@@ -22,7 +22,7 @@ import {
   type RecoveryToolState,
 } from "./recovery-tools.js";
 
-export const CASE_REVIEW_TOOL_REGISTRY_VERSION = "case-review-tools-2.0.0";
+export const CASE_REVIEW_TOOL_REGISTRY_VERSION = "case-review-tools-3.0.0";
 
 export interface AgentLedScope extends RecoveryScope {
   readonly context: AgentLedCaseReviewContext;
@@ -59,8 +59,8 @@ const requestReconciliationTool: Tool = {
     state.reconciliationReference = result.reference;
     return {
       summary: state.candidates.length === 0
-        ? "Existing extracted data was sufficient; no additional extraction was needed"
-        : `Submitted ${state.candidates.length} recovered ${state.candidates.length === 1 ? "value" : "values"} for verification`,
+        ? "No document value could be extracted for reconciliation"
+        : `Sent ${state.candidates.length} extracted ${state.candidates.length === 1 ? "value" : "values"} to deterministic reconciliation`,
       output: { reference: result.reference },
     };
   },
@@ -156,7 +156,7 @@ const submitBriefTool: Tool = {
 };
 
 export const CASE_REVIEW_TOOLS: readonly Tool[] = Object.freeze([
-  recoveryTool(getExtractionGapsTool), recoveryTool(inspectPageTool), recoveryTool(getNativeTextTool),
+  recoveryTool(getCaseManifestTool), recoveryTool(inspectPageTool), recoveryTool(getNativeTextTool),
   recoveryTool(runOcrTool), recoveryTool(renderPageRegionTool), recoveryTool(classifyPageTool),
   recoveryTool(detectDocumentBoundariesTool), recoveryTool(extractLocalTableTool),
   recoveryTool(extractWithVlmTool), recoveryTool(submitExtractionCandidatesTool),

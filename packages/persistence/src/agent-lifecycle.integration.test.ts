@@ -116,7 +116,11 @@ describe("PostgresAgentSessionLifecycle", () => {
     expect(replay).toMatchObject({ alreadyCommitted: true, stepId: first.stepId, invocationId: first.invocationId });
     await expect(lifecycle.commitStep({ ...base, toolName: "run_ocr" })).rejects.toBeInstanceOf(AgentStepConflictError);
 
-    const reuse = await lifecycle.commitStep(step({ sessionId: start.sessionId, attemptId: start.attemptId, invocation, outcome: "duplicate_resolved", summary: "Reused a committed result", integrityCheck: "hash_match" }));
+    // A reuse step carries lineage, not a second invocation payload: the committed invocation keeps
+    // the outcome of the call that produced it, so resending it under a different outcome conflicts.
+    await expect(lifecycle.commitStep(step({ sessionId: start.sessionId, attemptId: start.attemptId, invocation, outcome: "duplicate_resolved", summary: "Reused a committed result" })))
+      .rejects.toBeInstanceOf(AgentInvocationConflictError);
+    const reuse = await lifecycle.commitStep(step({ sessionId: start.sessionId, attemptId: start.attemptId, reusedInvocationId: first.invocationId, outcome: "duplicate_resolved", summary: "Reused a committed result", integrityCheck: "hash_match" }));
     expect(reuse.invocationId).toBe(first.invocationId);
     const [invocationRows] = await connection.db.select({ value: count() }).from(agentToolInvocations).where(eq(agentToolInvocations.sessionId, start.sessionId));
     expect(invocationRows?.value).toBe(1);

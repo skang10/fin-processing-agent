@@ -186,8 +186,15 @@ describe("PostgresCaseCommandService", () => {
     });
 
     const inputRevisionId = await coordinator.loadInputRevisionId(accepted.caseId, accepted.runId);
-    const sourceContext = await coordinator.loadOfflineSourceContext(accepted.caseId, accepted.runId);
-    expect(sourceContext.pages).toHaveLength(1);
+    const inventory = await coordinator.loadCaseDocumentInventory(accepted.caseId, accepted.runId);
+    expect(inventory.pages).toHaveLength(1);
+    expect(inventory.documentProcessorVersion).toBe("firecrawl/pdf-inspector@1.17.0");
+    expect(inventory.pages[0]).toMatchObject({
+      pageNumber: 1, nativeCharacterCount: 42, nativeTextObjectKey: "derived/native/page-1",
+      render: { objectKey: "derived/render/page-1" }, ocr: { objectKey: "derived/ocr/page-1", engine: "deterministic-fake-ocr" },
+      classification: { selectedType: "bank_statement", method: "synthetic-demo-heading-classifier", rawConfidence: 1 },
+    });
+    expect(inventory.logicalDocuments[0]).toMatchObject({ documentType: "bank_statement", uncertain: false });
     const resultRevisionId = "4c816f67-5f2f-4e21-8c17-7eb1e5383999";
     const evidenceId = "4c816f67-5f2f-4e21-8c17-7eb1e5383998";
     const claimId = "4c816f67-5f2f-4e21-8c17-7eb1e5383997";
@@ -300,11 +307,14 @@ describe("PostgresCaseCommandService", () => {
       availability: "ready", modelLabel: "fake-pi-harness-v1", estimatedCost: { amount: "0.0000", currency: "EUR" },
       currentStep: "awaiting_human_review",
       session: { harnessLabel: "pi-agent-led-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review", terminalReason: "report_submitted", iterations: 2, toolCalls: 2, usageAvailable: true },
+      // The synthetic session fixture is dated before the run rows this test creates, so the
+      // system-preprocessing event sorts after it here; in a real run it precedes the session.
       events: [
-        { activity: "Started review using pre-extracted case data" },
-        { activity: "Listed deterministic findings", toolLabel: "list_findings" },
-        { activity: "Submitted a Case Review Brief", toolLabel: "submit_case_review_brief" },
+        { activity: "Started the bounded case review session" },
+        { activity: "Listed deterministic findings", toolLabel: "list_findings", actor: "agent" },
+        { activity: "Submitted a Case Review Brief", toolLabel: "submit_case_review_brief", actor: "agent" },
         { activity: "Session ended: report submitted" },
+        { activity: "System preprocessing inspected 1 page and rendered its image, with text recognition routed for 1 of them", actor: "system" },
         { activity: "Deterministic reconciliation accepted the Agent's monthly net income candidate from page 1" },
         { activity: "Checked 4 facts" }, { activity: "Created 1 review issues" }, { activity: "Generated review report" },
       ],

@@ -24,18 +24,28 @@ export type FakeModelScript = (turn: number, context: Context) => ScriptedTurn;
  * the persisted view and never assumes that earlier Pi messages survived (AGT-REQ-119).
  */
 export function readToolResult<T>(context: Context, toolName: string): T | undefined {
-  for (let index = context.messages.length - 1; index >= 0; index -= 1) {
-    const message = context.messages[index];
-    if (message?.role !== "toolResult" || message.toolName !== toolName || message.isError) continue;
+  return readAllToolResults<T>(context, toolName).at(-1);
+}
+
+/**
+ * Every successful result of one tool in the visible conversation, oldest first. A resumed attempt
+ * starts with an empty conversation and simply repeats its plan; the control plane resolves each
+ * repeated call from its committed result instead of re-charging it.
+ */
+export function readAllToolResults<T>(context: Context, toolName: string): T[] {
+  const committed = readResumedProgress(context)[toolName];
+  const results: T[] = Array.isArray(committed) ? [...committed as T[]] : [];
+  for (const message of context.messages) {
+    if (message.role !== "toolResult" || message.toolName !== toolName || message.isError) continue;
     const text = message.content.find((part) => part.type === "text");
-    if (!text || text.type !== "text") return undefined;
-    try { return JSON.parse(text.text) as T; } catch { return undefined; }
+    if (!text || text.type !== "text") continue;
+    try { results.push(JSON.parse(text.text) as T); } catch { /* a non-JSON result is not usable */ }
   }
-  return readResumedProgress(context)[toolName] as T | undefined;
+  return results;
 }
 
 /** Parse the trusted resumed-progress block the control plane adds to a recovery attempt. */
-export function readResumedProgress(context: Context): Readonly<Record<string, unknown>> {
+export function readResumedProgress(context: Context): Readonly<Record<string, readonly unknown[]>> {
   for (const message of context.messages) {
     if (message.role !== "user") continue;
     const text = typeof message.content === "string"
@@ -44,7 +54,7 @@ export function readResumedProgress(context: Context): Readonly<Record<string, u
     const block = /<resumed_progress trust="trusted_control_metadata">\n([\s\S]*?)\n<\/resumed_progress>/.exec(text);
     if (!block?.[1]) continue;
     try {
-      const parsed = JSON.parse(block[1]) as { committed_tool_results?: Record<string, unknown> };
+      const parsed = JSON.parse(block[1]) as { committed_tool_results?: Record<string, readonly unknown[]> };
       return parsed.committed_tool_results ?? {};
     } catch { return {}; }
   }
@@ -122,35 +132,139 @@ export function createFakeStreamFn(script: FakeModelScript): StreamFn {
   };
 }
 
-interface ListedGap { gap_id: string; field_schema_id: string; scope: { document_version_id: string; page_number: number } }
+interface ManifestPage { document_version_id: string; page_number: number; needs_ocr: boolean; native_character_count: number }
+interface ManifestDocument { document_type: string; start_page: number; end_page: number; document_version_id: string }
+interface ManifestRequirement {
+  gap_id: string; field_schema_id: string; value_type: string; required: boolean;
+  scope: { document_version_id: string; page_number: number };
+}
+interface CaseManifest {
+  documents: ManifestDocument[]; extraction_requirements: ManifestRequirement[];
+  pages: ManifestPage[]; field_schemas: { field_schema_id: string }[];
+}
+
+interface NativeTextResult { document_version_id: string; page_number: number; available: boolean; untrusted_document_text: string }
+interface OcrResultView { document_version_id: string; page_number: number; untrusted_lines: { text: string }[] }
+interface VlmResultView { document_version_id: string; page_number: number; field_schema_id: string; value: { raw_value: string; region: { x: number; y: number; width: number; height: number } } | null }
 
 interface CurrentResult {
   result_revision_id: string;
   findings: { rule_id: string; rule_version?: string; status: string; reason_code: string }[];
 }
 
-/** One deterministic fake-model policy for the complete Agent-led case review session. */
+const MONTH_SUFFIX = /\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}$/u;
+
+/**
+ * Surface patterns of the synthetic corpus, per document type and field. The list is ordered: the
+ * structured A4 template first, then the simpler headed demo package. A reading model would not need
+ * them; this deterministic stand-in does.
+ */
+const FIELD_PATTERNS: Readonly<Record<string, Readonly<Record<string, readonly RegExp[]>>>> = {
+  identity_document: {
+    "person.name": [/\*\*FULL NAME\*\*\s*\*\*([^*]+?)\*\*/u, /^#+\s*Applicant:\s*(.+?)\s*$/mu],
+    "identity.expiry_date": [/EXPIRY DATE\*\*\s*\*\*[^*]*?(\d{1,2}\s+[A-Za-z]+\s+\d{4})[^*]*?\*\*/u, /^#+\s*Expiry:\s*(\S+)\s*$/mu],
+  },
+  payslip: {
+    "person.name": [/\*\*EMPLOYEE PAYROLL PERIOD\*\*\s*\*\*([^*]+?)\*\*/u],
+    "organization.name": [/\*\*EMPLOYER\*\*\s*\*\*([^*]+?)\*\*/u, /^#+\s*Employer:\s*(.+?)\s*$/mu],
+    "income.monthly_net": [/\|(?:Monthly net pay|Net payment)\|([\d.,]+)\|/u, /^#+\s*Net pay:\s*(?:EUR\s*)?([\d.,]+)\s*$/mu],
+  },
+  bank_statement: {
+    "person.name": [/\*\*ACCOUNT HOLDER MASKED IBAN\*\*\s*\*\*([^*]+?)\*\*/u],
+    "organization.name": [/\*\*([^*]+?)\*\*\s*Salary/u, /^#+\s*Salary payment:\s*(.+?)\s*$/mu],
+  },
+};
+
+/**
+ * Deterministic stand-in for a reading model. It parses only text that a registered tool returned
+ * for the same page; it has no access to golden truth, application values, or fixture tables.
+ */
+export function readDocumentField(fieldSchemaId: string, documentType: string, text: string): string | undefined {
+  for (const pattern of FIELD_PATTERNS[documentType]?.[fieldSchemaId] ?? []) {
+    const value = capture(text, pattern);
+    if (value === undefined) continue;
+    // The payroll period and the masked IBAN share a line with the person name in the A4 template.
+    if (fieldSchemaId === "person.name" && documentType === "payslip") return value.replace(MONTH_SUFFIX, "").trim() || undefined;
+    if (fieldSchemaId === "person.name" && documentType === "bank_statement") return value.replace(/\s+[A-Z]{2}$/u, "").trim() || undefined;
+    return value;
+  }
+  return undefined;
+}
+
+function capture(text: string, pattern: RegExp): string | undefined {
+  const value = pattern.exec(text)?.[1]?.trim();
+  return value && value.length > 0 ? value : undefined;
+}
+
+const pageKey = (page: { document_version_id: string; page_number: number }) => `${page.document_version_id}:${page.page_number}`;
+
+/**
+ * One deterministic fake-model policy for the complete Agent-led case review session: read the
+ * bounded manifest, inspect every authorized page, read committed native text, run the approved OCR
+ * boundary where a page needs it, use bounded VLM extraction only for a page local processing could
+ * not resolve, then submit evidence-backed candidates and the deterministic requests.
+ */
 export const standardCaseReviewScript: FakeModelScript = (_turn, context) => {
-  const gapsResult = readToolResult<{ gaps: ListedGap[]; pages: { document_version_id: string; page_number: number; needs_ocr: boolean }[] }>(context, "get_extraction_gaps");
-  if (!gapsResult) return { kind: "tool_calls", calls: [{ name: "get_extraction_gaps", args: {} }] };
-  const gap = gapsResult.gaps[0];
-  const reviewPage = gap?.scope ?? gapsResult.pages[0];
-  if (reviewPage && !readToolResult(context, "inspect_page")) {
-    return { kind: "tool_calls", calls: [{ name: "inspect_page", args: { document_version_id: reviewPage.document_version_id, page_number: reviewPage.page_number } }] };
+  const manifest = readToolResult<CaseManifest>(context, "get_case_manifest");
+  if (!manifest) return { kind: "tool_calls", calls: [{ name: "get_case_manifest", args: {} }] };
+
+  const inspected = new Set(readAllToolResults<{ document_version_id: string; page_number: number }>(context, "inspect_page").map(pageKey));
+  const uninspected = manifest.pages.filter((page) => !inspected.has(pageKey(page)));
+  if (uninspected.length > 0) {
+    return { kind: "tool_calls", calls: uninspected.map((page) => ({ name: "inspect_page", args: { document_version_id: page.document_version_id, page_number: page.page_number } })) };
   }
-  if (!gap && reviewPage && !readToolResult(context, "get_native_text")) {
-    return { kind: "tool_calls", calls: [{ name: "get_native_text", args: { document_version_id: reviewPage.document_version_id, page_number: reviewPage.page_number } }] };
+
+  const nativeCalls = readAllToolResults<NativeTextResult>(context, "get_native_text");
+  const nativeRead = new Set(nativeCalls.map(pageKey));
+  const nativeByPage = new Map(nativeCalls.filter((result) => result.available).map((result) => [pageKey(result), result.untrusted_document_text]));
+  const nativePending = manifest.pages.filter((page) => page.native_character_count > 0 && !nativeRead.has(pageKey(page)));
+  if (nativePending.length > 0) {
+    return { kind: "tool_calls", calls: nativePending.map((page) => ({ name: "get_native_text", args: { document_version_id: page.document_version_id, page_number: page.page_number } })) };
   }
-  if (gap && !readToolResult(context, "run_ocr")) {
-    return { kind: "tool_calls", calls: [{ name: "run_ocr", args: { document_version_id: gap.scope.document_version_id, page_number: gap.scope.page_number } }] };
+
+  const ocrRead = new Set(readAllToolResults<OcrResultView>(context, "run_ocr").map(pageKey));
+  const ocrPending = manifest.pages.filter((page) => page.needs_ocr && !ocrRead.has(pageKey(page)));
+  if (ocrPending.length > 0) {
+    return { kind: "tool_calls", calls: ocrPending.map((page) => ({ name: "run_ocr", args: { document_version_id: page.document_version_id, page_number: page.page_number } })) };
   }
-  if (gap && !readToolResult(context, "extract_with_vlm")) {
-    return { kind: "tool_calls", calls: [{ name: "extract_with_vlm", args: { document_version_id: gap.scope.document_version_id, page_number: gap.scope.page_number, field_schema_id: gap.field_schema_id } }] };
+
+  const documentTypeOf = (requirement: ManifestRequirement) =>
+    manifest.documents.find((document) => document.document_version_id === requirement.scope.document_version_id
+      && document.start_page <= requirement.scope.page_number && document.end_page >= requirement.scope.page_number)?.document_type ?? "unknown";
+
+  const submitted = new Set(readAllToolResults<{ submitted?: { gap_id: string }[] }>(context, "submit_extraction_candidates").flatMap((result) => (result.submitted ?? []).map((item) => item.gap_id)));
+  const open = manifest.extraction_requirements.filter((requirement) => !submitted.has(requirement.gap_id));
+
+  const readable = open.flatMap((requirement) => {
+    const text = nativeByPage.get(pageKey(requirement.scope));
+    const value = text ? readDocumentField(requirement.field_schema_id, documentTypeOf(requirement), text) : undefined;
+    return value ? [{ gap_id: requirement.gap_id, raw_value: value, document_version_id: requirement.scope.document_version_id, page_number: requirement.scope.page_number }] : [];
+  });
+
+  // A page local processing could not read is the only reason to spend a bounded VLM call.
+  const vlmResults = readAllToolResults<VlmResultView>(context, "extract_with_vlm");
+  const vlmByKey = new Map(vlmResults.filter((result) => result.value).map((result) => [`${pageKey(result)}:${result.field_schema_id}`, result]));
+  const vlmPending = open.filter((requirement) => !nativeByPage.get(pageKey(requirement.scope))
+    && !vlmResults.some((result) => `${pageKey(result)}:${result.field_schema_id}` === `${pageKey(requirement.scope)}:${requirement.field_schema_id}`));
+  if (vlmPending.length > 0) {
+    return {
+      kind: "tool_calls",
+      calls: vlmPending.map((requirement) => ({
+        name: "extract_with_vlm",
+        args: { document_version_id: requirement.scope.document_version_id, page_number: requirement.scope.page_number, field_schema_id: requirement.field_schema_id },
+      })),
+    };
   }
-  if (gap && !readToolResult(context, "submit_extraction_candidates")) {
-    const vlm = readToolResult<{ value: { raw_value: string; region: { x: number; y: number; width: number; height: number } } | null }>(context, "extract_with_vlm");
-    if (vlm?.value) return { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates: [{ gap_id: gap.gap_id, raw_value: vlm.value.raw_value, document_version_id: gap.scope.document_version_id, page_number: gap.scope.page_number, region: vlm.value.region }] } }] };
-  }
+  const recovered = open.flatMap((requirement) => {
+    const result = vlmByKey.get(`${pageKey(requirement.scope)}:${requirement.field_schema_id}`);
+    return result?.value
+      ? [{ gap_id: requirement.gap_id, raw_value: result.value.raw_value, document_version_id: requirement.scope.document_version_id, page_number: requirement.scope.page_number, region: result.value.region }]
+      : [];
+  });
+
+  const candidates = [...readable, ...recovered];
+  if (candidates.length > 0) return { kind: "tool_calls", calls: [{ name: "submit_extraction_candidates", args: { candidates } }] };
+
   if (!readToolResult(context, "request_reconciliation")) return { kind: "tool_calls", calls: [{ name: "request_reconciliation", args: {} }] };
   if (!readToolResult(context, "request_validation")) return { kind: "tool_calls", calls: [{ name: "request_validation", args: {} }] };
   const result = readToolResult<CurrentResult>(context, "get_current_result");

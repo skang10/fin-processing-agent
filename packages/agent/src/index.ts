@@ -88,18 +88,18 @@ export class AgentReportExecutionError extends Error {
 }
 
 /** Configuration-controlled report-session budget envelope (AGT-REQ-057). */
-export const AGENT_BUDGET_CONFIGURATION_VERSION = "agent-budget-1.1.0";
+export const AGENT_BUDGET_CONFIGURATION_VERSION = "agent-budget-2.0.0";
 export const DEFAULT_AGENT_BUDGET: AgentBudgetEnvelope = Object.freeze({
   maxAttempts: 3,
-  maxIterations: 14,
-  maxToolCalls: 18,
-  maxModelCalls: 14,
-  maxInputTokens: 60_000,
-  maxOutputTokens: 8_000,
-  maxWallClockMs: 60_000,
+  maxIterations: 24,
+  maxToolCalls: 40,
+  maxModelCalls: 24,
+  maxInputTokens: 250_000,
+  maxOutputTokens: 20_000,
+  maxWallClockMs: 180_000,
   maxEstimatedCostUsd: 0.25,
-  maxVlmCalls: 2,
-  maxOcrPages: 3,
+  maxVlmCalls: 8,
+  maxOcrPages: 8,
   maxConsecutiveNoProgressSteps: 2,
 });
 
@@ -164,6 +164,11 @@ const DISPLAYS: Readonly<Record<string, {
   income_input_incomparable: { signal: "evidence_ambiguous", action: "verify_extracted_value", description: "The monthly income value does not have sufficient evidence for comparison." },
   income_conflict: { signal: "validation_finding_requires_attention", action: "verify_extracted_value", description: "The submitted monthly income values do not agree." },
   required_document_missing: { signal: "document_missing", action: "review_missing_document", description: "A required bank statement was not submitted." },
+  person_name_unresolved: { signal: "evidence_ambiguous", action: "inspect_evidence", description: "The applicant name could not be confirmed on every submitted document." },
+  person_name_conflict: { signal: "validation_finding_requires_attention", action: "compare_claims", description: "The applicant name differs between the submitted documents." },
+  employer_input_unresolved: { signal: "evidence_ambiguous", action: "inspect_evidence", description: "The employer information could not be confirmed from the submitted documents." },
+  identity_expiry_unresolved: { signal: "evidence_ambiguous", action: "inspect_evidence", description: "The identity document expiry date could not be confirmed." },
+  identity_document_expired: { signal: "validation_finding_requires_attention", action: "inspect_evidence", description: "The identity document expiry date is before the review reference date." },
 });
 
 /** Registered display text for deterministic reason codes; shared by fake harness and fake model scripts. */
@@ -273,12 +278,26 @@ export interface RecoveryFieldSchemaView {
   readonly valueType: "string" | "money" | "date";
 }
 
+/** One grouped logical document of the current run as the Agent may see it (AGT-REQ-013). */
+export interface CaseDocumentView {
+  readonly logicalDocumentRevisionId: string;
+  readonly documentVersionId: string;
+  readonly documentType: string;
+  readonly startPage: number;
+  readonly endPage: number;
+  readonly uncertain: boolean;
+}
+
 /** Minimum bounded document context for one case-review session (AGT-REQ-013 to AGT-REQ-015). */
 export interface AdaptiveRecoveryContext {
   readonly runId: string;
   readonly gaps: readonly ExtractionGap[];
   readonly pages: readonly RecoveryPageView[];
   readonly fieldSchemas: readonly RecoveryFieldSchemaView[];
+  /** Grouped logical documents of the current run; the Agent reads them, it never regroups them. */
+  readonly documents?: readonly CaseDocumentView[];
+  /** Structured application data of the current input revision. Never a source of document evidence. */
+  readonly applicationData?: Readonly<Record<string, unknown>>;
 }
 
 export interface NormalizedRegion {
@@ -305,16 +324,24 @@ export interface RecoveryToolPorts {
   extractWithVlm(request: { readonly page: PageReference; readonly fieldSchemaId: string; readonly region?: NormalizedRegion }): Promise<{ readonly modelLabel: string; readonly promptVersion: string; readonly value?: { readonly rawValue: string; readonly normalizedValue: unknown; readonly region: NormalizedRegion; readonly rawConfidence: number }; readonly usage?: { readonly inputTokens: number; readonly outputTokens: number } }>;
 }
 
+/** How the Agent obtained a submitted value; every option is a registered, scoped tool boundary. */
+export type AgentExtractionMethod = "agent_native_text_reading" | "agent_ocr_reading" | "agent_vlm_extraction";
+
+/**
+ * One value the Agent proposes for a bound extraction gap. It carries the raw value it read and the
+ * tool boundary it came from; deterministic code owns normalization, reconciliation, and claims
+ * (AGT-REQ-048). The model never supplies a normalized value.
+ */
 export interface SubmittedExtractionCandidate {
   readonly gapId: string;
   readonly fieldSchemaId: string;
   readonly fieldSchemaVersion: string;
   readonly valueType: "string" | "money" | "date";
   readonly rawValue: string;
-  readonly normalizedValue: unknown;
   readonly page: PageReference;
-  readonly region: NormalizedRegion;
-  readonly extractionMethod: "agent_vlm_extraction" | "agent_ocr_reading";
+  /** Present only when the source tool returned coordinates; native text has none. */
+  readonly region?: NormalizedRegion;
+  readonly extractionMethod: AgentExtractionMethod;
   readonly processorVersion: string;
 }
 

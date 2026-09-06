@@ -60,12 +60,12 @@ describe("durable re-entry after Worker loss", () => {
   it("continues after a committed inspection step without repeating it", async () => {
     const ports = reviewPorts();
     const { interrupted, outcome, resumed } = await crashThenResume(2, ports);
-    expect(toolNames(interrupted?.steps ?? [])).toEqual(["get_extraction_gaps", "inspect_page"]);
+    expect(toolNames(interrupted?.steps ?? [])).toEqual(["get_case_manifest", "inspect_page"]);
     expect(calls(ports, "inspectPage")).toBe(1);
     expect(outcome).toMatchObject({ resumed: true, attemptNumber: 2 });
     expect(resumed).toMatchObject({ status: "terminal", terminalReason: "report_submitted", attempts: 2 });
     expect(toolNames(resumed?.steps ?? [])).toEqual([
-      "get_extraction_gaps", "inspect_page", "run_ocr", "extract_with_vlm", "submit_extraction_candidates",
+      "get_case_manifest", "inspect_page", "run_ocr", "extract_with_vlm", "submit_extraction_candidates",
       "request_reconciliation", "request_validation", "get_current_result", "submit_case_review_brief",
     ]);
   });

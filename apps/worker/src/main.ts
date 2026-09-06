@@ -7,6 +7,7 @@ import type { AgentLedCaseReviewHarness } from "@findoc/agent";
 import { PiAgentLedCaseReviewHarness, policyViolationCaseReviewScript, standardCaseReviewScript } from "@findoc/agent-pi";
 import { PostgresAgentSessionLifecycle, PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
 import { createMinioObjectStore, readObjectBytes, storeNativeTextArtifact, storeOcrArtifact, storePageRenderArtifact } from "@findoc/storage";
+import { findFixtureScannedPageAdapter } from "@findoc/offline";
 import { processAgentLedCaseReview } from "./case-review.js";
 import { CASE_PROCESSING_QUEUE, OutboxRelay } from "./outbox.js";
 
@@ -102,6 +103,8 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
     logger.warn({ case_id: job.data.case_id, run_id: job.data.run_id }, "case routed to processing exception");
     return;
   }
+  const applicationData = await coordinator.loadApplicationData(job.data.case_id, job.data.run_id);
+  const fixtureScannedPages = findFixtureScannedPageAdapter(applicationData["demo_fixture_id"], applicationData);
   const documents = await coordinator.loadUninspectedDocuments(job.data.case_id, job.data.run_id);
   for (const document of documents) {
     if (document.mediaType === "application/pdf") {
@@ -112,7 +115,12 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
       });
       const inspection = sandboxResult.inspection;
       const demoAnalysis = process.env["FINDOC_SYNTHETIC_DEMO"] === "true"
-        ? classifySyntheticDemoPages(inspection.pages)
+        ? classifySyntheticDemoPages(inspection.pages, {
+          // An image-only synthetic page carries no text the fixture OCR adapter can recover, so a
+          // registered demo fixture declares its page type. It is recorded with its own method
+          // identity so a reviewer can see the type came from a fixture, not from the page.
+          ...(fixtureScannedPages ? { fixturePageType: (pageNumber: number) => fixtureScannedPages.pageType(pageNumber) } : {}),
+        })
         : undefined;
       const pages = [];
       for (const page of inspection.pages) {
@@ -158,7 +166,10 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
       });
     }
   }
-  const stage = await processAgentLedCaseReview({ coordinator, selectHarness: selectAgentHarness, logger }, job.data);
+  const stage = await processAgentLedCaseReview({
+    coordinator, selectHarness: selectAgentHarness, logger,
+    readArtifact: (objectKey, maximumBytes) => readObjectBytes(objectStore, objectKey, maximumBytes),
+  }, job.data);
   if (stage === "processing_exception") return;
   logger.info({ case_id: job.data.case_id, run_id: job.data.run_id }, "offline case processing completed");
   } catch (error) {

@@ -1,9 +1,9 @@
 import { Type, type Static } from "typebox";
-import type { AdaptiveRecoveryContext, NormalizedRegion, PageReference, RecoveryToolPorts, SubmittedExtractionCandidate } from "@findoc/agent";
+import type { AdaptiveRecoveryContext, AgentExtractionMethod, NormalizedRegion, PageReference, RecoveryToolPorts, SubmittedExtractionCandidate } from "@findoc/agent";
 import type { RegisteredToolSpec } from "./session.js";
 
 /** Immutable, versioned adaptive-recovery tool catalog (AGT section 6). */
-export const RECOVERY_TOOL_REGISTRY_VERSION = "adaptive-recovery-tools-1.0.0";
+export const RECOVERY_TOOL_REGISTRY_VERSION = "adaptive-recovery-tools-2.0.0";
 
 const MAX_NATIVE_TEXT_CHARACTERS = 4_000;
 const MAX_OCR_LINES = 200;
@@ -13,18 +13,59 @@ export interface RecoveryScope {
   readonly ports: RecoveryToolPorts;
 }
 
+/**
+ * In-session record of what registered tools actually returned, keyed by `${documentVersionId}:${pageNumber}`.
+ * A submitted candidate must cite one of these observations, so the model cannot introduce a value
+ * that no authorized tool produced for that page (AGT-REQ-047).
+ */
 export interface RecoveryToolState {
   readonly candidates: SubmittedExtractionCandidate[];
   readonly inspectedPages: Set<string>;
-  readonly locallyReadPages: Set<string>;
-  /** Values a tool actually returned for a page, keyed by `${documentVersionId}:${pageNumber}`; submissions must cite one of them. */
-  readonly observedValues: Map<string, Set<string>>;
-  readonly vlmResults: Map<string, { rawValue: string; normalizedValue: unknown; region: NormalizedRegion; processorVersion: string }>;
+  /** Bounded committed native text returned for a page, exactly as the model saw it. */
+  readonly nativeTextByPage: Map<string, string>;
+  /** Bounded OCR lines returned for a page, with the region each line came from. */
+  readonly ocrLinesByPage: Map<string, { text: string; region: NormalizedRegion }[]>;
+  /** VLM values keyed by `${documentVersionId}:${pageNumber}:${fieldSchemaId}`. */
+  readonly vlmResults: Map<string, { rawValue: string; region: NormalizedRegion; processorVersion: string }>;
 }
 
 export function createRecoveryToolState(): RecoveryToolState {
-  return { candidates: [], inspectedPages: new Set(), locallyReadPages: new Set(), observedValues: new Map(), vlmResults: new Map() };
+  return { candidates: [], inspectedPages: new Set(), nativeTextByPage: new Map(), ocrLinesByPage: new Map(), vlmResults: new Map() };
 }
+
+/** True when at least one approved local boundary already returned text for the page. */
+function locallyProcessed(state: RecoveryToolState, page: PageReference): boolean {
+  return state.nativeTextByPage.has(pageKey(page)) || state.ocrLinesByPage.has(pageKey(page));
+}
+
+export interface ResolvedEvidenceSource {
+  readonly extractionMethod: AgentExtractionMethod;
+  readonly processorVersion: string;
+  readonly region?: NormalizedRegion;
+}
+
+/**
+ * Resolve the tool boundary a submitted value came from. A VLM value must match exactly, an OCR
+ * value must match a returned line exactly, and a native-text value must appear verbatim in the
+ * bounded text the page tool returned. Anything else has no tool evidence.
+ */
+export function resolveEvidenceSource(
+  state: RecoveryToolState, page: PageReference, fieldSchemaId: string, rawValue: string,
+): ResolvedEvidenceSource | undefined {
+  const key = pageKey(page);
+  const vlm = state.vlmResults.get(`${key}:${fieldSchemaId}`);
+  if (vlm && vlm.rawValue === rawValue) return { extractionMethod: "agent_vlm_extraction", processorVersion: vlm.processorVersion, region: vlm.region };
+  const line = state.ocrLinesByPage.get(key)?.find((item) => item.text === rawValue);
+  if (line) return { extractionMethod: "agent_ocr_reading", processorVersion: AGENT_OCR_READING_VERSION, region: line.region };
+  const native = state.nativeTextByPage.get(key);
+  if (native && rawValue.length > 0 && native.includes(rawValue)) {
+    return { extractionMethod: "agent_native_text_reading", processorVersion: AGENT_NATIVE_TEXT_READING_VERSION };
+  }
+  return undefined;
+}
+
+export const AGENT_OCR_READING_VERSION = "agent-ocr-reading-1.0.0";
+export const AGENT_NATIVE_TEXT_READING_VERSION = "agent-native-text-reading-1.0.0";
 
 const PageParameters = {
   document_version_id: Type.String({ minLength: 1, maxLength: 64 }),
@@ -45,8 +86,8 @@ const SubmitParameters = Type.Object({
     gap_id: Type.String({ minLength: 1, maxLength: 64 }),
     raw_value: Type.String({ minLength: 1, maxLength: 500 }),
     ...PageParameters,
-    region: RegionSchema,
-  }, { additionalProperties: false }), { minItems: 1, maxItems: 10 }),
+    region: Type.Optional(RegionSchema),
+  }, { additionalProperties: false }), { minItems: 1, maxItems: 20 }),
 }, { additionalProperties: false });
 
 const pageKey = (page: PageReference) => `${page.documentVersionId}:${page.pageNumber}`;
@@ -64,25 +105,27 @@ function fieldLabel(fieldSchemaId: string): string {
   return fieldSchemaId === "income.monthly_net" ? "monthly net income" : fieldSchemaId.replace(/[._]/g, " ");
 }
 
-function observe(state: RecoveryToolState, page: PageReference, value: string): void {
-  const key = pageKey(page);
-  const values = state.observedValues.get(key) ?? new Set<string>();
-  values.add(value);
-  state.observedValues.set(key, values);
-}
-
 type Tool<TParams extends Type.TSchema> = RegisteredToolSpec<TParams, RecoveryScope, RecoveryToolState>;
 
-export const getExtractionGapsTool: Tool<typeof NoParameters> = {
-  name: "get_extraction_gaps", version: "1.0.0", label: "Get extraction gaps", costClass: "read",
-  description: "Return the session-bound extraction gaps, their scope, and the pages this session may inspect.",
-  promptSnippet: "list the bound extraction gaps and authorized pages",
+/**
+ * The bounded case manifest: grouped logical documents, authorized pages, the declared field
+ * requirements this session must satisfy from documents, and the structured application data of the
+ * run. It carries no document content; every document value must come from a page tool.
+ */
+export const getCaseManifestTool: Tool<typeof NoParameters> = {
+  name: "get_case_manifest", version: "1.0.0", label: "Get case manifest", costClass: "read",
+  description: "Return the bounded case manifest: logical documents, authorized pages, declared extraction requirements, and structured application data. It contains no document content.",
+  promptSnippet: "read the bounded case manifest before inspecting any page",
   parameters: NoParameters,
   authorize: () => undefined,
   execute: async (_args, scope, state) => ({
-    summary: "Listed bound extraction gaps",
+    summary: `Read the case manifest: ${scope.context.documents?.length ?? 0} documents, ${scope.context.pages.length} pages, ${scope.context.gaps.length} extraction requirements`,
     output: {
-      gaps: scope.context.gaps.map((gap) => ({
+      documents: (scope.context.documents ?? []).map((document) => ({
+        logical_document_revision_id: document.logicalDocumentRevisionId, document_version_id: document.documentVersionId,
+        document_type: document.documentType, start_page: document.startPage, end_page: document.endPage, uncertain: document.uncertain,
+      })),
+      extraction_requirements: scope.context.gaps.map((gap) => ({
         gap_id: gap.gapId, field_schema_id: gap.fieldSchemaId, field_schema_version: gap.fieldSchemaVersion, value_type: gap.valueType,
         required: gap.required, reason_code: gap.reasonCode, attempted_paths: [...gap.attemptedPaths],
         scope: { document_version_id: gap.scope.documentVersionId, page_number: gap.scope.pageNumber, logical_document_revision_id: gap.scope.logicalDocumentRevisionId },
@@ -90,6 +133,7 @@ export const getExtractionGapsTool: Tool<typeof NoParameters> = {
       })),
       pages: scope.context.pages.map((page) => ({ document_version_id: page.documentVersionId, page_number: page.pageNumber, needs_ocr: page.needsOcr, ocr_available: page.ocrAvailable, native_character_count: page.nativeCharacterCount, render_available: page.renderAvailable })),
       field_schemas: scope.context.fieldSchemas.map((schema) => ({ field_schema_id: schema.fieldSchemaId, field_schema_version: schema.fieldSchemaVersion, value_type: schema.valueType })),
+      application_data: scope.context.applicationData ?? {},
     },
   }),
 };
@@ -120,9 +164,14 @@ export const getNativeTextTool: Tool<typeof PageOnly> = {
   execute: async (args, scope, state) => {
     const result = await scope.ports.getNativeText(toPage(args));
     const text = result.text.slice(0, MAX_NATIVE_TEXT_CHARACTERS);
-    state.locallyReadPages.add(pageKey(toPage(args)));
-    if (result.available && text) observe(state, toPage(args), text);
-    return { summary: `Read native text of page ${args.page_number}`, output: { available: result.available, truncated: result.truncated || text.length < result.text.length, untrusted_document_text: text } };
+    state.nativeTextByPage.set(pageKey(toPage(args)), result.available ? text : "");
+    return {
+      summary: `Read native text of page ${args.page_number}`,
+      output: {
+        document_version_id: args.document_version_id, page_number: args.page_number,
+        available: result.available, truncated: result.truncated || text.length < result.text.length, untrusted_document_text: text,
+      },
+    };
   },
 };
 
@@ -137,10 +186,10 @@ export const runOcrTool: Tool<typeof PageOnly> = {
   execute: async (args, scope, state) => {
     const result = await scope.ports.runOcr(toPage(args));
     const lines = result.lines.slice(0, MAX_OCR_LINES);
-    for (const line of lines) observe(state, toPage(args), line.text);
+    state.ocrLinesByPage.set(pageKey(toPage(args)), lines.map((line) => ({ text: line.text, region: line.region })));
     return {
       summary: `Ran OCR on page ${args.page_number}`,
-      output: { engine: result.engine, engine_version: result.engineVersion, model_asset_version: result.modelAssetVersion, reused_committed_output: result.reusedCommittedOutput, untrusted_lines: lines.map((line) => ({ text: line.text, region: line.region, raw_confidence: line.rawConfidence })) },
+      output: { document_version_id: args.document_version_id, page_number: args.page_number, engine: result.engine, engine_version: result.engineVersion, model_asset_version: result.modelAssetVersion, reused_committed_output: result.reusedCommittedOutput, untrusted_lines: lines.map((line) => ({ text: line.text, region: line.region, raw_confidence: line.rawConfidence })) },
     };
   },
 };
@@ -189,18 +238,19 @@ export const extractWithVlmTool: Tool<typeof VlmParameters> = {
     if (!scope.context.fieldSchemas.some((schema) => schema.fieldSchemaId === args.field_schema_id)) return "field_schema_outside_session_scope";
     if (!scope.context.gaps.some((gap) => gap.fieldSchemaId === args.field_schema_id && gap.scope.documentVersionId === args.document_version_id && gap.scope.pageNumber === args.page_number)) return "page_outside_gap_scope";
     if (!state.inspectedPages.has(pageKey(toPage(args)))) return "page_inspection_required";
-    if (!state.observedValues.has(pageKey(toPage(args))) && !state.locallyReadPages.has(pageKey(toPage(args)))) return "local_processing_required";
+    if (!locallyProcessed(state, toPage(args))) return "local_processing_required";
     if (args.region && !validRegion(args.region)) return "region_invalid";
     return undefined;
   },
   execute: async (args, scope, state) => {
     const result = await scope.ports.extractWithVlm({ page: toPage(args), fieldSchemaId: args.field_schema_id, ...(args.region ? { region: args.region } : {}) });
     if (result.value) {
-      observe(state, toPage(args), result.value.rawValue);
-      state.vlmResults.set(`${pageKey(toPage(args))}:${args.field_schema_id}`, { rawValue: result.value.rawValue, normalizedValue: result.value.normalizedValue, region: result.value.region, processorVersion: `${result.modelLabel}/${result.promptVersion}` });
+      state.vlmResults.set(`${pageKey(toPage(args))}:${args.field_schema_id}`, { rawValue: result.value.rawValue, region: result.value.region, processorVersion: `${result.modelLabel}/${result.promptVersion}` });
     }
     return {
-      summary: `Checked page ${args.page_number} for ${fieldLabel(args.field_schema_id)} with VLM`,
+      // The model label is part of the reviewer-visible summary so a fixture gateway is never
+      // mistaken for a real Vision Language Model result.
+      summary: `Checked page ${args.page_number} for ${fieldLabel(args.field_schema_id)} with ${result.modelLabel}`,
       output: {
         document_version_id: args.document_version_id, page_number: args.page_number, field_schema_id: args.field_schema_id,
         model_label: result.modelLabel, prompt_version: result.promptVersion,
@@ -216,27 +266,28 @@ export const extractWithVlmTool: Tool<typeof VlmParameters> = {
     };
     if (!committed.value) return;
     const page = { documentVersionId: committed.document_version_id, pageNumber: committed.page_number };
-    observe(state, page, committed.value.raw_value);
     state.vlmResults.set(`${pageKey(page)}:${committed.field_schema_id}`, {
-      rawValue: committed.value.raw_value, normalizedValue: committed.value.normalized_value,
+      rawValue: committed.value.raw_value,
       region: committed.value.region, processorVersion: `${committed.model_label}/${committed.prompt_version}`,
     });
   },
 };
 
 export const submitExtractionCandidatesTool: Tool<typeof SubmitParameters> = {
-  name: "submit_extraction_candidates", version: "1.0.0", label: "Submit extraction candidates", costClass: "submit",
-  description: "Submit candidates for the bound gaps. Each candidate must cite a value that a tool returned for the same page; candidates enter deterministic reconciliation and never become claims directly.",
-  promptSnippet: "submit evidence-backed candidates for the bound gaps",
+  name: "submit_extraction_candidates", version: "2.0.0", label: "Submit extraction candidates", costClass: "submit",
+  description: "Submit candidates for the declared extraction requirements. Each candidate must cite a value an authorized tool returned for the same page; candidates enter deterministic reconciliation and never become claims directly.",
+  promptSnippet: "submit evidence-backed candidates for the declared extraction requirements",
   parameters: SubmitParameters,
   authorize: (args, scope, state) => {
+    const proposed = new Set<string>();
     for (const candidate of args.candidates) {
       const gap = scope.context.gaps.find((item) => item.gapId === candidate.gap_id);
       if (!gap) return "gap_outside_session_scope";
       if (gap.scope.documentVersionId !== candidate.document_version_id || gap.scope.pageNumber !== candidate.page_number) return "page_outside_gap_scope";
-      if (!validRegion(candidate.region)) return "region_invalid";
-      if (!state.observedValues.get(pageKey(toPage(candidate)))?.has(candidate.raw_value)) return "value_without_tool_evidence";
-      if (state.candidates.some((item) => item.gapId === candidate.gap_id)) return "gap_already_has_candidate";
+      if (candidate.region && !validRegion(candidate.region)) return "region_invalid";
+      if (!resolveEvidenceSource(state, toPage(candidate), gap.fieldSchemaId, candidate.raw_value)) return "value_without_tool_evidence";
+      if (state.candidates.some((item) => item.gapId === candidate.gap_id) || proposed.has(candidate.gap_id)) return "gap_already_has_candidate";
+      proposed.add(candidate.gap_id);
     }
     return undefined;
   },
@@ -244,21 +295,21 @@ export const submitExtractionCandidatesTool: Tool<typeof SubmitParameters> = {
     for (const candidate of args.candidates) {
       const gap = scope.context.gaps.find((item) => item.gapId === candidate.gap_id);
       if (!gap) throw new Error("Authorized gap is missing");
-      const vlm = state.vlmResults.get(`${pageKey(toPage(candidate))}:${gap.fieldSchemaId}`);
+      const source = resolveEvidenceSource(state, toPage(candidate), gap.fieldSchemaId, candidate.raw_value);
+      if (!source) throw new Error("Authorized candidate has no tool evidence");
+      const region = candidate.region ?? source.region;
       state.candidates.push({
         gapId: gap.gapId, fieldSchemaId: gap.fieldSchemaId, fieldSchemaVersion: gap.fieldSchemaVersion, valueType: gap.valueType,
-        rawValue: candidate.raw_value,
-        normalizedValue: vlm && vlm.rawValue === candidate.raw_value ? vlm.normalizedValue : candidate.raw_value,
-        page: toPage(candidate), region: candidate.region,
-        extractionMethod: vlm && vlm.rawValue === candidate.raw_value ? "agent_vlm_extraction" : "agent_ocr_reading",
-        processorVersion: vlm && vlm.rawValue === candidate.raw_value ? vlm.processorVersion : "agent-ocr-reading-1.0.0",
+        rawValue: candidate.raw_value, page: toPage(candidate),
+        ...(region ? { region } : {}),
+        extractionMethod: source.extractionMethod, processorVersion: source.processorVersion,
       });
     }
     const remaining = scope.context.gaps.filter((gap) => gap.required && !state.candidates.some((candidate) => candidate.gapId === gap.gapId));
     const fields = args.candidates.map((candidate) => scope.context.gaps.find((gap) => gap.gapId === candidate.gap_id)?.fieldSchemaId).filter((field): field is string => Boolean(field)).map(fieldLabel);
     const submitted = state.candidates.filter((candidate) => args.candidates.some((item) => item.gap_id === candidate.gapId));
     return {
-      summary: `Proposed ${args.candidates.length} recovered ${args.candidates.length === 1 ? "value" : "values"} for ${fields.join(", ")} to deterministic reconciliation`,
+      summary: `Proposed ${args.candidates.length} extracted ${args.candidates.length === 1 ? "value" : "values"} for ${[...new Set(fields)].join(", ")} to deterministic reconciliation`,
       output: { accepted: args.candidates.length, remaining_required_gaps: remaining.map((gap) => gap.gapId), submitted: submitted.map(serializeCandidate) },
     };
   },
@@ -266,7 +317,6 @@ export const submitExtractionCandidatesTool: Tool<typeof SubmitParameters> = {
     for (const candidate of (output as { submitted?: readonly ReturnType<typeof serializeCandidate>[] }).submitted ?? []) {
       if (state.candidates.some((item) => item.gapId === candidate.gap_id)) continue;
       state.candidates.push(deserializeCandidate(candidate));
-      observe(state, { documentVersionId: candidate.document_version_id, pageNumber: candidate.page_number }, candidate.raw_value);
     }
   },
 };
@@ -274,23 +324,25 @@ export const submitExtractionCandidatesTool: Tool<typeof SubmitParameters> = {
 function serializeCandidate(candidate: SubmittedExtractionCandidate) {
   return {
     gap_id: candidate.gapId, field_schema_id: candidate.fieldSchemaId, field_schema_version: candidate.fieldSchemaVersion,
-    value_type: candidate.valueType, raw_value: candidate.rawValue, normalized_value: candidate.normalizedValue,
+    value_type: candidate.valueType, raw_value: candidate.rawValue,
     document_version_id: candidate.page.documentVersionId, page_number: candidate.page.pageNumber,
-    region: candidate.region, extraction_method: candidate.extractionMethod, processor_version: candidate.processorVersion,
+    ...(candidate.region ? { region: candidate.region } : {}),
+    extraction_method: candidate.extractionMethod, processor_version: candidate.processorVersion,
   };
 }
 
 function deserializeCandidate(candidate: ReturnType<typeof serializeCandidate>): SubmittedExtractionCandidate {
   return {
     gapId: candidate.gap_id, fieldSchemaId: candidate.field_schema_id, fieldSchemaVersion: candidate.field_schema_version,
-    valueType: candidate.value_type, rawValue: candidate.raw_value, normalizedValue: candidate.normalized_value,
+    valueType: candidate.value_type, rawValue: candidate.raw_value,
     page: { documentVersionId: candidate.document_version_id, pageNumber: candidate.page_number },
-    region: candidate.region, extractionMethod: candidate.extraction_method, processorVersion: candidate.processor_version,
+    ...(candidate.region ? { region: candidate.region } : {}),
+    extractionMethod: candidate.extraction_method, processorVersion: candidate.processor_version,
   };
 }
 
 export const ADAPTIVE_RECOVERY_TOOLS: readonly RegisteredToolSpec<any, RecoveryScope, RecoveryToolState>[] = Object.freeze([
-  getExtractionGapsTool, inspectPageTool, getNativeTextTool, runOcrTool, renderPageRegionTool, classifyPageTool, detectDocumentBoundariesTool, extractLocalTableTool, extractWithVlmTool, submitExtractionCandidatesTool,
+  getCaseManifestTool, inspectPageTool, getNativeTextTool, runOcrTool, renderPageRegionTool, classifyPageTool, detectDocumentBoundariesTool, extractLocalTableTool, extractWithVlmTool, submitExtractionCandidatesTool,
 ]);
 
 export const ADAPTIVE_RECOVERY_TOOL_NAMES: readonly string[] = Object.freeze(ADAPTIVE_RECOVERY_TOOLS.map((tool) => tool.name));

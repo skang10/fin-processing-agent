@@ -6,7 +6,7 @@ import { PiSessionRunner, contextManifestVersion, type PiHarnessOptions } from "
 import type { FakeModelScript } from "./fake-model.js";
 
 export const PI_AGENT_LED_HARNESS_ID = "pi-agent-led-case-review-harness";
-export const CASE_REVIEW_CONTEXT_SELECTOR_VERSION = "case-review-context-1.0.0";
+export const CASE_REVIEW_CONTEXT_SELECTOR_VERSION = "case-review-context-2.0.0";
 
 function withDefaultScript(options: PiHarnessOptions, script: FakeModelScript): PiHarnessOptions {
   return options.model.route === "fake" && !options.model.script ? { ...options, model: { ...options.model, script } } : options;
@@ -54,12 +54,13 @@ export function caseReviewContextManifestVersion(context: AgentLedCaseReviewCont
     pages: context.pages.map((page) => `${page.documentVersionId}:${page.pageNumber}`).sort(),
     gaps: context.gaps.map((gap) => `${gap.gapId}:${gap.fieldSchemaId}`).sort(),
     field_schemas: context.fieldSchemas.map((schema) => `${schema.fieldSchemaId}@${schema.fieldSchemaVersion}`).sort(),
+    documents: (context.documents ?? []).map((document) => `${document.logicalDocumentRevisionId}:${document.documentType}`).sort(),
   });
 }
 
 export interface AgentLedResumeInput {
   readonly attemptNumber: number;
-  readonly committedToolResults: Readonly<Record<string, unknown>>;
+  readonly committedToolResults: Readonly<Record<string, readonly unknown[]>>;
 }
 
 /**
@@ -71,12 +72,13 @@ export function buildAgentLedUserMessage(context: AgentLedCaseReviewContext, res
   const payload = canonicalJson({
     run_id: context.runId,
     authorized_pages: context.pages.map((page) => `${page.documentVersionId}:${page.pageNumber}`).sort(),
-    gap_ids: context.gaps.map((gap) => gap.gapId).sort(),
+    extraction_requirement_ids: context.gaps.map((gap) => gap.gapId).sort(),
     field_schema_ids: context.fieldSchemas.map((schema) => schema.fieldSchemaId).sort(),
+    logical_documents: (context.documents ?? []).map((document) => `${document.logicalDocumentRevisionId}:${document.documentType}`).sort(),
   });
   const header = `<case_review_context trust="trusted_control_metadata">\n${payload}\n</case_review_context>`;
   if (!resume) {
-    return `${header}\n\nReview this case with registered tools. Request deterministic reconciliation and validation, read the current result, then submit one Case Review Brief.`;
+    return `${header}\n\nReview this case with registered tools. Start with get_case_manifest, read the documents through the page tools, submit an evidence-backed candidate for each declared extraction requirement, then request deterministic reconciliation and validation, read the current result, and submit one Case Review Brief.`;
   }
   const committed = canonicalJson({ attempt: resume.attemptNumber, committed_tool_results: resume.committedToolResults });
   return `${header}\n\n<resumed_progress trust="trusted_control_metadata">\n${committed}\n</resumed_progress>\n\n`

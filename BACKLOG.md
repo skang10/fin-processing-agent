@@ -39,7 +39,7 @@ Validation findings, risk or review signals, and recommended-disposition mapping
 
 ### BL-002 — Bounded Pi Case Review Agent
 
-**Status:** The single `case_review` Pi SDK harness is implemented and used by the Worker for every processable case. Its registered tools cover bounded PDF inspection and extraction, candidate submission, deterministic reconciliation and validation requests, current-result retrieval, and report submission. Incremental per-step persistence and durable re-entry are implemented and proven by a Docker-backed Worker-termination suite covering six committed boundaries. An initial budgeted `openai/gpt-5.6-terra` acceptance case completed successfully; full evaluation capture, usage reconciliation, and real OCR/VLM adapters remain pending.
+**Status:** The single `case_review` Pi SDK harness is implemented and used by the Worker for every processable case, and it now leads document extraction: the manifest, page inspection, native-text, OCR, render, classification, boundary, VLM, candidate-submission, reconciliation-request, validation-request, current-result, and report tools are the Agent's only route to document content, and no fixture seeds structured values on the native-text path. Incremental per-step persistence and durable re-entry are implemented and proven by a Docker-backed Worker-termination suite covering seven committed boundaries. An initial budgeted `openai/gpt-5.6-terra` acceptance case completed successfully against the previous fixture-seeded path; a new live acceptance run is required for the Agent-led path, and full evaluation capture, usage reconciliation, and real OCR/VLM adapters remain pending.
 
 Embed the `pi-coding-agent` software development kit as the bounded pre-screening orchestrator for every processable case. After deterministic intake and minimum file preflight, one case-review session may select registered PDF Inspector, extraction, evidence, reconciliation-request, validation-request, and report-submission tools. Disable built-in coding tools, Shell access, arbitrary file and network access, dynamic extensions, runtime package installation, and automatic resource discovery.
 
@@ -90,7 +90,7 @@ The resulting choice belongs in `specs/decisions/ADR_003_VLM_SELECTION.md`. Prod
 
 ### BL-005 — Versioned Golden Dataset
 
-**Status:** Initial six-case release complete. All visibly synthetic candidates are manually confirmed and frozen as checksum-verified `v0.1.1`; the completed V1 target remains twenty cases
+**Status:** Initial six-case release complete. All visibly synthetic candidates are manually confirmed and frozen as checksum-verified `v0.1.1`; the completed V1 target remains twenty cases. **Two frozen expectations no longer describe the system:** `v0.1.1` was confirmed while document values were seeded from a fixture table, and the Agent-led extraction path now derives them from the documents. `golden-003-multiple-review-issues` no longer shows an uncertain bank-statement boundary or an incomparable payslip income, because the generated pages contain neither; `golden-004-missing-bank-evidence` now also reports `VAL_NAME_CONSISTENCY_001` as unresolved, because without a bank statement the account-holder name genuinely cannot be confirmed. The frozen release must not be edited. Either accept the new outcomes in a new confirmed release, or change the generated documents so `golden-003` genuinely carries the ambiguity it is named for (see BL-009).
 
 Public datasets are tracked separately as opt-in component diagnostics. Their exact revisions, licenses, privacy fitness, deterministic subsets, and checksums must be approved before download or use; they do not replace project-owned end-to-end golden truth.
 
@@ -160,6 +160,25 @@ Do not add new business fields or document types until their owning schema and r
 2. `specs/DATA_MODEL.md`
 3. `specs/components/DOCUMENT_PROCESSING.md`
 4. `specs/components/VALIDATION_AND_DISPOSITION.md`
+
+### BL-009 — Declared Field Requirements and Agent-Led Extraction Coverage
+
+**Status:** Implemented for the demonstration corpus; coverage and evidence quality remain to be broadened
+
+Document values now come from the Agent through registered, scoped tools rather than from a fixture table. The versioned requirement set (`document-field-requirements-1.0.0`) declares seven document fields across the three required document types, and a requirement becomes an explicit extraction gap only when the run actually contains a logical document of that type.
+
+Remaining work:
+
+1. Extend the requirement set beyond the seven demonstration fields once more document variation exists.
+2. Attach normalized evidence regions to native-text candidates; PDF Inspector layout coordinates are not exposed through the current native-text boundary, so those candidates carry a page reference without a bounding box.
+3. Replace the fixture scanned-page adapter with the accepted real OCR runtime (BL-003) and an accepted VLM gateway (BL-004), and implement crop rendering so a Vision Language Model receives a region rather than a full page.
+4. Regenerate `golden-003-multiple-review-issues` so its documents carry the boundary ambiguity and unreadable income the case is named for, then confirm a new dataset release (BL-005).
+
+**Target documents:**
+
+1. `specs/components/DOCUMENT_PROCESSING.md`
+2. `specs/components/ADAPTIVE_EXTRACTION_AGENT.md`
+3. `specs/components/VALIDATION_AND_DISPOSITION.md`
 
 ## Deferred Production Work
 

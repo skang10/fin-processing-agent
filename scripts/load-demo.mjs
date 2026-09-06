@@ -34,14 +34,25 @@ for (let attempt = 0; attempt < 60; attempt += 1) {
 if (current?.lifecycle !== "ready_for_review") {
   throw new Error(`Demo case did not become ready: ${current?.lifecycle ?? "timeout"}`);
 }
-const [report, findings, issues, documents] = await Promise.all([
+const [report, findings, issues, documents, agentLog] = await Promise.all([
   fetch(`${apiBaseUrl}${current.links.agent_report}`).then(requireOk),
   fetch(`${apiBaseUrl}${current.links.findings}`).then(requireOk),
   fetch(`${apiBaseUrl}${current.links.issues}`).then(requireOk),
   fetch(`${apiBaseUrl}${current.links.documents}`).then(requireOk),
+  fetch(`${apiBaseUrl}/api/v1/cases/${accepted.case_id}/agent-log`).then(requireOk),
 ]);
-if (report.availability !== "ready" || findings.findings.length !== 5 || issues.issues.length !== 3) {
-  throw new Error("Demo result did not match the registered offline acceptance fixture");
+// The demo package prints the applicant name only on its identity page, so the employee and
+// account-holder names stay unresolved and the salary counterparty conflicts with the declared
+// employer: two review issues, both derived from what the documents actually show.
+if (report.availability !== "ready" || findings.findings.length !== 5 || issues.issues.length !== 2) {
+  throw new Error("Demo result did not match the registered acceptance expectation");
+}
+const documentToolSteps = agentLog.events.filter((event) => event.actor === "agent_document_tool");
+if (!agentLog.events.some((event) => event.actor === "system") || documentToolSteps.length === 0) {
+  throw new Error("Demo Agent log did not separate system preprocessing from Agent document tools");
+}
+if (!documentToolSteps.some((event) => event.tool_label === "get_native_text")) {
+  throw new Error("Demo Agent did not read committed native text through a registered tool");
 }
 const firstDocument = documents.documents[0];
 if (!firstDocument) throw new Error("Demo result did not expose its processed document");
@@ -67,6 +78,7 @@ console.log(JSON.stringify({
   lifecycle: current.lifecycle,
   findings: findings.findings.length,
   issues: issues.issues.length,
+  agent_document_tool_calls: documentToolSteps.length,
   review_url: `${reviewWebUrl}/?case_id=${accepted.case_id}`,
 }, null, 2));
 

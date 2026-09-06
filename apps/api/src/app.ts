@@ -236,7 +236,8 @@ export function buildApp(
       current_step: log.currentStep,
       ...(log.session ? { session: projectAgentSession(log.session) } : {}),
       events: log.events.map((event) => ({ timestamp: event.timestamp, activity: event.activity,
-        ...(event.toolLabel ? { tool_label: event.toolLabel } : {}) })),
+        ...(event.toolLabel ? { tool_label: event.toolLabel } : {}),
+        ...(event.actor ? { actor: event.actor } : {}) })),
     };
   });
 

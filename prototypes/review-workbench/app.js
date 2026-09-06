@@ -1117,13 +1117,16 @@ function renderAgentLog() {
   if (!apiAgentLog) return;
   const stepLabels = { processing: 'Processing', awaiting_human_review: 'Awaiting human review', review_completed: 'Review completed' };
   const activityLabels = {
-    'Listed bound extraction gaps': 'Found unresolved fields',
-    'Inspected page 2': 'Inspected payslip, page 2',
-    'Ran OCR on page 2': 'Read the scanned payslip page with OCR',
     'Submitted a Case Review Brief': 'Submitted review report',
   };
+  // Who performed the step: system preprocessing, an Agent document tool, or the Agent itself.
+  const actorLabels = {
+    system: 'System preprocessing',
+    agent_document_tool: 'Agent document tool',
+    agent: 'Agent',
+  };
   const toolLabels = {
-    get_extraction_gaps: 'Get extraction gaps', inspect_page: 'Inspect page', get_native_text: 'Get native text',
+    get_case_manifest: 'Get case manifest', inspect_page: 'Inspect page', get_native_text: 'Get native text',
     run_ocr: 'Run OCR', render_page_region: 'Render page region', classify_page: 'Classify page',
     detect_document_boundaries: 'Detect document boundaries', extract_local_table: 'Extract local table',
     extract_with_vlm: 'Extract with VLM', submit_extraction_candidates: 'Submit candidates',
@@ -1147,8 +1150,12 @@ function renderAgentLog() {
       const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
         '.' + String(date.getMilliseconds()).padStart(3, '0');
       const activity = activityLabels[event.activity] || event.activity;
-      return '<div class="agent-log-event"><time>' + escapeHtml(time) + '</time><span><strong>' + escapeHtml(activity) + '</strong>' +
-        (event.tool_label ? '<small>Tool: ' + escapeHtml(toolLabels[event.tool_label] || event.tool_label) + '</small>' : '') + '</span></div>';
+      const actor = actorLabels[event.actor] || '';
+      const detail = [actor, event.tool_label ? 'Tool: ' + (toolLabels[event.tool_label] || event.tool_label) : '']
+        .filter(function (part) { return part; }).join(' \u00b7 ');
+      return '<div class="agent-log-event' + (event.actor === 'system' ? ' system' : '') + '"><time>' + escapeHtml(time) + '</time>' +
+        '<span><strong>' + escapeHtml(activity) + '</strong>' +
+        (detail ? '<small>' + escapeHtml(detail) + '</small>' : '') + '</span></div>';
     }).join('');
   };
   const sessionHeader = function (title, session) {

@@ -1,5 +1,13 @@
 # Evaluation Results
 
+> **Superseded configuration.** The result below was measured while document values were seeded from
+> a fixture table before the Agent ran. Since `2026-09-07` the bounded Pi session leads document
+> extraction through registered tools, so this report no longer describes the delivered pipeline and
+> must not be cited for it. It is retained unchanged as the immutable record of the configuration it
+> names. Two frozen `v0.1.1` case expectations also no longer match the Agent-led outcomes; the
+> divergence and the options for resolving it are tracked in `BACKLOG.md` under BL-005 and BL-009. A
+> replacement baseline requires a new evaluation capture against the Agent-led path.
+
 ## Offline deterministic regression baseline — v0.1.1
 
 **Recorded:** 2026-09-06

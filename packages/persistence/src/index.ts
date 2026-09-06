@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, AgentAttemptSupersededError, AgentInvocationConflictError, AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError, EMPTY_AGENT_CONSUMED_BUDGET,
@@ -495,6 +496,11 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
 
     const sessions = await this.db.select().from(agentSessions).where(eq(agentSessions.runId, runId)).orderBy(asc(agentSessions.startedAt));
     if (!report && sessions.length === 0) return { availability: "pending", currentStep, events: [] };
+    const preprocessing = await this.db.select({
+      processor: documentInspections.processor, processorVersion: documentInspections.processorVersion,
+      createdAt: documentInspections.createdAt, pageNumber: pages.pageNumber, needsOcr: pages.needsOcr,
+    }).from(documentInspections).innerJoin(pages, eq(pages.documentInspectionId, documentInspections.id))
+      .where(eq(documentInspections.runId, runId)).orderBy(asc(documentInspections.createdAt));
     const sessionIds = sessions.map((session) => session.id);
     const [steps, attempts, resolvedGaps] = await Promise.all([
       sessionIds.length ? this.db.select().from(agentSteps).where(inArray(agentSteps.sessionId, sessionIds)).orderBy(asc(agentSteps.sequence)) : [],
@@ -539,12 +545,22 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       currentStep,
       ...(currentSession ? { session: view(currentSession) } : {}),
       events: [
+        ...(preprocessing.length > 0
+          ? [{
+            timestamp: preprocessing[0]!.createdAt.toISOString(), actor: "system" as const,
+            activity: `System preprocessing inspected ${preprocessing.length} ${preprocessing.length === 1 ? "page" : "pages"} and rendered ${preprocessing.length === 1 ? "its image" : "their images"}`
+              + `${preprocessing.some((page) => page.needsOcr) ? `, with text recognition routed for ${preprocessing.filter((page) => page.needsOcr).length} of them` : ""}`,
+          }]
+          : []),
         ...sessions.flatMap((session) => [
-          { timestamp: session.startedAt.toISOString(), activity: "Started review using pre-extracted case data" },
+          { timestamp: session.startedAt.toISOString(), activity: "Started the bounded case review session" },
           ...attempts.filter((attempt) => attempt.sessionId === session.id && attempt.attemptNumber > 1)
             .map((attempt) => ({ timestamp: attempt.startedAt.toISOString(), activity: "Processing resumed from saved progress" })),
           ...steps.filter((step) => step.sessionId === session.id)
-            .map((step) => ({ timestamp: step.completedAt.toISOString(), activity: reviewerActivity(step, originatingAttempt), toolLabel: step.toolName })),
+            .map((step) => ({
+              timestamp: step.completedAt.toISOString(), activity: reviewerActivity(step, originatingAttempt), toolLabel: step.toolName,
+              actor: AGENT_DOCUMENT_TOOLS.has(step.toolName) ? "agent_document_tool" as const : "agent" as const,
+            })),
           ...(session.completedAt && session.terminalReason
             ? [{ timestamp: session.completedAt.toISOString(), activity: `Session ended: ${session.terminalReason.replace(/_/g, " ")}` }]
             : []),
@@ -847,6 +863,38 @@ export class PostgresOutboxStore {
   }
 }
 
+/** Committed page and logical-document inventory of one run (DAT sections 4 and 5). */
+export interface CaseInventoryPage {
+  readonly documentVersionId: string;
+  readonly submittedFilename: string;
+  readonly pageNumber: number;
+  readonly needsOcr: boolean;
+  readonly ocrReason?: string;
+  readonly hasTable: boolean;
+  readonly hasColumns: boolean;
+  readonly nativeCharacterCount: number;
+  readonly nativeTextObjectKey?: string;
+  readonly render?: { readonly objectKey: string; readonly width: number; readonly height: number; readonly rendererVersion: string };
+  readonly ocr?: { readonly objectKey: string; readonly engine: string; readonly engineVersion: string; readonly modelAssetVersion: string };
+  readonly classification?: { readonly selectedType: string; readonly method: string; readonly version: string; readonly rawConfidence: number };
+  readonly boundary?: { readonly startsNewDocument: boolean; readonly method: string; readonly version: string; readonly rawConfidence: number };
+}
+
+export interface CaseDocumentInventory {
+  readonly inputRevisionId: string;
+  readonly applicationSnapshotId: string;
+  readonly documentProcessorVersion: string;
+  readonly pages: readonly CaseInventoryPage[];
+  readonly logicalDocuments: readonly {
+    readonly logicalDocumentRevisionId: string; readonly documentVersionId: string;
+    readonly startPage: number; readonly endPage: number; readonly documentType: string; readonly uncertain: boolean;
+  }[];
+}
+
+function confidenceValue(value: unknown): number {
+  return value && typeof value === "object" && typeof (value as { value?: unknown }).value === "number" ? (value as { value: number }).value : 0;
+}
+
 export class PostgresWorkflowCoordinator {
   constructor(private readonly db: ReturnType<typeof drizzle>) {}
 
@@ -877,40 +925,84 @@ export class PostgresWorkflowCoordinator {
     return record.inputRevisionId;
   }
 
-  async loadOfflineSourceContext(caseId: string, runId: string): Promise<{
-    inputRevisionId: string;
-    applicationSnapshotId: string;
-    pages: readonly { documentVersionId: string; submittedFilename: string; pageNumber: number; needsOcr: boolean; nativeCharacterCount: number; ocrAvailable: boolean; renderAvailable: boolean }[];
-    logicalDocuments: readonly { logicalDocumentRevisionId: string; documentVersionId: string; startPage: number; endPage: number }[];
-  }> {
+  /**
+   * Committed document inventory of one run: grouped logical documents, page metadata, derived
+   * artifact keys, and the persisted classification and boundary of every page. It is the only
+   * document input the Agent-led stage reads; no fixture supplies it.
+   */
+  async loadCaseDocumentInventory(caseId: string, runId: string): Promise<CaseDocumentInventory> {
     const [run] = await this.db.select({
       inputRevisionId: processingRuns.inputRevisionId,
       applicationSnapshotId: inputRevisions.applicationSnapshotId,
     }).from(processingRuns).innerJoin(inputRevisions, eq(processingRuns.inputRevisionId, inputRevisions.id))
       .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
     if (!run) throw new CaseNotFoundError();
-    const pageRecords = (await this.db.select({
+    const [inspection] = await this.db.select({ processor: documentInspections.processor, processorVersion: documentInspections.processorVersion })
+      .from(documentInspections).where(eq(documentInspections.runId, runId)).limit(1);
+    const nativeArtifacts = alias(artifacts, "native_text_artifacts");
+    const renderArtifacts = alias(artifacts, "render_artifacts");
+    const ocrArtifacts = alias(artifacts, "ocr_artifacts");
+    const pageRecords = await this.db.select({
       documentVersionId: pages.documentVersionId,
       submittedFilename: documentVersions.submittedFilename,
       pageNumber: pages.pageNumber,
       needsOcr: pages.needsOcr,
+      ocrReason: pages.ocrReason,
+      hasTable: pages.hasTable,
+      hasColumns: pages.hasColumns,
       nativeCharacterCount: pages.nativeCharacterCount,
-      ocrOutputId: pageOcrOutputs.id,
-      renderArtifactId: pages.renderArtifactId,
+      nativeTextObjectKey: nativeArtifacts.objectKey,
+      renderObjectKey: renderArtifacts.objectKey,
+      renderWidth: pages.renderWidth,
+      renderHeight: pages.renderHeight,
+      rendererVersion: pages.rendererVersion,
+      ocrObjectKey: ocrArtifacts.objectKey,
+      ocrEngine: pageOcrOutputs.engine,
+      ocrEngineVersion: pageOcrOutputs.engineVersion,
+      ocrModelAssetVersion: pageOcrOutputs.modelAssetVersion,
+      classificationType: pageClassifications.selectedType,
+      classificationMethod: pageClassifications.method,
+      classificationVersion: pageClassifications.version,
+      classificationConfidence: pageClassifications.rawConfidence,
+      boundaryStartsNewDocument: boundaryPredictions.startsNewDocument,
+      boundaryMethod: boundaryPredictions.method,
+      boundaryVersion: boundaryPredictions.version,
+      boundaryConfidence: boundaryPredictions.rawConfidence,
     }).from(pages)
       .innerJoin(documentInspections, eq(pages.documentInspectionId, documentInspections.id))
       .innerJoin(documentVersions, eq(pages.documentVersionId, documentVersions.id))
+      .leftJoin(nativeArtifacts, eq(pages.nativeTextArtifactId, nativeArtifacts.id))
+      .leftJoin(renderArtifacts, eq(pages.renderArtifactId, renderArtifacts.id))
       .leftJoin(pageOcrOutputs, eq(pageOcrOutputs.pageId, pages.id))
+      .leftJoin(ocrArtifacts, eq(pageOcrOutputs.artifactId, ocrArtifacts.id))
+      .leftJoin(pageClassifications, eq(pageClassifications.pageId, pages.id))
+      .leftJoin(boundaryPredictions, eq(boundaryPredictions.pageId, pages.id))
       .where(eq(documentInspections.runId, runId))
-      .orderBy(asc(documentVersions.submittedFilename), asc(pages.pageNumber)))
-      .map(({ ocrOutputId, renderArtifactId, ...page }) => ({ ...page, ocrAvailable: ocrOutputId !== null, renderAvailable: renderArtifactId !== null }));
+      .orderBy(asc(documentVersions.submittedFilename), asc(pages.pageNumber));
     const logicalDocuments = await this.db.select({
       logicalDocumentRevisionId: logicalDocumentRevisions.id,
       documentVersionId: logicalDocumentRevisions.documentVersionId,
       startPage: logicalDocumentRevisions.startPage,
       endPage: logicalDocumentRevisions.endPage,
+      documentType: logicalDocumentRevisions.documentType,
+      uncertain: logicalDocumentRevisions.uncertain,
     }).from(logicalDocumentRevisions).where(eq(logicalDocumentRevisions.runId, runId));
-    return { ...run, pages: pageRecords, logicalDocuments };
+    return {
+      inputRevisionId: run.inputRevisionId,
+      applicationSnapshotId: run.applicationSnapshotId,
+      documentProcessorVersion: inspection ? `${inspection.processor}@${inspection.processorVersion}` : "unknown",
+      pages: pageRecords.map((page) => ({
+        documentVersionId: page.documentVersionId, submittedFilename: page.submittedFilename, pageNumber: page.pageNumber,
+        needsOcr: page.needsOcr, ...(page.ocrReason ? { ocrReason: page.ocrReason } : {}),
+        hasTable: page.hasTable, hasColumns: page.hasColumns, nativeCharacterCount: page.nativeCharacterCount,
+        ...(page.nativeTextObjectKey ? { nativeTextObjectKey: page.nativeTextObjectKey } : {}),
+        ...(page.renderObjectKey ? { render: { objectKey: page.renderObjectKey, width: page.renderWidth ?? 0, height: page.renderHeight ?? 0, rendererVersion: page.rendererVersion ?? "unknown" } } : {}),
+        ...(page.ocrObjectKey ? { ocr: { objectKey: page.ocrObjectKey, engine: page.ocrEngine ?? "unknown", engineVersion: page.ocrEngineVersion ?? "unknown", modelAssetVersion: page.ocrModelAssetVersion ?? "unknown" } } : {}),
+        ...(page.classificationType ? { classification: { selectedType: page.classificationType, method: page.classificationMethod ?? "unknown", version: page.classificationVersion ?? "unknown", rawConfidence: confidenceValue(page.classificationConfidence) } } : {}),
+        ...(page.boundaryStartsNewDocument !== null ? { boundary: { startsNewDocument: page.boundaryStartsNewDocument, method: page.boundaryMethod ?? "unknown", version: page.boundaryVersion ?? "unknown", rawConfidence: confidenceValue(page.boundaryConfidence) } } : {}),
+      })),
+      logicalDocuments,
+    };
   }
 
   async hasInputDocuments(caseId: string, runId: string): Promise<boolean> {
@@ -1357,9 +1449,15 @@ function reviewerActivity(
   return REUSED_WORK_LABELS[step.toolName] ?? "Reused previously saved work after processing resumed";
 }
 
+/** Tools the Agent itself called to look at document content, as opposed to system preprocessing. */
+const AGENT_DOCUMENT_TOOLS: ReadonlySet<string> = new Set([
+  "inspect_page", "get_native_text", "run_ocr", "render_page_region", "classify_page",
+  "detect_document_boundaries", "extract_local_table", "extract_with_vlm",
+]);
+
 function reviewerStepSummary(step: typeof agentSteps.$inferSelect): string {
   if (step.toolName === "request_reconciliation" && step.summary.startsWith("Sent 0 Agent-proposed values")) {
-    return "Existing extracted data was sufficient; no additional extraction was needed";
+    return "No document value could be extracted for reconciliation";
   }
   if (step.toolName === "request_validation") {
     const attention = /; (\d+) findings? requires? attention$/u.exec(step.summary)?.[1];

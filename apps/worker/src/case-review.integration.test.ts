@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { count, eq } from "drizzle-orm";
+import { count, eq, inArray } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AgentLedCaseReviewHarness } from "@findoc/agent";
@@ -36,6 +36,39 @@ class TerminateAfterToolCommit implements AgentSessionLifecyclePort {
 
 const silentLogger = { info: () => {}, warn: () => {} };
 
+/**
+ * Committed derived artifacts of the synthetic case, keyed exactly as `persistInspection` records
+ * them. The Agent reaches this content only through registered document tools.
+ */
+const artifactStore = new Map<string, Buffer>();
+const readArtifact = async (objectKey: string) => {
+  const bytes = artifactStore.get(objectKey);
+  if (!bytes) throw new Error(`Unknown derived artifact ${objectKey}`);
+  return bytes;
+};
+
+const identityMarkdown = (key: string) => [
+  "# Identity evidence", "",
+  "SYNTHETIC DEMO-Identity document | document-processing evaluation", "",
+  "**SYNTHETIC IDENTITY DOCUMENT** **FULL NAME** **Greta Demofall** **DEMO PORTRAIT** **DATE OF BIRTH** **14 February 1991**", "",
+  `**DOCUMENT REFERENCE EXPIRY DATE** **DEMO-${key}-ID 31 August 2030**`, "",
+].join("\n");
+
+const bankMarkdown = [
+  "# Account statement", "",
+  "SYNTHETIC DEMO-Bank statement | Nordblick Demo Bank", "",
+  "**ACCOUNT HOLDER MASKED IBAN** **Greta Demofall DE** **** **** 3042**", "",
+  "**Date Description Reference Amount EUR**", "",
+  "01.08 Rent transfer Monthly rent-1,120.00",
+  "28.08 **Demowerk GmbH** Salary 08/2026 +3010.00",
+].join("\n");
+
+/** The fixture OCR adapter recovers no field text from an image-only page; that is the point. */
+const scannedOcrArtifact = JSON.stringify({
+  rawText: "Synthetic OCR candidate for page 2",
+  spans: [{ text: "Synthetic OCR candidate for page 2", bbox: [0, 0, 935, 1210], confidence: { value: 1, scale: "zero_to_one", producer: "deterministic-fake-ocr" } }],
+});
+
 describe("Worker termination during Agent-led case review", () => {
   let container: Awaited<ReturnType<PostgreSqlContainer["start"]>>;
   let connection: ReturnType<typeof createDatabase>;
@@ -60,7 +93,10 @@ describe("Worker termination during Agent-led case review", () => {
     return () => harness;
   }
 
-  /** One scanned three-page synthetic case whose payslip page needs the bounded OCR and model path. */
+  /**
+   * One three-page synthetic case: the identity and bank pages carry real native text the Agent must
+   * read, and the payslip page is image-only so it must go through the bounded OCR and VLM path.
+   */
   async function prepareCase(key: string) {
     const accepted = await new PostgresCaseCommandService(connection.db, `actor_${key}`).accept({
       applicantDisplayName: "Greta Demofall", idempotencyKey: key,
@@ -112,6 +148,9 @@ describe("Worker termination during Agent-led case review", () => {
         uncertain: false, pageNumbers: [pageNumber],
       })),
     });
+    artifactStore.set(`derived/${key}/native/page-1`, Buffer.from(identityMarkdown(key.slice(0, 6))));
+    artifactStore.set(`derived/${key}/native/page-3`, Buffer.from(bankMarkdown));
+    artifactStore.set(`derived/${key}/ocr/page-2`, Buffer.from(scannedOcrArtifact));
     return accepted;
   }
 
@@ -132,28 +171,53 @@ describe("Worker termination during Agent-led case review", () => {
       reports: await scoped(connection.db.select({ value: count() }).from(agentReports).where(eq(agentReports.runId, runId))),
       candidates: await scoped(connection.db.select({ value: count() }).from(extractionCandidates).where(eq(extractionCandidates.runId, runId))),
       gaps: gapRows.length,
-      resolutions: gapRows[0] ? await scoped(connection.db.select({ value: count() }).from(gapResolutions).where(eq(gapResolutions.gapId, gapRows[0].id))) : 0,
+      resolutions: gapRows.length ? await scoped(connection.db.select({ value: count() }).from(gapResolutions).where(inArray(gapResolutions.gapId, gapRows.map((row) => row.id)))) : 0,
       lifecycle: caseRow?.lifecycle,
     };
   }
 
   it("completes the uninterrupted case-review stage once", async () => {
     const accepted = await prepareCase("baseline");
-    const outcome = await processAgentLedCaseReview({ coordinator, selectHarness: harnessWith(durable), logger: silentLogger }, { case_id: accepted.caseId, run_id: accepted.runId });
+    const outcome = await processAgentLedCaseReview({ coordinator, selectHarness: harnessWith(durable), logger: silentLogger, readArtifact }, { case_id: accepted.caseId, run_id: accepted.runId });
     expect(outcome).toBe("completed");
     const counts = await tally(accepted.runId, accepted.caseId);
-    expect(counts).toMatchObject({ sessions: 1, revisions: 1, reports: 1, gaps: 1, resolutions: 1, lifecycle: "ready_for_review" });
+    // Seven declared field requirements, ten candidates: three from structured input and one per requirement.
+    expect(counts).toMatchObject({ sessions: 1, revisions: 1, reports: 1, gaps: 7, resolutions: 7, candidates: 10, lifecycle: "ready_for_review" });
     const [session] = await connection.db.select({ id: agentSessions.id }).from(agentSessions).where(eq(agentSessions.runId, accepted.runId));
     const steps = await connection.db.select().from(agentSteps).where(eq(agentSteps.sessionId, session!.id)).orderBy(agentSteps.sequence);
     expect(steps.map((step) => step.toolName)).toEqual([
-      "get_extraction_gaps", "inspect_page", "run_ocr", "extract_with_vlm", "submit_extraction_candidates",
+      "get_case_manifest",
+      "inspect_page", "inspect_page", "inspect_page",
+      "get_native_text", "get_native_text",
+      "run_ocr",
+      "extract_with_vlm", "extract_with_vlm", "extract_with_vlm",
+      "submit_extraction_candidates",
       "request_reconciliation", "request_validation", "get_current_result", "submit_case_review_brief",
     ]);
+
+    // The Agent read the native pages itself; only the image-only page used the bounded fixture path.
+    const candidates = await connection.db.select({ method: extractionCandidates.extractionMethod, rawValue: extractionCandidates.rawValue })
+      .from(extractionCandidates).where(eq(extractionCandidates.runId, accepted.runId));
+    const byMethod = candidates.reduce<Record<string, number>>((totals, candidate) => ({ ...totals, [candidate.method]: (totals[candidate.method] ?? 0) + 1 }), {});
+    expect(byMethod).toEqual({ structured_input: 3, agent_native_text_reading: 4, agent_vlm_extraction: 3 });
+    expect(candidates.map((candidate) => candidate.rawValue)).toContain("31 August 2030");
+    expect(candidates.map((candidate) => candidate.rawValue)).toContain("2980.00");
+
+    const findings = await connection.db.select({ ruleId: validationFindings.ruleId, status: validationFindings.status })
+      .from(validationFindings).innerJoin(resultRevisions, eq(validationFindings.resultRevisionId, resultRevisions.id))
+      .where(eq(resultRevisions.runId, accepted.runId));
+    expect(findings.filter((finding) => finding.status !== "passed").map((finding) => finding.ruleId)).toEqual(["VAL_INCOME_CONSISTENCY_001"]);
+
+    const log = await new PostgresCaseQueryService(connection.db).getAgentLog(accepted.caseId);
+    expect(log.events[0]).toMatchObject({ actor: "system", activity: "System preprocessing inspected 3 pages and rendered their images, with text recognition routed for 1 of them" });
+    expect(log.events.filter((event) => event.actor === "agent_document_tool")).toHaveLength(9);
+    expect(log.events.map((event) => event.activity)).toContain("Started the bounded case review session");
   });
 
   const boundaries = [
     { name: "document inspection", tool: "inspect_page" },
-    { name: "fake OCR output", tool: "run_ocr" },
+    { name: "committed native text", tool: "get_native_text" },
+    { name: "fixture OCR output", tool: "run_ocr" },
     { name: "model extraction output", tool: "extract_with_vlm" },
     { name: "extraction candidate submission", tool: "submit_extraction_candidates" },
     { name: "deterministic reconciliation", tool: "request_reconciliation" },
@@ -165,7 +229,7 @@ describe("Worker termination during Agent-led case review", () => {
     const job = { case_id: accepted.caseId, run_id: accepted.runId };
     const faulted = new TerminateAfterToolCommit(durable, tool);
 
-    await expect(processAgentLedCaseReview({ coordinator, selectHarness: harnessWith(faulted), logger: silentLogger }, job))
+    await expect(processAgentLedCaseReview({ coordinator, selectHarness: harnessWith(faulted), logger: silentLogger, readArtifact }, job))
       .rejects.toThrow(WORKER_LOST);
     const interrupted = await durable.loadSnapshot(accepted.runId);
     expect(interrupted?.status).toBe("running");
@@ -176,18 +240,18 @@ describe("Worker termination during Agent-led case review", () => {
     const interruptedLog = await queries.getAgentLog(accepted.caseId);
     expect(interruptedLog).toMatchObject({ availability: "pending", currentStep: "processing", session: { status: "running", attempts: 1 } });
     expect(interruptedLog.session?.terminalReason).toBeUndefined();
-    expect(interruptedLog.events.map((event) => event.activity)).toContain("Started case review session");
+    expect(interruptedLog.events.map((event) => event.activity)).toContain("Started the bounded case review session");
 
-    const outcome = await processAgentLedCaseReview({ coordinator, selectHarness: harnessWith(durable), logger: silentLogger }, job);
+    const outcome = await processAgentLedCaseReview({ coordinator, selectHarness: harnessWith(durable), logger: silentLogger, readArtifact }, job);
     expect(outcome).toBe("completed");
 
     const counts = await tally(accepted.runId, accepted.caseId);
-    expect(counts).toMatchObject({ sessions: 1, attempts: 2, revisions: 1, findings: 5, dispositions: 1, reports: 1, gaps: 1, resolutions: 1, lifecycle: "ready_for_review" });
+    expect(counts).toMatchObject({ sessions: 1, attempts: 2, revisions: 1, findings: 5, dispositions: 1, reports: 1, gaps: 7, resolutions: 7, candidates: 10, lifecycle: "ready_for_review" });
     const recovered = await durable.loadSnapshot(accepted.runId);
     expect(recovered).toMatchObject({ status: "terminal", terminalReason: "report_submitted", attempts: 2 });
     expect(recovered?.consumed.iterations).toBeGreaterThanOrEqual(consumedBeforeRecovery?.iterations ?? 0);
     expect(recovered?.consumed.ocrPages).toBe(1);
-    expect(recovered?.consumed.vlmCalls).toBe(1);
+    expect(recovered?.consumed.vlmCalls).toBe(3);
     const sequences = recovered?.steps.map((step) => step.sequence) ?? [];
     expect(sequences).toEqual([...sequences].sort((left, right) => left - right));
     expect(new Set(sequences).size).toBe(sequences.length);
@@ -214,11 +278,11 @@ describe("Worker termination during Agent-led case review", () => {
     const accepted = await prepareCase("lost_after_report");
     const job = { case_id: accepted.caseId, run_id: accepted.runId };
     await expect(processAgentLedCaseReview({
-      coordinator, selectHarness: harnessWith(durable), logger: silentLogger,
+      coordinator, selectHarness: harnessWith(durable), logger: silentLogger, readArtifact,
       afterReportCommitted: async () => { throw new Error(WORKER_LOST); },
     }, job)).rejects.toThrow(WORKER_LOST);
 
-    const outcome = await processAgentLedCaseReview({ coordinator, selectHarness: harnessWith(durable), logger: silentLogger }, job);
+    const outcome = await processAgentLedCaseReview({ coordinator, selectHarness: harnessWith(durable), logger: silentLogger, readArtifact }, job);
     expect(outcome).toBe("completed");
     const counts = await tally(accepted.runId, accepted.caseId);
     expect(counts).toMatchObject({ sessions: 1, revisions: 1, reports: 1, lifecycle: "ready_for_review" });

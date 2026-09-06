@@ -1,19 +1,29 @@
 # Codex Handoff
 
-## Current Implementation Handoff — 2026-09-06
+## Current Implementation Handoff — 2026-09-07
 
 This section is the operational starting point for the next implementation agent. The specifications and ADRs remain authoritative for required behavior.
 
 ### Repository and runtime state
 
-1. The repository is on `main`. The latest completed change is `0b6fe74 fix: clarify live agent cost and review activity`.
-2. `pnpm check` (124 unit and contract tests), `pnpm dataset:validate`, the Review Web production build, and `git diff --check` pass. Earlier Docker-backed integration and acceptance runs remain recorded below.
-3. PostgreSQL now owns Agent execution state. One authoritative `case_review` session exists per processing run, guarded by a run-scoped advisory lock and a `(run_id, mode)` unique index. Linked attempts, incrementally committed steps, immutable tool invocation results keyed by a canonical idempotency key, step reuse lineage, and cumulative budget counters live in `agent_sessions`, `agent_session_attempts`, `agent_tool_invocations`, and `agent_steps` (migration `0023`, additive: it adds tables and columns and only relaxes the terminal columns so an in-flight session can exist). Attempt fencing rejects step or terminal writes from a Worker after a newer linked attempt takes ownership.
-4. The bounded Pi session persists its identity and attempt before the first model call and commits each completed step, its invocation result or reuse lineage, and the consumed budget before the result reaches the model. The reviewer-facing trace is rebuilt from those durable records rather than from an end-of-session blob.
-5. A redelivered case-processing job resumes the same session as a linked attempt. Committed tool results are reused by idempotency key only after the persisted tool identity, implementation version, outcome, output schema and hash, authorized input versions, produced references, and terminal behavior match. A result carrying document text keeps only an integrity hash and is re-read from its committed artifact, while a paid or side-effecting result keeps a bounded payload that restores session state without repeating the operation. An already terminal session replays its committed outcome without opening a new attempt, an incompatible configuration or an exhausted attempt budget fails safely, and the Worker routes a session with no reviewable result through durable workflow failure policy.
-6. `apps/worker/src/case-review.ts` holds the Agent-led review stage so it can be driven directly. `apps/worker/src/case-review.integration.test.ts` terminates the Worker after each durable boundary and proves recovery through the real coordinator. Its fault hook is a test-only dependency that the delivered Worker never supplies.
-7. The case Agent log projects running, interrupted, resumed, and terminal attempts in one chronological timeline, marks each recovery attempt as `Processing resumed from saved progress`, and renames a reused step so a reviewer reads why it was not repeated. The Workbench header shows session status and how often processing resumed.
-8. Docker Compose still warns when shell-level `POSTGRES_PASSWORD` and `MINIO_SECRET_KEY` are absent even though the running demo uses its generated local configuration. Treat removal of this warning as cleanup, not as evidence that a service is unhealthy.
+1. The repository is on `main`. The latest completed change implements the Agent-led extraction path.
+2. `pnpm check` (137 unit and contract tests), `pnpm test:integration` (22 Docker-backed tests), `pnpm dataset:validate`, `pnpm build`, the Review Web production build, and a Docker Compose run of the bundled demo case plus all six golden cases pass. No paid live-model call was made: the demo was driven with `AGENT_MODEL=fake`.
+3. The bounded Pi `case_review` session now leads the document review. The Worker still inspects, renders, and selectively OCRs every page before the session, but the system has no deterministic field parser, so every document value reaches the deterministic pipeline as an Agent candidate produced through a registered, scoped tool. `buildOfflineExtraction` and the fixture-seeded result builder are gone.
+4. A versioned declared field-requirement set (`document-field-requirements-1.0.0`, `packages/offline/src/case-assembly.ts`) declares seven document fields across the three required document types. A requirement becomes an explicit extraction gap only when the run actually contains a grouped logical document of that type, scoped to that document's first page. Nothing is derived from golden truth.
+5. `submit_extraction_candidates` accepts a value only when an authorized tool returned it for that same page: exactly a VLM value, exactly an OCR line, or verbatim inside the committed native text. The model never supplies a normalized value; `assembleCaseResult` normalizes money, dates, and names deterministically and owns reconciliation, claims, entity matching, the five registered rules, and the disposition.
+6. `get_extraction_gaps` is replaced by `get_case_manifest` (logical documents, authorized pages, declared requirements, field schemas, structured application data; no document content). The registry is `case-review-tools-3.0.0`, the prompt is `case-review-prompt-3.0.0`, and the budget envelope is `agent-budget-2.0.0` (24 iterations, 40 tool calls, 8 VLM calls, 8 OCR pages, 180 s wall clock). The `USD 0.25` per-case cost cap is unchanged.
+7. Document tools are backed by committed run state: `apps/worker/src/document-ports.ts` reads persisted page metadata, the stored native-text artifact, the stored OCR output, the stored page render, and the persisted classification and boundary through `PostgresWorkflowCoordinator.loadCaseDocumentInventory`.
+8. `classifySyntheticDemoPages` previously matched a heading spelling PDF Inspector never produces, so every real page classified as `unknown`. The fixture-seeded result hid this. It now normalizes separators and classifies the whole corpus correctly.
+9. A durable step commit that is rejected now stops the loop immediately instead of spending further model turns on work that cannot be recorded.
+10. The Agent Log separates system preprocessing from Agent document tools: the API returns an `actor` of `system`, `agent_document_tool`, or `agent` per event, the log opens with a system-preprocessing event, and a VLM step names its gateway so `fixture-vlm-gateway` is never read as a real model result.
+11. Docker Compose still warns when shell-level `POSTGRES_PASSWORD` and `MINIO_SECRET_KEY` are absent even though the running demo uses its generated local configuration. Treat removal of this warning as cleanup, not as evidence that a service is unhealthy.
+
+### What is still fixture-backed
+
+1. OCR is a deterministic fixture engine. It produces no field text, so an image-only page carries nothing recoverable at runtime.
+2. No VLM gateway is wired. For a registered synthetic case, `findFixtureScannedPageAdapter` answers `extract_with_vlm` for a page with no committed native text and declares that page's document type for classification. It is named `fixture-vlm-gateway` / `fixture-scanned-page-adapter` everywhere it appears. A non-fixture case gets no such answer: its image-only pages stay unresolved. No accuracy claim may be derived from it.
+3. Crop rendering is not implemented; a region request resolves to the committed full-page render.
+4. Native-text candidates carry a page reference without a bounding box, because the native-text boundary does not expose PDF Inspector layout coordinates.
 
 ### Implemented baseline
 
@@ -21,89 +31,56 @@ The implemented baseline is summarized in `AGENTS.md`. In practical terms, the r
 
 1. A working pnpm monorepo with separate API, Worker, and Review Web applications.
 2. Durable PostgreSQL workflow state, a transactional outbox, pg-boss processing, immutable run and result revisions, MinIO artifact storage, and scoped artifact delivery.
-3. PDF Inspector-backed native extraction and PDFium rendering behind project interfaces.
+3. PDF Inspector-backed native extraction and PDFium rendering behind project interfaces, exposed to the Agent only through registered tools.
 4. Selective OCR orchestration and persisted OCR provenance using a deterministic fixture adapter. This is not real OCR and must not be evaluated or described as OCR recognition quality.
-5. Deterministic page classification, contiguous logical-document grouping, candidate creation, reconciliation lineage, explicit extraction gaps, five registered validation rules, recommended document-processing dispositions, deterministic report verification, and one bounded Agent-led Pi harness whose session, attempts, steps, tool results, and budgets are persisted as it runs and resumed after Worker loss.
-6. The Review Workbench flows for active review, changes requested, completed cases, evidence navigation, Agent and human issues, requested-change drafts, final review, downstream handoff projection, and bounded case Agent logs.
-7. Six manually confirmed structured synthetic golden cases frozen as immutable release `v0.1.1`, runtime loading, candidate lifecycle commands, evaluation-run capture, and immutable offline evaluation reports. The bounded offline regression result is recorded in `EVALUATION_RESULTS.md`.
+5. Deterministic page classification, contiguous logical-document grouping, declared field requirements, explicit extraction gaps, Agent-produced evidence-linked candidates, deterministic normalization, reconciliation lineage, entity matching, five registered validation rules, recommended dispositions, deterministic report verification, and one bounded Agent-led Pi harness whose session, attempts, steps, tool results, and budgets are persisted as it runs and resumed after Worker loss.
+6. The Review Workbench flows for active review, changes requested, completed cases, evidence navigation, Agent and human issues, requested-change drafts, final review, downstream handoff projection, and bounded case Agent logs that name the actor of every step.
+7. Six manually confirmed structured synthetic golden cases frozen as immutable release `v0.1.1`, runtime loading, candidate lifecycle commands, evaluation-run capture, and immutable offline evaluation reports.
 
-### Golden candidate status
+### Golden case status under the Agent-led path
 
-All six candidates were explicitly reviewed and confirmed by `sulmae`. The checksum-verified first release is frozen as `v0.1.1`; `v0.1.0` remains immutable and must not be cited because its incomplete Checked Facts truth made evidence-grounding results pessimistic. Do not edit frozen truth to make evaluation pass.
+All six cases were loaded through the Docker demo with `AGENT_MODEL=fake` after the change:
 
-| Candidate | Latest runtime result (Pi harness, fake model) | Current conclusion |
-|---|---|---|
-| `golden-001-native-clear` | Report ready; no issues; five Checked Facts | Confirmed by `sulmae`. |
-| `golden-002-employer-conflict` | Report ready; one Agent employer issue; four Checked Facts | Confirmed by `sulmae`. |
-| `golden-003-multiple-review-issues` | Report ready; three Agent issues; two Checked Facts | Confirmed by `sulmae`. |
-| `golden-004-missing-bank-evidence` | Report ready; missing bank statement represented by finding evidence only; four Checked Facts | Confirmed by `sulmae`. |
-| `golden-005-instruction-inert` | Report ready; no issues; five Checked Facts | Confirmed by `sulmae`. |
-| `golden-006-scanned-adaptive-unavailable` | Four Checked Facts; system-origin income issue remains human-reviewable; report rejected as `policy_rejected_loan_approval` | Confirmed by `sulmae`; fixture OCR/VLM demonstrates orchestration, not recognition quality. |
+| Candidate | Agent-led runtime result | Frozen `v0.1.1` expectation | Status |
+|---|---|---|---|
+| `golden-001-native-clear` | Report ready; no issues; five Checked Facts | no issues | Matches |
+| `golden-002-employer-conflict` | Report ready; `VAL_EMPLOYER_CONSISTENCY_001` | same | Matches |
+| `golden-003-multiple-review-issues` | Report ready; `VAL_EMPLOYER_CONSISTENCY_001` only | also completeness and income | **Diverges** |
+| `golden-004-missing-bank-evidence` | Report ready; `VAL_DOC_COMPLETENESS_001` and `VAL_NAME_CONSISTENCY_001` | completeness only | **Diverges** |
+| `golden-005-instruction-inert` | Report ready; no issues; five Checked Facts | no issues | Matches |
+| `golden-006-scanned-adaptive-unavailable` | `VAL_INCOME_CONSISTENCY_001`; report rejected as `policy_rejected_loan_approval` | same | Matches |
 
-Runtime case identifiers are intentionally not recorded here because each capture creates new case records and `pnpm demo:reset` may remove them.
+Both divergences are the fixture seeding being removed, not a regression:
+
+1. `golden-003` was expected to show an uncertain bank-statement boundary and an incomparable payslip income. The generated document shows neither: page 3 is a payslip continuation of the same type, so the boundary is certain, and the payslip net pay equals the declared income. The old expectation came from a hard-coded `boundaryUncertain` and `incomeEvidenceSufficient: false` in the fixture table.
+2. `golden-004` has no bank statement, so the account-holder name genuinely cannot be confirmed and `VAL_NAME_CONSISTENCY_001` is `person_name_unresolved`. The fixture previously fabricated an account-holder claim from the application data.
+
+Do not edit frozen truth. BL-005 and BL-009 record the two ways forward: confirm a new release against the Agent-led outcomes, or regenerate `golden-003` so its documents genuinely carry the ambiguity the case is named for.
+
+`EVALUATION_RESULTS.md` is marked superseded for the same reason and needs a new capture.
 
 ### Immediate next task
 
-Implement only the Agent-led extraction live path. Do not start the full live evaluation, real OCR acceptance, VLM benchmark, dataset expansion, UI redesign, or unrelated cleanup in this task.
+**Capture a new evaluation baseline for the Agent-led path, and only then request approval for one live-model acceptance run.**
 
-#### Current defect
-
-`apps/worker/src/case-review.ts` calls `buildOfflineExtraction(fixtureId, fixtureContext)` before Pi. Consequently, even when `AGENT_MODEL=openai/gpt-5.6-terra`, structured candidates, claims, gaps, and much of the eventual five-rule result are seeded from the synthetic fixture rather than derived through the Agent's bounded document tools. PDF Inspector performs genuine pre-Agent native-text inspection and rendering, and Pi has registered inspection/extraction tools, but a clean fixture presents no extraction gap, so the live Agent can proceed directly to reconciliation, validation, and report submission without inspecting document contents. The successful single-case live observation therefore proves the model route and report loop only; it does not prove general PDF-to-structured-data extraction.
-
-#### Required outcome
-
-For a live-model case, Pi must lead the document review from a bounded case manifest and application data. It must obtain document content only through registered, scoped tools; use PDF Inspector native text, page metadata, renders, selective OCR, or bounded VLM extraction as tool-backed evidence sources; submit evidence-linked extraction candidates; and then request deterministic reconciliation and the five registered validation rules. Deterministic code must continue to own accepted claims, findings, recommended document-processing disposition, report verification, and workflow state. Human review remains mandatory.
-
-PDF Inspector is an Agent tool foundation, not the Agent's only input and not a source of precomputed fixture truth. Pi may receive structured application data, document inventory, page metadata, current accepted claims/candidates, extraction requirements, and prior durable tool results. It must not receive an unrestricted complete case package, unrestricted filesystem or network access, Shell, or authority to create rules or make lending, credit, AML, KYC, customer-contact, or final workflow decisions.
-
-#### Implementation constraints
-
-1. Preserve the deterministic offline/fake-model path used by default CI. Do not make tests depend on OpenAI or network access.
-2. Remove `buildOfflineExtraction(...)` as the source of live-path structured truth. Keeping it behind an explicit offline fixture adapter is acceptable.
-3. Do not invent extraction gaps from golden truth for the live path. Derive work from declared field requirements, application data, persisted document/page metadata, and tool results.
-4. Require evidence references for every submitted document-derived candidate. A candidate may become a claim only through the existing deterministic reconciliation path.
-5. Keep VLM input bounded to selected pages, windows, or regions. VLM extraction receives no tools.
-6. Keep the five-rule registry unchanged. A model cannot add, remove, activate, or reinterpret a rule.
-7. Preserve one durable `case_review` session, incremental step persistence, idempotent tool-result reuse, attempt fencing, cumulative budgets, and terminal replay.
-8. Retain the current `USD 0.25` per-case hard limit. Do not run paid acceptance cases while implementing; use fake adapters until automated checks pass and the user explicitly approves another live run.
-9. Do not rewrite historical Agent steps. Reviewer-facing projection may clarify old wording without mutating audit records.
-10. Keep limitations explicit: current OCR remains fixture output and this task must not claim OCR-recognition quality.
-
-#### Minimum acceptance evidence
-
-1. A clean synthetic case no longer reaches validation solely from fixture-seeded document values. Its fake Agent trace shows bounded document inventory/inspection, native-text access where available, evidence-linked candidate submission, reconciliation, validation, current-result review, and report submission.
-2. A scanned or unresolved field case selects only its authorized page or region and respects OCR/VLM page, call, token, time, and cost budgets.
-3. Cross-case, unauthorized-page, unknown-tool, missing-evidence, invalid-schema, and prompt-injection attempts remain rejected outside the model.
-4. Deterministic rule outputs and report verification remain authoritative; the Agent cannot directly persist claims, findings, disposition, or final review actions.
-5. Durable re-entry tests still prove that committed inspection, OCR/VLM, candidate, reconciliation, validation, and report steps are not charged or applied twice.
-6. Agent Log makes the handoff clear: preprocessing/PDF inspection performed by the system is distinguished from document tools actively called by Pi. Do not imply that fixture extraction is real extraction.
-7. `pnpm check`, `pnpm test:integration`, `pnpm dataset:validate`, `pnpm build`, and relevant Docker-backed Worker recovery tests pass. If a test cannot run, record the exact reason rather than weakening it.
-
-#### Stop condition and handback
-
-Stop after this task is implemented, tested, documented, and committed. Do not proceed to a paid full-dataset run. Hand back:
-
-1. Commit hashes and files changed.
-2. A concise before/after data-flow description.
-3. Automated verification results.
-4. The exact synthetic cases and UI/API observations the user should manually inspect.
-5. Remaining known limitations, especially fake OCR, any still-fixture-backed component, and whether the live route is ready for a separately approved acceptance run.
+1. Run `pnpm evaluate:capture` against the Agent-led path with the fake model and record the actual-run manifest.
+2. Score it against `v0.1.1` with `pnpm evaluate:offline` and record the two known divergences explicitly rather than editing frozen truth.
+3. Decide with the user whether to confirm a new dataset release or to regenerate `golden-003` (BL-009 item 4).
+4. Do not start a paid run without explicit approval. The live route is ready in the sense that nothing in the Agent-led path depends on the fake script — the tools, budgets, evidence checks, and durable re-entry are model-agnostic — but it has not been exercised with a live model since the change, and a live model must satisfy the same evidence rule: a submitted value must appear verbatim in what a tool returned for that page. Keep the `USD 0.25` per-case cap and add an explicit whole-run cap before running more than one case.
 
 ### Global next steps
 
 After the immediate task, proceed in this order:
 
-1. **Accept a live model route for the Pi harness** (`BL-002`, `BL-004` precondition): choose an authorized provider route and Euro-denominated budget, run one complete case-review session, and verify usage and cost reconciliation. Durable re-entry must not reset usage.
-2. **Capture operational observations** required by `MLE-REQ-070` and `MLE-REQ-071`: latency, model calls, available token usage, estimated cost, and explicit unavailable values. The current offline quality baseline correctly reports operations as unavailable.
-3. **Accept the real PDF Inspector PP-OCRv6 runtime** (`BL-003`): pin offline assets, replace fixture OCR only in explicit real-runtime mode, and test image-only and mixed PDFs while keeping default CI deterministic.
+1. **Accept a live model route for the Agent-led path** (`BL-002`, `BL-004` precondition): one budgeted case-review session, then verify usage and cost reconciliation. Durable re-entry must not reset usage.
+2. **Capture operational observations** required by `MLE-REQ-070` and `MLE-REQ-071`: latency, model calls, available token usage, estimated cost, and explicit unavailable values.
+3. **Accept the real PDF Inspector PP-OCRv6 runtime** (`BL-003`): pin offline assets, replace fixture OCR only in explicit real-runtime mode, and retire the fixture scanned-page adapter for cases the real runtime can read.
 4. **Establish the formal measured baseline** (`BL-006`) from compatible live-model and real-runtime evidence without claiming real-world OCR or banking performance.
-5. **Run the VLM selection benchmark** (`BL-004`) against the same frozen compatible subset and complete ADR-003 from evidence rather than preference.
+5. **Run the VLM selection benchmark** (`BL-004`) and complete ADR-003 from evidence rather than preference.
 6. **Expand from six to twenty golden cases**, prioritizing meaningful document variation over nearly identical templates.
 7. **Finish V1 hardening and demonstration evidence**: crop rendering, JPEG/PNG execution, OS resource and network isolation, observability evidence, browser acceptance coverage, README/demo limitations, and a reproducible Docker acceptance run.
 
-The provider route, first candidate model, credentials, and EUR 2 total ceiling are available, and the single-case acceptance succeeded. The next live benchmark must retain the stricter `USD 0.25` per-case hard limit and add an explicit whole-run cap plus currency-correct reporting before running all cases.
-
-Real OCR and VLM recognition, live-model acceptance, crop rendering, and hardened operating-system and network isolation all remain pending.
+Real OCR and VLM recognition, live-model acceptance of the Agent-led path, crop rendering, and hardened operating-system and network isolation all remain pending.
 
 ## Project
 
@@ -174,12 +151,14 @@ The system has no permission or interface to disburse funds, open accounts, appr
 ```text
 Case intake
   -> basic file validation and immutable storage
-  -> PDF/image inspection and page rendering
+  -> PDF/image inspection, page rendering, and selective local OCR
   -> page classification and logical-document grouping
-  -> native extraction or selective local OCR
-  -> fixed VLM fallback where configured
-  -> optional bounded Pi Adaptive Extraction Loop for eligible unresolved gaps
-  -> field normalization and evidence binding
+  -> declared field requirements -> explicit extraction gaps for this run
+  -> bounded Pi case-review session:
+       bounded case manifest
+       -> page inspection -> committed native text -> selective OCR -> bounded VLM for what is left
+       -> evidence-linked extraction candidates
+  -> deterministic normalization, reconciliation, and evidence binding
   -> entity and claim resolution
   -> finite demonstration validation rule set
   -> deterministic recommended-disposition mapping

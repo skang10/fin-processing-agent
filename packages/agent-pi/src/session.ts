@@ -102,6 +102,8 @@ class BoundedResourceLoader implements ResourceLoader {
 interface BudgetFlags {
   timeout: boolean; iteration: boolean; tool: boolean; model: boolean; token: boolean; cost: boolean;
   vlm: boolean; ocr: boolean; noProgress: boolean; modelUnavailable: boolean; integrity: boolean;
+  /** A durable step commit was rejected, so no further model turn may spend budget on this attempt. */
+  durableWriteFailed: boolean;
 }
 
 /**
@@ -113,6 +115,7 @@ export class SessionControlPlane<TScope, TState> {
   readonly flags: BudgetFlags = {
     timeout: false, iteration: false, tool: false, model: false, token: false, cost: false,
     vlm: false, ocr: false, noProgress: false, modelUnavailable: false, integrity: false,
+    durableWriteFailed: false,
   };
   private sequence: number;
   private consumed: AgentConsumedBudget;
@@ -148,11 +151,15 @@ export class SessionControlPlane<TScope, TState> {
     }
   }
 
-  /** Committed results whose bounded payload may seed a resumed model continuation. */
-  resumeDigest(): Readonly<Record<string, unknown>> {
-    const digest: Record<string, unknown> = {};
+  /**
+   * Committed results whose bounded payload may seed a resumed model continuation, grouped by tool
+   * so a plan that touched several pages is restored completely rather than collapsed to its last call.
+   */
+  resumeDigest(): Readonly<Record<string, readonly unknown[]>> {
+    const digest: Record<string, unknown[]> = {};
     for (const result of this.committedByKey.values()) {
-      if (result.safeOutput !== undefined) digest[result.toolName] = result.safeOutput;
+      if (result.safeOutput === undefined) continue;
+      (digest[result.toolName] ??= []).push(result.safeOutput);
     }
     return digest;
   }
@@ -164,7 +171,8 @@ export class SessionControlPlane<TScope, TState> {
   hardStopRequested(): boolean {
     const { flags } = this;
     return flags.timeout || flags.iteration || flags.tool || flags.model || flags.token || flags.cost
-      || flags.vlm || flags.ocr || flags.noProgress || flags.integrity || this.isComplete(this.state);
+      || flags.vlm || flags.ocr || flags.noProgress || flags.integrity || flags.durableWriteFailed
+      || this.isComplete(this.state);
   }
 
   noteToolStart(toolCallId: string): void {
@@ -376,16 +384,24 @@ export class SessionControlPlane<TScope, TState> {
       completedAt: new Date().toISOString(),
       budgetState: { iterationsUsed: used.iterations, toolCallsUsed: used.toolCalls },
     };
-    const result = await this.lifecycle.commitStep({
-      sessionId: this.sessionId, attemptId: this.attemptId, sequence: step.sequence, phase, toolName,
-      ...(toolVersion ? { toolVersion } : {}),
-      argumentHash: step.argumentHash, outcome, summary,
-      startedAt: step.startedAt, completedAt: step.completedAt,
-      budgetDelta, budgetState: step.budgetState,
-      ...(lineage.invocation ? { invocation: lineage.invocation } : {}),
-      ...(lineage.reusedInvocationId ? { reusedInvocationId: lineage.reusedInvocationId } : {}),
-      ...(lineage.integrityCheck ? { integrityCheck: lineage.integrityCheck } : {}),
-    });
+    // A rejected durable write means this attempt has lost ownership or the store is unavailable.
+    // Stop the loop instead of spending further model turns on work that cannot be recorded.
+    let result: CommitAgentStepResult;
+    try {
+      result = await this.lifecycle.commitStep({
+        sessionId: this.sessionId, attemptId: this.attemptId, sequence: step.sequence, phase, toolName,
+        ...(toolVersion ? { toolVersion } : {}),
+        argumentHash: step.argumentHash, outcome, summary,
+        startedAt: step.startedAt, completedAt: step.completedAt,
+        budgetDelta, budgetState: step.budgetState,
+        ...(lineage.invocation ? { invocation: lineage.invocation } : {}),
+        ...(lineage.reusedInvocationId ? { reusedInvocationId: lineage.reusedInvocationId } : {}),
+        ...(lineage.integrityCheck ? { integrityCheck: lineage.integrityCheck } : {}),
+      });
+    } catch (error) {
+      this.flags.durableWriteFailed = true;
+      throw error;
+    }
     this.consumed = result.consumed;
     if (lineage.invocation && result.invocationId) {
       const stored = this.committedByKey.get(lineage.invocation.idempotencyKey);
@@ -414,7 +430,7 @@ export interface BoundedSessionSpec<TScope, TState> {
   readonly promptHash: string;
   readonly contextManifestVersion: string;
   /** Builds the deterministic data-channel message, optionally seeded with committed progress. */
-  readonly userMessage: (resume?: { readonly attemptNumber: number; readonly committedToolResults: Readonly<Record<string, unknown>> }) => string;
+  readonly userMessage: (resume?: { readonly attemptNumber: number; readonly committedToolResults: Readonly<Record<string, readonly unknown[]>> }) => string;
   readonly tools: readonly AnyToolSpec<TScope, TState>[];
   readonly toolRegistryVersion: string;
   readonly scope: TScope;
