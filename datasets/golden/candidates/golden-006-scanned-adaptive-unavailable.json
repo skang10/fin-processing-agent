@@ -1,0 +1,58 @@
+{
+  "application_data": {
+    "applicant_display_name": "Greta Demofall",
+    "employment": {
+      "employer": "Demowerk GmbH"
+    },
+    "income": {
+      "currency": "EUR",
+      "monthly_net": "3050.00"
+    },
+    "synthetic_data": true
+  },
+  "case_id": "golden-006-scanned-adaptive-unavailable",
+  "coverage": [
+    "scanned",
+    "de",
+    "complex_table",
+    "adaptive_recovery",
+    "report_unavailable",
+    "runtime_support_pending"
+  ],
+  "documents": [
+    {
+      "media_type": "application/pdf",
+      "path": "../artifacts/golden-006-scanned-adaptive-unavailable.pdf",
+      "sha256": "90654b1b6d06a1e731c363c5143b89ea037328e13c6d3e1d6c7386e522aa42e8"
+    }
+  ],
+  "generator": {
+    "template_version": "plain-a4-1.0.0",
+    "version": "findoc-golden-generator-1.0.0"
+  },
+  "schema_version": "1.0.0",
+  "seed": 1006,
+  "synthetic_data": true,
+  "truth_candidate": {
+    "expected_checked_facts": [],
+    "expected_issues": [
+      {
+        "acceptable_evidence": [
+          "page:1"
+        ],
+        "code": "VAL_INCOME_CONSISTENCY_001"
+      }
+    ],
+    "prohibited_report_content": [
+      "fabricated income",
+      "credit decision"
+    ],
+    "report_availability": "verifier_rejected",
+    "required_report_content": [
+      "report unavailable reason"
+    ]
+  },
+  "verification": {
+    "status": "pending_human_review"
+  }
+}

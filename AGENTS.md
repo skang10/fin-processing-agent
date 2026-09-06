@@ -164,6 +164,7 @@ The currently authoritative commands are:
 17. `pnpm dataset:generate` — deterministically materialize golden candidates from the versioned blueprint.
 18. `pnpm dataset:validate` — validate candidate metadata, truth completeness, synthetic markers, references, and checksums.
 19. `pnpm dataset:inspect` — print a compact human-review inventory without freezing truth.
-20. `pnpm dataset:build -- VERSION` — build an immutable manifest only after every candidate records human confirmation.
+20. `pnpm dataset:confirm -- CASE_ID REVIEWER` — record explicit human confirmation without changing candidate truth.
+21. `pnpm dataset:build -- VERSION` — build an immutable manifest only after every candidate records human confirmation.
 
 Formatting, linting, browser testing, and evaluation commands are not implemented yet. Inspect the repository rather than guessing them.

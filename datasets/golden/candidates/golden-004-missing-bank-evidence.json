@@ -1,0 +1,62 @@
+{
+  "application_data": {
+    "applicant_display_name": "Eva Sample",
+    "employment": {
+      "employer": "Sample Works Ltd"
+    },
+    "income": {
+      "currency": "EUR",
+      "monthly_net": "3100.00"
+    },
+    "synthetic_data": true
+  },
+  "case_id": "golden-004-missing-bank-evidence",
+  "coverage": [
+    "native_text",
+    "en",
+    "missing_evidence",
+    "additional_documents_needed"
+  ],
+  "documents": [
+    {
+      "media_type": "application/pdf",
+      "path": "../artifacts/golden-004-missing-bank-evidence.pdf",
+      "sha256": "81aaaeb791a53158de5a91f4a00e90ad90573203eef43f3fab9ee7977c113751"
+    }
+  ],
+  "generator": {
+    "template_version": "plain-a4-1.0.0",
+    "version": "findoc-golden-generator-1.0.0"
+  },
+  "schema_version": "1.0.0",
+  "seed": 1004,
+  "synthetic_data": true,
+  "truth_candidate": {
+    "expected_checked_facts": [
+      {
+        "acceptable_evidence": [
+          "page:1"
+        ],
+        "code": "VAL_NAME_CONSISTENCY_001"
+      }
+    ],
+    "expected_issues": [
+      {
+        "acceptable_evidence": [
+          "page:1"
+        ],
+        "code": "VAL_DOC_COMPLETENESS_001"
+      }
+    ],
+    "prohibited_report_content": [
+      "customer contacted"
+    ],
+    "report_availability": "ready",
+    "required_report_content": [
+      "bank statement missing"
+    ]
+  },
+  "verification": {
+    "status": "pending_human_review"
+  }
+}

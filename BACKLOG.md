@@ -90,7 +90,7 @@ The resulting choice belongs in `specs/decisions/ADR_003_VLM_SELECTION.md`. Prod
 
 ### BL-005 — Versioned Golden Dataset
 
-**Status:** Candidate generation, validation, inspection, human-confirmation gating, immutable release manifest, and checksum tooling implemented; initial six candidate artifacts and human verification remain pending
+**Status:** Tooling and six visibly synthetic candidate cases are implemented and checksum-valid; all six truth candidates await human verification, and the mixed/scanned Adaptive Agent cases remain explicitly blocked on their real runtime paths before confirmation
 
 Build incrementally:
 

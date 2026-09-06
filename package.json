@@ -23,6 +23,7 @@
     "dataset:generate": "node scripts/dataset.mjs generate",
     "dataset:validate": "node scripts/dataset.mjs validate",
     "dataset:inspect": "node scripts/dataset.mjs inspect",
+    "dataset:confirm": "node scripts/dataset.mjs confirm",
     "dataset:build": "node scripts/dataset.mjs build",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",

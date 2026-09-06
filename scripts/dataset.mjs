@@ -15,8 +15,13 @@ export async function generateCandidates(blueprintPath = defaultBlueprintPath, d
   for (const item of blueprint.cases) {
     const documents = await Promise.all(item.documents.map(async (document) => {
       const artifactPath = resolve(dirname(blueprintPath), document.path);
+      if (Array.isArray(document.pages)) {
+        await mkdir(dirname(artifactPath), { recursive: true });
+        await writeFile(artifactPath, createSyntheticPdf(document.pages));
+      }
       const bytes = await readFile(artifactPath);
-      return { ...document, path: relative(directory, artifactPath), sha256: sha256(bytes) };
+      const { pages: _pages, ...metadata } = document;
+      return { ...metadata, path: relative(directory, artifactPath), sha256: sha256(bytes) };
     }));
     const candidate = { ...item, schema_version: "1.0.0", synthetic_data: true, documents };
     await writeFile(join(directory, `${item.case_id}.json`), canonicalJson(candidate));
@@ -55,6 +60,17 @@ export async function inspectCandidates(directory = defaultCandidateDirectory, a
     expected_issues: candidate.truth_candidate.expected_issues.map((item) => item.code),
     coverage: candidate.coverage,
   }));
+}
+
+export async function confirmCandidate(caseId, reviewer, directory = defaultCandidateDirectory) {
+  if (!caseId || !reviewer?.trim()) throw new Error("Case ID and human reviewer identity are required");
+  const path = join(directory, `${caseId}.json`);
+  const candidate = JSON.parse(await readFile(path, "utf8"));
+  if (candidate.case_id !== caseId) throw new Error("Candidate identity does not match its filename");
+  candidate.verification = { status: "confirmed", verified_by: reviewer.trim(), verified_at: new Date().toISOString() };
+  await writeFile(path, canonicalJson(candidate));
+  await validateCandidates(directory);
+  return candidate.verification;
 }
 
 export async function buildRelease(version, candidateDirectory = defaultCandidateDirectory, releaseRoot = defaultReleaseDirectory, allowedRoot = repositoryRoot) {
@@ -112,13 +128,43 @@ function sortValue(value) {
 
 function sha256(bytes) { return createHash("sha256").update(bytes).digest("hex"); }
 
+function createSyntheticPdf(pages) {
+  if (pages.length === 0 || pages.some((page) => !Array.isArray(page) || !page.some((line) => line.includes("SYNTHETIC DEMO")))) {
+    throw new Error("Every generated PDF page requires a visible SYNTHETIC DEMO line");
+  }
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    `<< /Type /Pages /Count ${pages.length} /Kids [${pages.map((_, index) => `${4 + index * 2} 0 R`).join(" ")}] >>`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  pages.forEach((lines, index) => {
+    const stream = ["BT", "/F1 14 Tf", "72 770 Td", ...lines.flatMap((line, lineIndex) => [
+      ...(lineIndex === 0 ? [] : ["0 -24 Td"]), `(${escapePdfText(line)}) Tj`,
+    ]), "ET"].join("\n");
+    const pageId = 4 + index * 2;
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageId + 1} 0 R >>`);
+    objects.push(`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`);
+  });
+  let output = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => { offsets.push(Buffer.byteLength(output)); output += `${index + 1} 0 obj\n${object}\nendobj\n`; });
+  const xref = Buffer.byteLength(output);
+  output += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets.slice(1)) output += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  output += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(output);
+}
+
+function escapePdfText(value) { return value.replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)"); }
+
 async function main() {
-  const [command, argument] = process.argv.slice(2);
+  const [command, argument, secondArgument] = process.argv.slice(2).filter((value) => value !== "--");
   if (command === "generate") console.log(JSON.stringify({ generated: (await generateCandidates()).length }, null, 2));
   else if (command === "validate") console.log(JSON.stringify({ valid: true, cases: (await validateCandidates()).length }, null, 2));
   else if (command === "inspect") console.log(JSON.stringify(await inspectCandidates(), null, 2));
+  else if (command === "confirm" && argument && secondArgument) console.log(JSON.stringify(await confirmCandidate(argument, secondArgument), null, 2));
   else if (command === "build" && argument) console.log(JSON.stringify(await buildRelease(argument), null, 2));
-  else throw new Error("Usage: dataset <generate|validate|inspect|build VERSION>");
+  else throw new Error("Usage: dataset <generate|validate|inspect|confirm CASE_ID REVIEWER|build VERSION>");
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) main().catch((error) => { console.error(error.message); process.exitCode = 1; });

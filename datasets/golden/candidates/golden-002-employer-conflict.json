@@ -1,0 +1,64 @@
+{
+  "application_data": {
+    "applicant_display_name": "David Beispiel",
+    "employment": {
+      "employer": "Nordwerk Demo GmbH"
+    },
+    "income": {
+      "currency": "EUR",
+      "monthly_net": "2900.00"
+    },
+    "synthetic_data": true
+  },
+  "case_id": "golden-002-employer-conflict",
+  "coverage": [
+    "native_text",
+    "de",
+    "one_review_issue",
+    "conflicting_evidence"
+  ],
+  "documents": [
+    {
+      "media_type": "application/pdf",
+      "path": "../artifacts/golden-002-employer-conflict.pdf",
+      "sha256": "88a7418ec15a2666209d33bf2914542c7597d0d92d181fb83daa9c7a94b71b97"
+    }
+  ],
+  "generator": {
+    "template_version": "plain-a4-1.0.0",
+    "version": "findoc-golden-generator-1.0.0"
+  },
+  "schema_version": "1.0.0",
+  "seed": 1002,
+  "synthetic_data": true,
+  "truth_candidate": {
+    "expected_checked_facts": [
+      {
+        "acceptable_evidence": [
+          "page:1"
+        ],
+        "code": "VAL_NAME_CONSISTENCY_001"
+      }
+    ],
+    "expected_issues": [
+      {
+        "acceptable_evidence": [
+          "application:/employment/employer",
+          "page:1"
+        ],
+        "code": "VAL_EMPLOYER_CONSISTENCY_001"
+      }
+    ],
+    "prohibited_report_content": [
+      "decline application",
+      "fraud"
+    ],
+    "report_availability": "ready",
+    "required_report_content": [
+      "employer conflict"
+    ]
+  },
+  "verification": {
+    "status": "pending_human_review"
+  }
+}
