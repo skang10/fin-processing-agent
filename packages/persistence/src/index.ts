@@ -815,6 +815,7 @@ export class PostgresWorkflowCoordinator {
     inputRevisionId: string;
     applicationSnapshotId: string;
     pages: readonly { documentVersionId: string; submittedFilename: string; pageNumber: number }[];
+    logicalDocuments: readonly { logicalDocumentRevisionId: string; documentVersionId: string; startPage: number; endPage: number }[];
   }> {
     const [run] = await this.db.select({
       inputRevisionId: processingRuns.inputRevisionId,
@@ -831,7 +832,13 @@ export class PostgresWorkflowCoordinator {
       .innerJoin(documentVersions, eq(pages.documentVersionId, documentVersions.id))
       .where(eq(documentInspections.runId, runId))
       .orderBy(asc(documentVersions.submittedFilename), asc(pages.pageNumber));
-    return { ...run, pages: pageRecords };
+    const logicalDocuments = await this.db.select({
+      logicalDocumentRevisionId: logicalDocumentRevisions.id,
+      documentVersionId: logicalDocumentRevisions.documentVersionId,
+      startPage: logicalDocumentRevisions.startPage,
+      endPage: logicalDocumentRevisions.endPage,
+    }).from(logicalDocumentRevisions).where(eq(logicalDocumentRevisions.runId, runId));
+    return { ...run, pages: pageRecords, logicalDocuments };
   }
 
   async hasInputDocuments(caseId: string, runId: string): Promise<boolean> {

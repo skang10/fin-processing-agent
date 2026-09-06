@@ -11,6 +11,11 @@ describe("offline fixture", () => {
       income: { monthly_net: "3480.00" },
     },
     pages: [1, 2, 3, 4].map((pageNumber) => ({ submittedFilename: "case-package.pdf", documentVersionId: "document-1", pageNumber })),
+    logicalDocuments: [
+      { logicalDocumentRevisionId: "logical-identity", documentVersionId: "document-1", startPage: 1, endPage: 1 },
+      { logicalDocumentRevisionId: "logical-payslip", documentVersionId: "document-1", startPage: 2, endPage: 3 },
+      { logicalDocumentRevisionId: "logical-bank", documentVersionId: "document-1", startPage: 4, endPage: 4 },
+    ],
   };
 
   it("reproduces the Anna Beispiel review result", async () => {
@@ -25,6 +30,9 @@ describe("offline fixture", () => {
     expect(result.findings).toHaveLength(5);
     expect(result.evidence).toHaveLength(7);
     expect(result.claims).toHaveLength(9);
+    expect(result.candidates).toHaveLength(9);
+    expect(result.reconciliations).toHaveLength(9);
+    expect(result.claims.every((claim) => claim.supportingCandidateIds?.length === 1)).toBe(true);
     expect(result.recommendedDisposition).toBe("human_review_required");
   });
 

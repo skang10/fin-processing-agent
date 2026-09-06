@@ -123,6 +123,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
       applicationSnapshotId: sourceContext.applicationSnapshotId,
       applicationData,
       pages: sourceContext.pages,
+      logicalDocuments: sourceContext.logicalDocuments,
     });
     await coordinator.persistOfflineDeterministic(job.data.case_id, job.data.run_id, deterministic);
     const persistedResult = await coordinator.loadOfflineReportInput(job.data.case_id, job.data.run_id);

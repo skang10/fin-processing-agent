@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { OfflineCaseResult, OfflineClaimResult, OfflineDeterministicResult, OfflineEvidenceResult, OfflineReportInput, OfflineReportResult } from "@findoc/core";
+import { reconcileSingleAcceptedCandidate, type CandidateReconciliation, type ExtractionCandidate, type OfflineCaseResult, type OfflineClaimResult, type OfflineDeterministicResult, type OfflineEvidenceResult, type OfflineReportInput, type OfflineReportResult, type PersistedCandidateReconciliation } from "@findoc/core";
 import { FakeCaseReviewAgentHarness, runVerifiedReport, type CaseReviewAgentHarness } from "@findoc/agent";
 import { evaluateRuleSet, mapDisposition, type ValidationInput } from "@findoc/validation";
 
@@ -14,6 +14,7 @@ export interface OfflineFixtureContext {
   readonly applicationSnapshotId: string;
   readonly applicationData: Readonly<Record<string, unknown>>;
   readonly pages: readonly { submittedFilename: string; documentVersionId: string; pageNumber: number }[];
+  readonly logicalDocuments: readonly { logicalDocumentRevisionId: string; documentVersionId: string; startPage: number; endPage: number }[];
 }
 
 export function buildOfflineFixture(fixtureId: unknown, context: OfflineFixtureContext): OfflineDeterministicResult {
@@ -29,6 +30,8 @@ export function buildOfflineFixture(fixtureId: unknown, context: OfflineFixtureC
     findings,
     recommendedDisposition,
     evidence: fixture.evidence,
+    candidates: fixture.candidates,
+    reconciliations: fixture.reconciliations,
     claims: fixture.claims,
   };
 }
@@ -65,6 +68,8 @@ export async function runOfflineFixture(
 
 interface AnnaExampleRecords {
   readonly evidence: readonly OfflineEvidenceResult[];
+  readonly candidates: readonly ExtractionCandidate[];
+  readonly reconciliations: readonly PersistedCandidateReconciliation[];
   readonly claims: readonly OfflineClaimResult[];
   readonly evidenceIds: Readonly<Record<string, string>>;
   readonly claimIds: Readonly<Record<string, string>>;
@@ -82,6 +87,8 @@ function annaExampleRecords(context: OfflineFixtureContext): AnnaExampleRecords 
   readString(context.applicationData, ["applicant_display_name"]);
   const evidenceId = (key: string) => deterministicUuid(`${context.resultRevisionId}:evidence:${key}`);
   const claimId = (key: string) => deterministicUuid(`${context.resultRevisionId}:claim:${key}`);
+  const candidateId = (key: string) => deterministicUuid(`${context.resultRevisionId}:candidate:${key}`);
+  const reconciliationId = (key: string) => deterministicUuid(`${context.resultRevisionId}:reconciliation:${key}`);
   const evidenceIds = {
     applicant: evidenceId("applicant"), declaredEmployer: evidenceId("declared-employer"),
     declaredIncome: evidenceId("declared-income"), identity: evidenceId("identity-page"),
@@ -108,28 +115,53 @@ function annaExampleRecords(context: OfflineFixtureContext): AnnaExampleRecords 
     page(evidenceIds.identity, requiredPages.identity), page(evidenceIds.payslip, requiredPages.payslip),
     page(evidenceIds.boundary, requiredPages.boundary), page(evidenceIds.bank, requiredPages.bank),
   ];
-  const claim = (claimIdValue: string, fieldSchemaId: string, valueType: OfflineClaimResult["valueType"], rawValue: string, normalizedValue: unknown, evidenceIdValue: string): OfflineClaimResult => ({
-    claimId: claimIdValue, fieldSchemaId, valueType, rawValue, normalizedValue,
-    normalizationVersion: "offline-normalization-1.0.0", evidenceIds: [evidenceIdValue],
-  });
-  const claims = [
-    claim(claimIds.identityName, "person.name", "string", "Anna Beispiel", "anna beispiel", evidenceIds.identity),
-    claim(claimIds.employeeName, "person.name", "string", "Anna Beispiel", "anna beispiel", evidenceIds.payslip),
-    claim(claimIds.accountName, "person.name", "string", "Anna Beispiel", "anna beispiel", evidenceIds.bank),
-    claim(claimIds.declaredEmployer, "organization.name", "string", employer, employer.toLocaleLowerCase("de-DE"), evidenceIds.declaredEmployer),
-    claim(claimIds.payslipEmployer, "organization.name", "string", "Beispieltechnik GmbH", "beispieltechnik gmbh", evidenceIds.payslip),
-    claim(claimIds.salaryCounterparty, "organization.name", "string", "Beispiel Tech Services", "beispiel tech services", evidenceIds.bank),
-    claim(claimIds.declaredIncome, "income.monthly_net", "money", declaredIncome, { amount: declaredIncome, currency: "EUR" }, evidenceIds.declaredIncome),
-    claim(claimIds.payslipIncome, "income.monthly_net", "money", "3480.00", { amount: "3480.00", currency: "EUR" }, evidenceIds.payslip),
-    claim(claimIds.identityExpiry, "identity.expiry_date", "date", "2030-08-31", "2030-08-31", evidenceIds.identity),
+  const definitions = [
+    ["identity-name", claimIds.identityName, "person.name", "string", "Anna Beispiel", "anna beispiel", evidenceIds.identity, requiredPages.identity] as const,
+    ["employee-name", claimIds.employeeName, "person.name", "string", "Anna Beispiel", "anna beispiel", evidenceIds.payslip, requiredPages.payslip] as const,
+    ["account-name", claimIds.accountName, "person.name", "string", "Anna Beispiel", "anna beispiel", evidenceIds.bank, requiredPages.bank] as const,
+    ["declared-employer", claimIds.declaredEmployer, "organization.name", "string", employer, employer.toLocaleLowerCase("de-DE"), evidenceIds.declaredEmployer, "/employment/employer"] as const,
+    ["payslip-employer", claimIds.payslipEmployer, "organization.name", "string", "Beispieltechnik GmbH", "beispieltechnik gmbh", evidenceIds.payslip, requiredPages.payslip] as const,
+    ["salary-counterparty", claimIds.salaryCounterparty, "organization.name", "string", "Beispiel Tech Services", "beispiel tech services", evidenceIds.bank, requiredPages.bank] as const,
+    ["declared-income", claimIds.declaredIncome, "income.monthly_net", "money", declaredIncome, { amount: declaredIncome, currency: "EUR" }, evidenceIds.declaredIncome, "/income/monthly_net"] as const,
+    ["payslip-income", claimIds.payslipIncome, "income.monthly_net", "money", "3480.00", { amount: "3480.00", currency: "EUR" }, evidenceIds.payslip, requiredPages.payslip] as const,
+    ["identity-expiry", claimIds.identityExpiry, "identity.expiry_date", "date", "2030-08-31", "2030-08-31", evidenceIds.identity, requiredPages.identity] as const,
   ];
-  return { evidence, claims, evidenceIds, claimIds };
+  const candidates = definitions.map(([key, , fieldSchemaId, valueType, rawValue, normalizedValue, evidenceIdValue, source]): ExtractionCandidate => ({
+    candidateId: candidateId(key), fieldSchemaId, fieldSchemaVersion: "1.0.0", valueType,
+    rawValue, normalizedValue, extractionMethod: typeof source === "string" ? "structured_input" : "offline_fixture",
+    processorVersion: typeof source === "string" ? "application-schema-1.0.0" : ANNA_EXAMPLE_FIXTURE_ID,
+    evidenceIds: [evidenceIdValue], qualityStatus: "accepted",
+    source: typeof source === "string"
+      ? { type: "structured_input", applicationSnapshotId: context.applicationSnapshotId, jsonPointer: source }
+      : { type: "logical_document", logicalDocumentRevisionId: findLogicalDocument(context, source).logicalDocumentRevisionId },
+  }));
+  const reconciliations: PersistedCandidateReconciliation[] = definitions.map(([key, resultingClaimId, fieldSchemaId], index) => ({
+    reconciliationId: reconciliationId(key),
+    ...reconcileSingleAcceptedCandidate(fieldSchemaId, [candidates[index]!]),
+    resultingClaimId,
+  }));
+  const claims = definitions.map(([, claimIdValue, fieldSchemaId, valueType, rawValue, normalizedValue, evidenceIdValue], index): OfflineClaimResult => {
+    const reconciliation: CandidateReconciliation = reconciliations[index]!;
+    if (reconciliation.status !== "selected" || !reconciliation.selectedCandidateId) throw new OfflineFixtureUnavailableError("Fixture candidate could not be reconciled");
+    return {
+      claimId: claimIdValue, fieldSchemaId, valueType, rawValue, normalizedValue,
+      normalizationVersion: "offline-normalization-1.0.0", evidenceIds: [evidenceIdValue],
+      supportingCandidateIds: [reconciliation.selectedCandidateId],
+    };
+  });
+  return { evidence, candidates, reconciliations, claims, evidenceIds, claimIds };
 }
 
 function findFixturePage(context: OfflineFixtureContext, submittedFilename: string, pageNumber: number) {
   const page = context.pages.find((item) => item.submittedFilename === submittedFilename && item.pageNumber === pageNumber);
   if (!page) throw new OfflineFixtureUnavailableError(`Fixture source ${submittedFilename} page ${pageNumber} is unavailable`);
   return page;
+}
+
+function findLogicalDocument(context: OfflineFixtureContext, page: { documentVersionId: string; pageNumber: number }) {
+  const document = context.logicalDocuments.find((item) => item.documentVersionId === page.documentVersionId && item.startPage <= page.pageNumber && item.endPage >= page.pageNumber);
+  if (!document) throw new OfflineFixtureUnavailableError(`Logical document for page ${page.pageNumber} is unavailable`);
+  return document;
 }
 
 function annaExampleInput(context: OfflineFixtureContext, fixture: AnnaExampleRecords): ValidationInput {

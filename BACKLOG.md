@@ -140,7 +140,7 @@ Define implementation contracts for the approved V1 HTML UX baseline:
 
 ### BL-008 — Logical Documents and Candidate Reconciliation
 
-**Status:** Deterministic synthetic page classification, boundary prediction, contiguous grouping, Worker wiring, PostgreSQL candidate/reconciliation/claim-lineage schema, validated persistence, and the single-accepted-candidate reconciliation primitive are implemented; candidate production and end-to-end reconciliation wiring remain pending
+**Status:** The deterministic synthetic path now produces evidence-linked structured-input and document-derived candidates, reconciles each accepted candidate into a claim, and persists complete candidate-to-claim lineage; broader non-fixture extraction remains pending
 
 Implement the minimum deterministic path in dependency order:
 
