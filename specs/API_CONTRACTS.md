@@ -2,7 +2,7 @@
 
 Document ID: `API`
 
-Version: 1.1.3
+Version: 1.1.4
 
 Status: Approved
 
@@ -211,9 +211,9 @@ POST  /api/v1/cases/{case_id}/final-review
 
 `API-REQ-053` Ignoring an issue may include an optional reviewer note. Confirming, ignoring, editing, or creating an issue must record reviewer, time, predecessor result revision, command identity, and resulting resource version.
 
-`API-REQ-054` A confirm response may create or expose a verified Agent-proposed requested-change draft for human editing, but confirmation must not include that draft in the final message automatically.
+`API-REQ-054` A confirm response may create or expose a verified Agent-proposed requested-change draft for human editing. The Review Workbench must select that draft for the message by default and let the reviewer exclude it before final submission.
 
-`API-REQ-055` Updating a requested-change draft must preserve Agent-proposed text separately from the current human-edited text, bind exactly one issue, and record inclusion as an explicit reviewer choice.
+`API-REQ-055` Updating a requested-change draft must preserve Agent-proposed text separately from the current human-edited text, bind exactly one issue, and persist its current message-inclusion state.
 
 `API-REQ-056` Requested-change text must be non-empty when included, applicant-readable, and free of prohibited banking decisions, internal processing instructions, unsafe document content, or claims of customer delivery.
 
@@ -329,6 +329,7 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.1.4 | 2026-09-06 | Approved | Selected confirmed issues for the applicant message by default while preserving reviewer opt-out. |
 | 1.1.3 | 2026-09-06 | Approved | Made the internal reviewer note optional when ignoring an issue. |
 | 1.1.2 | 2026-09-06 | Approved | Added the current-run evidence collection used by the reviewer supporting-evidence picker. |
 | 1.1.1 | 2026-09-05 | Approved | Added the current deterministic-findings projection required for human review when the Agent report is unavailable. |

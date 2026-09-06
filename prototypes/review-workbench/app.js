@@ -562,7 +562,7 @@ function decide(kind) {
 async function persistDecision(kind, noteOrReason) {
   const issue = issues[current];
   if (!apiCaseRecord || !apiReport?.result_revision || !issue.issueId) {
-    if (kind === 'confirmed') { reviewNotes[current] = noteOrReason; includedRequests[current] = false; }
+    if (kind === 'confirmed') { reviewNotes[current] = noteOrReason; includedRequests[current] = true; }
     decide(kind);
     return;
   }
@@ -589,11 +589,11 @@ async function persistDecision(kind, noteOrReason) {
     if (kind === 'confirmed') {
       const draft = await saveRequestedChange(apiCaseRecord.case_id, issue.issueId, {
         result_revision_id: apiReport.result_revision.id,
-        command_id: crypto.randomUUID(), text: noteOrReason, included: false,
+        command_id: crypto.randomUUID(), text: noteOrReason, included: true,
       });
-      issue.requestedChange = { draft_revision_id: draft.draft_revision_id, revision: draft.revision, text: noteOrReason, included: false };
+      issue.requestedChange = { draft_revision_id: draft.draft_revision_id, revision: draft.revision, text: noteOrReason, included: true };
       reviewNotes[current] = noteOrReason;
-      includedRequests[current] = false;
+      includedRequests[current] = true;
     }
     ignoring = false;
     decide(kind);
