@@ -14,7 +14,7 @@ import {
 import { FAKE_MODEL, createFakeStreamFn, type FakeModelScript } from "./fake-model.js";
 
 export const PI_HARNESS_VERSION = `pi-coding-agent@${VERSION}`;
-export const PI_HARNESS_CONFIGURATION_VERSION = `pi-harness-2.1.0;${AGENT_BUDGET_CONFIGURATION_VERSION}`;
+export const PI_HARNESS_CONFIGURATION_VERSION = `pi-harness-2.2.0;${AGENT_BUDGET_CONFIGURATION_VERSION}`;
 
 function textContent(value: unknown): TextContent {
   return { type: "text", text: JSON.stringify(value) };

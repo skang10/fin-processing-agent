@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 3.6.0
+Version: 3.7.0
 
 Status: Approved
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.0, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.0.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.4.0, and `components/REVIEW_WORKBENCH.md` version 3.3.0. `ADR_001_PI_AGENT_HARNESS.md` is accepted as amended for the single-session lifecycle; `ADR_002_PDF_INSPECTOR.md` and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
+All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.0, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.0.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.5.0, and `components/REVIEW_WORKBENCH.md` version 3.3.0. `ADR_001_PI_AGENT_HARNESS.md` is accepted as amended for the single-session lifecycle; `ADR_002_PDF_INSPECTOR.md` and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
 
 ## 3. Product Baseline
 
@@ -367,6 +367,7 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.7.0 | 2026-09-07 | Approved | Approved Agent component 3.5.0, using PDF Inspector `needsOcr` as the interim routing signal and requiring visual inspection before OCR or VLM on routed pages. |
 | 3.6.0 | 2026-09-07 | Approved | Approved Review Workbench 3.3.0 with German local second-precision Agent-log timestamps. |
 | 3.5.0 | 2026-09-07 | Approved | Approved Agent component 3.4.0, moving attention-reference validation to the report tool boundary and limiting attention items to non-passing deterministic findings. |
 | 3.4.0 | 2026-09-07 | Approved | Approved Agent component 3.3.0, aligning report tool validation with the verifier schema and adding semantic extraction-role guidance to the bounded manifest. |

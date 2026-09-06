@@ -233,7 +233,7 @@ export const standardCaseReviewScript: FakeModelScript = (_turn, context) => {
   // The offline policy exercises the same visual-document boundary offered to a live multimodal
   // model. Image bytes are transient tool content; only these safe artifact references are durable.
   const renderedCount = readAllToolResults<RenderResultView>(context, "render_page_region").length;
-  const renderPending = manifest.pages.slice(renderedCount);
+  const renderPending = manifest.pages.filter((page) => page.needs_ocr).slice(renderedCount);
   if (renderPending.length > 0) {
     return { kind: "tool_calls", calls: renderPending.map((page) => ({
       name: "render_page_region",

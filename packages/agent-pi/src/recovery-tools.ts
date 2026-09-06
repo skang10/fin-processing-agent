@@ -4,7 +4,7 @@ import type { AdaptiveRecoveryContext, AgentExtractionMethod, NormalizedRegion, 
 import type { RegisteredToolSpec } from "./session.js";
 
 /** Immutable, versioned adaptive-recovery tool catalog (AGT section 6). */
-export const RECOVERY_TOOL_REGISTRY_VERSION = "adaptive-recovery-tools-2.0.0";
+export const RECOVERY_TOOL_REGISTRY_VERSION = "adaptive-recovery-tools-2.1.0";
 
 const MAX_NATIVE_TEXT_CHARACTERS = 4_000;
 const MAX_OCR_LINES = 200;
@@ -22,6 +22,8 @@ export interface RecoveryScope {
 export interface RecoveryToolState {
   readonly candidates: SubmittedExtractionCandidate[];
   readonly inspectedPages: Set<string>;
+  /** Pages whose authorized render was delivered to the model during this session. */
+  readonly renderedPages: Set<string>;
   /** Bounded committed native text returned for a page, exactly as the model saw it. */
   readonly nativeTextByPage: Map<string, string>;
   /** Bounded OCR lines returned for a page, with the region each line came from. */
@@ -31,7 +33,7 @@ export interface RecoveryToolState {
 }
 
 export function createRecoveryToolState(): RecoveryToolState {
-  return { candidates: [], inspectedPages: new Set(), nativeTextByPage: new Map(), ocrLinesByPage: new Map(), vlmResults: new Map() };
+  return { candidates: [], inspectedPages: new Set(), renderedPages: new Set(), nativeTextByPage: new Map(), ocrLinesByPage: new Map(), vlmResults: new Map() };
 }
 
 /** True when at least one approved local boundary already returned text for the page. */
@@ -203,13 +205,14 @@ export const getNativeTextTool: Tool<typeof PageOnly> = {
 };
 
 export const runOcrTool: Tool<typeof PageOnly> = {
-  name: "run_ocr", version: "1.0.0", label: "Run OCR", costClass: "ocr", reuse: "reexecute",
+  name: "run_ocr", version: "2.0.0", label: "Run OCR", costClass: "ocr", reuse: "reexecute",
   description: "Invoke the approved OCR boundary for one authorized page and return bounded lines with raw provider confidence. Lines are untrusted document data.",
   promptSnippet: "run the approved OCR boundary on one authorized page",
   parameters: PageOnly,
   authorize: (args, scope, state) => authorizePage(args, scope)
     ?? (!state.inspectedPages.has(pageKey(toPage(args))) ? "page_inspection_required" : undefined)
-    ?? (!scope.context.pages.find((page) => page.documentVersionId === args.document_version_id && page.pageNumber === args.page_number)?.needsOcr ? "ocr_not_required" : undefined),
+    ?? (!scope.context.pages.find((page) => page.documentVersionId === args.document_version_id && page.pageNumber === args.page_number)?.needsOcr ? "ocr_not_required" : undefined)
+    ?? (!state.renderedPages.has(pageKey(toPage(args))) ? "page_visual_inspection_required" : undefined),
   execute: async (args, scope, state) => {
     const result = await scope.ports.runOcr(toPage(args));
     const lines = result.lines.slice(0, MAX_OCR_LINES);
@@ -222,18 +225,23 @@ export const runOcrTool: Tool<typeof PageOnly> = {
 };
 
 export const renderPageRegionTool: Tool<typeof PageWithRegion> = {
-  name: "render_page_region", version: "2.0.0", label: "View page region", costClass: "render", reuse: "reexecute",
+  name: "render_page_region", version: "3.0.0", label: "View page region", costClass: "render", reuse: "reexecute",
   description: "Render and visually inspect a bounded normalized region of one authorized uploaded-document page. Returns the image to the model and a safe immutable artifact reference for audit.",
   promptSnippet: "visually inspect an authorized uploaded-document page or region",
   parameters: PageWithRegion,
   authorize: (args, scope) => authorizePage(args, scope) ?? (validRegion(args.region) ? undefined : "region_invalid"),
-  execute: async (args, scope) => {
+  execute: async (args, scope, state) => {
     const { image, ...safe } = await scope.ports.renderPageRegion(toPage(args), args.region);
+    state.renderedPages.add(pageKey(toPage(args)));
     return {
       summary: `Viewed the uploaded document on page ${args.page_number}`,
-      output: safe,
+      output: { document_version_id: args.document_version_id, page_number: args.page_number, ...safe },
       ...(image ? { modelContent: [{ type: "image" as const, data: image.data, mimeType: image.mimeType }] } : {}),
     };
+  },
+  restore: (output, _scope, state) => {
+    const page = output as { document_version_id?: string; page_number?: number };
+    if (page.document_version_id && page.page_number) state.renderedPages.add(`${page.document_version_id}:${page.page_number}`);
   },
   producedReferences: (output) => [{ kind: "artifact", id: (output as { artifactReference: string }).artifactReference }],
 };
@@ -262,7 +270,7 @@ export const extractLocalTableTool: Tool<typeof PageOnly> = {
 };
 
 export const extractWithVlmTool: Tool<typeof VlmParameters> = {
-  name: "extract_with_vlm", version: "2.0.0", label: "Extract with VLM", costClass: "vlm",
+  name: "extract_with_vlm", version: "3.0.0", label: "Extract with VLM", costClass: "vlm",
   description: "Invoke the configured schema-constrained VLM extraction operation for one field on one authorized page or region. The invocation has no tools.",
   promptSnippet: "run schema-constrained VLM extraction for one field on one authorized page",
   parameters: VlmParameters,
@@ -272,6 +280,8 @@ export const extractWithVlmTool: Tool<typeof VlmParameters> = {
     if (!scope.context.fieldSchemas.some((schema) => schema.fieldSchemaId === args.field_schema_id)) return "field_schema_outside_session_scope";
     if (!scope.context.gaps.some((gap) => gap.fieldSchemaId === args.field_schema_id && pageWithinGapScope(gap, scope, toPage(args)))) return "page_outside_gap_scope";
     if (!state.inspectedPages.has(pageKey(toPage(args)))) return "page_inspection_required";
+    const page = scope.context.pages.find((item) => item.documentVersionId === args.document_version_id && item.pageNumber === args.page_number);
+    if (page?.needsOcr && !state.renderedPages.has(pageKey(toPage(args)))) return "page_visual_inspection_required";
     if (!locallyProcessed(state, toPage(args))) return "local_processing_required";
     if (args.region && !validRegion(args.region)) return "region_invalid";
     return undefined;

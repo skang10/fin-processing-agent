@@ -2,7 +2,7 @@
 
 Document ID: `AGT`
 
-Version: 3.4.0
+Version: 3.5.0
 
 Status: Approved
 
@@ -324,6 +324,8 @@ flowchart LR
 
 `AGT-REQ-166` Native text must be attempted or its inapplicability established before OCR for the same target, and approved local extraction must be attempted or its insufficiency established before VLM extraction. The Agent chooses targets and whether further eligible work is useful, but it cannot bypass these ordering constraints.
 
+`AGT-REQ-184` Until a separately approved page-quality router supersedes this rule, the committed PDF Inspector `needsOcr` value is the deterministic OCR-routing decision. For a page where it is true, `render_page_region` must successfully deliver an authorized page image to the Agent before `run_ocr` or `extract_with_vlm` may execute. A page with usable native text does not require visual inspection solely to satisfy this prerequisite.
+
 `AGT-REQ-167` Every cacheable document tool invocation must resolve an idempotency key before execution and reuse an integrity-valid compatible committed result. Agent-selected repetition must not create duplicate artifacts or untracked native work.
 
 ## 8. Model Gateway and Prompt Boundary
@@ -591,6 +593,7 @@ Version 3.0.0 resolves Agent authority but creates dependent specification work 
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.5.0 | 2026-09-07 | Approved | Adopted PDF Inspector `needsOcr` as the interim deterministic routing signal and required the Agent to visually inspect such a page before OCR or VLM extraction. A future quality router remains evidence-dependent. |
 | 3.4.0 | 2026-09-07 | Approved | Moved dynamic attention-reference authorization to the report tool boundary and limited report attention references to non-passing deterministic findings, allowing a live model to repair an invalid reference before session termination. |
 | 3.3.0 | 2026-09-07 | Approved | Unified the report-submission tool and Report Verifier on the same closed schema, and exposed stable semantic roles and extraction guidance for declared requirements so a salary-payment counterparty cannot be confused with the account-holding bank. |
 | 3.2.0 | 2026-09-07 | Approved | Made an authorized page render visible to the multimodal Pi model as transient tool content while persisting only its safe artifact reference, integrity metadata, and step summary. Source paths, object-store credentials, arbitrary files, and image bytes remain outside durable Agent state. |

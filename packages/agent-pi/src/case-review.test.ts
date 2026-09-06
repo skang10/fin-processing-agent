@@ -94,6 +94,22 @@ describe("PiAgentLedCaseReviewHarness", () => {
     expect(vlmLimited.trace.terminalReason).toBe("tool_budget_exhausted");
   });
 
+  it("requires visual inspection before OCR on a PDF Inspector needsOcr page", async () => {
+    const script: FakeModelScript = (turn) => {
+      if (turn === 1) return { kind: "tool_calls", calls: [{ name: "get_case_manifest", args: {} }] };
+      if (turn === 2) return { kind: "tool_calls", calls: [{ name: "inspect_page", args: { document_version_id: "document-1", page_number: 1 } }] };
+      if (turn === 3) return { kind: "tool_calls", calls: [{ name: "run_ocr", args: { document_version_id: "document-1", page_number: 1 } }] };
+      if (turn === 4) return { kind: "tool_calls", calls: [{ name: "render_page_region", args: { document_version_id: "document-1", page_number: 1, region: { x: 0, y: 0, width: 1, height: 1 } } }] };
+      if (turn === 5) return { kind: "tool_calls", calls: [{ name: "run_ocr", args: { document_version_id: "document-1", page_number: 1 } }] };
+      return { kind: "text", text: "Done." };
+    };
+    const outcome = await new PiAgentLedCaseReviewHarness({ model: { route: "fake", script } }).review(context(true), ports());
+    expect(outcome.trace.steps.map((step) => `${step.toolName}:${step.outcome}`)).toEqual([
+      "get_case_manifest:succeeded", "inspect_page:succeeded", "run_ocr:authorization_rejected",
+      "render_page_region:succeeded", "run_ocr:succeeded",
+    ]);
+  });
+
   it("stops repeated identical calls as no progress", async () => {
     const script: FakeModelScript = () => ({ kind: "tool_calls", calls: [{ name: "get_case_manifest", args: {} }] });
     const outcome = await new PiAgentLedCaseReviewHarness({ model: { route: "fake", script } }).review(context(true), ports());
@@ -272,7 +288,7 @@ describe("local-first extraction routing", () => {
     const outcome = await new PiAgentLedCaseReviewHarness({ model: { route: "fake", script: standardCaseReviewScript } }).review(twoPagePayslip(), service);
 
     expect(outcome.trace.steps.map((step) => step.toolName)).toEqual([
-      "get_case_manifest", "inspect_page", "inspect_page", "render_page_region", "render_page_region", "get_native_text", "run_ocr",
+      "get_case_manifest", "inspect_page", "inspect_page", "render_page_region", "get_native_text", "run_ocr",
       "submit_extraction_candidates", "request_reconciliation", "request_validation", "get_current_result", "submit_case_review_brief",
     ]);
     expect(service.extractWithVlm).not.toHaveBeenCalled();
