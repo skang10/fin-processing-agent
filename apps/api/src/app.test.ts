@@ -43,7 +43,11 @@ describe("case intake", () => {
     getAgentLog: vi.fn(async () => ({
       availability: "ready" as const, modelLabel: "fake-pi-harness-v1",
       estimatedCost: { amount: "0.0000", currency: "EUR" as const }, currentStep: "awaiting_human_review" as const,
-      events: [{ timestamp: "2026-09-01T10:05:00.000Z", activity: "Generated review report" }],
+      session: { harnessLabel: "pi-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review_report" as const, terminalReason: "report_submitted" as const, iterations: 3, toolCalls: 3, usageAvailable: true },
+      events: [
+        { timestamp: "2026-09-01T10:04:00.000Z", activity: "Listed deterministic findings", toolLabel: "list_findings" },
+        { timestamp: "2026-09-01T10:05:00.000Z", activity: "Generated review report" },
+      ],
     })),
     getIssues: vi.fn(async () => [{
       issueId: "4c816f67-5f2f-4e21-8c17-7eb1e53838be",
@@ -159,7 +163,11 @@ describe("case intake", () => {
     expect(response.json()).toEqual({
       availability: "ready", model_label: "fake-pi-harness-v1",
       estimated_cost: { amount: "0.0000", currency: "EUR" }, current_step: "awaiting_human_review",
-      events: [{ timestamp: "2026-09-01T10:05:00.000Z", activity: "Generated review report" }],
+      session: { harness_label: "pi-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review_report", terminal_reason: "report_submitted", iterations: 3, tool_calls: 3, usage_available: true },
+      events: [
+        { timestamp: "2026-09-01T10:04:00.000Z", activity: "Listed deterministic findings", tool_label: "list_findings" },
+        { timestamp: "2026-09-01T10:05:00.000Z", activity: "Generated review report" },
+      ],
     });
     await app.close();
   });

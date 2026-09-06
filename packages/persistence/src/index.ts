@@ -2,8 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type PageRenderArtifactView, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type SourceDocumentArtifactView, type StoredDerivedArtifact, type StoredOcrArtifact, type StoredPageRenderArtifact } from "@findoc/core";
-import { agentReports, applicationSnapshots, artifacts, boundaryPredictions, candidateEvidenceLinks, cases, caseStateTransitions, claimCandidateLinks, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, extractionCandidates, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, logicalDocumentPages, logicalDocumentRevisions, outboxEvents, pageClassifications, pageOcrOutputs, pages, physicalDocuments, processingRuns, processingRunTransitions, reconciliationCandidateLinks, reconciliationDecisions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AcceptedCase, type AgentLogView, type AgentSessionMode, type AgentTerminalReason, type AgentReportView, type ApplicationDataView, type CaseCommandService, type CaseIntakeCommand, type CaseQueryService, type CaseReviewQueryService, type CaseStatus, type DocumentPageView, type DocumentView, type DownstreamHandoffView, type EvidenceView, type FindingView, type NativeTextArtifactView, type OfflineDeterministicResult, type OfflineReportInput, type OfflineReportResult, type PageRenderArtifactView, type QueueCaseView, type ReviewCommandService, type ReviewIssueView, type SourceDocumentArtifactView, type StoredDerivedArtifact, type StoredOcrArtifact, type StoredPageRenderArtifact } from "@findoc/core";
+import { agentReports, agentSessions, agentSteps, applicationSnapshots, artifacts, boundaryPredictions, candidateEvidenceLinks, cases, caseStateTransitions, claimCandidateLinks, claimEvidenceLinks, claimRecords, documentInspections, documentVersions, evidenceRecords, extractionCandidates, finalReviews, idempotencyRecords, inputDocumentSelections, inputRevisions, logicalDocumentPages, logicalDocumentRevisions, outboxEvents, pageClassifications, pageOcrOutputs, pages, physicalDocuments, processingRuns, processingRunTransitions, reconciliationCandidateLinks, reconciliationDecisions, recommendedDispositions, requestedChangeRevisions, resultRevisions, reviewIssueActions, reviewIssueEditRevisions, reviewIssues, stageExecutions, validationFindings } from "./schema.js";
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
@@ -473,20 +473,36 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     const [report] = await this.db.select({
       availability: agentReports.availability, modelLabel: agentReports.modelLabel,
       estimatedCost: agentReports.estimatedCost, checkedFacts: agentReports.checkedFacts,
-      issueLinks: agentReports.issueLinks, createdAt: agentReports.createdAt,
+      issueLinks: agentReports.issueLinks, createdAt: agentReports.createdAt, sessionId: agentReports.sessionId,
     }).from(agentReports).where(eq(agentReports.caseId, caseId)).orderBy(sql`${agentReports.createdAt} desc`).limit(1);
     const currentStep = caseRecord.lifecycle === "processing" ? "processing" as const
       : caseRecord.lifecycle === "review_complete" ? "review_completed" as const : "awaiting_human_review" as const;
     if (!report) return { availability: "pending", currentStep, events: [] };
+    const [session] = report.sessionId
+      ? await this.db.select().from(agentSessions).where(eq(agentSessions.id, report.sessionId)).limit(1)
+      : [];
+    const steps = session
+      ? await this.db.select().from(agentSteps).where(eq(agentSteps.sessionId, session.id)).orderBy(asc(agentSteps.sequence))
+      : [];
     const timestamp = report.createdAt.toISOString();
     const factCount = (report.checkedFacts as unknown[]).length;
     const issueCount = (report.issueLinks as unknown[]).length;
+    const usage = session?.usage as { available?: boolean } | undefined;
     return {
       availability: report.availability === "ready" ? "ready" : "unavailable",
       modelLabel: report.modelLabel,
-      estimatedCost: { amount: report.estimatedCost, currency: "EUR" },
+      ...(report.estimatedCost !== null ? { estimatedCost: { amount: report.estimatedCost, currency: "EUR" } } : {}),
       currentStep,
+      ...(session ? { session: {
+        harnessLabel: `${session.harnessId} (${session.harnessVersion})`,
+        mode: session.mode as AgentSessionMode,
+        terminalReason: session.terminalReason as AgentTerminalReason,
+        iterations: session.iterations, toolCalls: session.toolCalls, usageAvailable: usage?.available === true,
+      } } : {}),
       events: [
+        ...(session ? [{ timestamp: session.startedAt.toISOString(), activity: `Started ${session.mode.replace(/_/g, " ")} session` }] : []),
+        ...steps.map((step) => ({ timestamp: step.completedAt.toISOString(), activity: step.summary, toolLabel: step.toolName })),
+        ...(session ? [{ timestamp: session.completedAt.toISOString(), activity: `Session ended: ${session.terminalReason.replace(/_/g, " ")}` }] : []),
         { timestamp, activity: `Checked ${factCount} facts` },
         { timestamp, activity: `Created ${issueCount} review issues` },
         { timestamp, activity: report.availability === "ready" ? "Generated review report" : "Report verification failed" },
@@ -1123,13 +1139,37 @@ export class PostgresWorkflowCoordinator {
         description: issue.description, recommendedAction: issue.recommendedAction, reviewState: "pending",
       }));
       if (issues.length > 0) await tx.insert(reviewIssues).values(issues);
+      const session = report.session;
+      if (session) {
+        await tx.insert(agentSessions).values({
+          id: session.sessionId, caseId, runId, resultRevisionId, mode: session.mode,
+          harnessId: session.harnessId, harnessVersion: session.harnessVersion,
+          modelLabel: session.modelLabel, modelRoute: session.modelRoute,
+          promptVersion: session.promptVersion, promptHash: session.promptHash,
+          configurationVersion: session.configurationVersion, toolRegistryVersion: session.toolRegistryVersion,
+          offeredTools: session.offeredTools, budget: session.budget,
+          iterations: session.iterations, toolCalls: session.toolCalls, usage: session.usage,
+          estimatedCost: session.estimatedCost?.amount ?? null, terminalReason: session.terminalReason,
+          startedAt: new Date(session.startedAt), completedAt: new Date(session.completedAt),
+        });
+        if (session.steps.length > 0) {
+          await tx.insert(agentSteps).values(session.steps.map((step) => ({
+            id: randomUUID(), sessionId: session.sessionId, sequence: step.sequence,
+            toolName: step.toolName, toolVersion: step.toolVersion ?? null, argumentHash: step.argumentHash,
+            outcome: step.outcome, summary: step.summary, budgetState: step.budgetState,
+            startedAt: new Date(step.startedAt), completedAt: new Date(step.completedAt),
+          })));
+        }
+      }
       await tx.insert(agentReports).values({
-        id: randomUUID(), caseId, runId, resultRevisionId, availability: report.reportAvailability,
+        id: randomUUID(), caseId, runId, resultRevisionId, sessionId: session?.sessionId ?? null,
+        availability: report.reportAvailability,
         verificationStatus: report.reportAvailability === "ready" ? "verified" : "rejected",
         verificationFailureReason: report.reportFailureReason, summary: report.summary,
         issueLinks: issues.map((issue) => issue.id),
         checkedFacts,
-        modelLabel: report.modelLabel, estimatedCost: report.estimatedCost,
+        originalSubmission: report.originalSubmission === undefined ? null : report.originalSubmission,
+        modelLabel: report.modelLabel, estimatedCost: report.estimatedCost ?? null,
       });
       const completedAt = new Date();
       await tx.insert(stageExecutions).values({

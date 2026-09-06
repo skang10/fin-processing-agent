@@ -141,6 +141,13 @@
       "when": 1788660991712,
       "tag": "0019_yielding_logan",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788701532256,
+      "tag": "0020_volatile_pete_wisdom",
+      "breakpoints": true
     }
   ]
 }

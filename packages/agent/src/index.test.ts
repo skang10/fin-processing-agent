@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AgentReportExecutionError, FakeCaseReviewAgentHarness, runVerifiedReport, verifyCaseReviewBrief, type CaseReviewContext } from "./index.js";
+import { AgentReportExecutionError, FAKE_HARNESS_DESCRIPTOR, FakeCaseReviewAgentHarness, buildSyntheticSessionTrace, canonicalJson, hashArguments, runVerifiedReport, verifyCaseReviewBrief, type CaseReviewContext } from "./index.js";
 
 function context(): CaseReviewContext {
   return {
@@ -11,9 +11,10 @@ function context(): CaseReviewContext {
 }
 
 describe("Case Review Brief verification", () => {
-  it("accepts the deterministic fake Agent report", async () => {
+  it("accepts the deterministic fake Agent report and records a session trace", async () => {
     const result = await runVerifiedReport(new FakeCaseReviewAgentHarness(), context());
-    expect(result).toMatchObject({ verified: true, brief: { report_status: "ready" } });
+    expect(result).toMatchObject({ verified: true, brief: { report_status: "ready" }, trace: { terminalReason: "report_submitted", harnessId: "fake-case-review-harness", toolCalls: 1 } });
+    expect(result.originalSubmission).toEqual(result.verified ? result.brief : undefined);
   });
 
   it("rejects schema-invalid output", () => {
@@ -40,7 +41,20 @@ describe("Case Review Brief verification", () => {
   });
 
   it("returns an unavailable outcome when the harness times out", async () => {
-    const timeoutHarness = { generate: async () => { throw new AgentReportExecutionError("timeout"); } };
-    await expect(runVerifiedReport(timeoutHarness, context())).resolves.toEqual({ verified: false, reason: "timeout" });
+    const timeoutHarness = { descriptor: FAKE_HARNESS_DESCRIPTOR, generate: async () => { throw new AgentReportExecutionError("timeout"); } };
+    await expect(runVerifiedReport(timeoutHarness, context())).resolves.toMatchObject({ verified: false, reason: "timeout", trace: { terminalReason: "timeout", steps: [] } });
+  });
+
+  it("maps a session that ends without a submission to an unavailable report", async () => {
+    const harness = {
+      descriptor: FAKE_HARNESS_DESCRIPTOR,
+      generate: async () => ({ trace: buildSyntheticSessionTrace({ descriptor: FAKE_HARNESS_DESCRIPTOR, steps: [], terminalReason: "tool_budget_exhausted" }) }),
+    };
+    await expect(runVerifiedReport(harness, context())).resolves.toMatchObject({ verified: false, reason: "unavailable", trace: { terminalReason: "tool_budget_exhausted" } });
+  });
+
+  it("hashes arguments canonically regardless of key order", () => {
+    expect(canonicalJson({ b: [1, { d: 2, c: 3 }], a: "x" })).toBe('{"a":"x","b":[1,{"c":3,"d":2}]}');
+    expect(hashArguments({ a: 1, b: 2 })).toBe(hashArguments({ b: 2, a: 1 }));
   });
 });

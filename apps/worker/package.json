@@ -8,6 +8,8 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@findoc/agent": "workspace:*",
+    "@findoc/agent-pi": "workspace:*",
     "@findoc/contracts": "workspace:*",
     "@findoc/core": "workspace:*",
     "@findoc/document-processing": "workspace:*",
@@ -17,5 +19,7 @@
     "pg-boss": "12.30.0",
     "pino": "10.3.1"
   },
-  "devDependencies": { "tsx": "4.23.13" }
+  "devDependencies": {
+    "tsx": "4.23.13"
+  }
 }

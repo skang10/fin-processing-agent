@@ -234,6 +234,10 @@ export function buildApp(
       ...(log.modelLabel ? { model_label: log.modelLabel } : {}),
       ...(log.estimatedCost ? { estimated_cost: log.estimatedCost } : {}),
       current_step: log.currentStep,
+      ...(log.session ? { session: {
+        harness_label: log.session.harnessLabel, mode: log.session.mode, terminal_reason: log.session.terminalReason,
+        iterations: log.session.iterations, tool_calls: log.session.toolCalls, usage_available: log.session.usageAvailable,
+      } } : {}),
       events: log.events.map((event) => ({ timestamp: event.timestamp, activity: event.activity,
         ...(event.toolLabel ? { tool_label: event.toolLabel } : {}) })),
     };

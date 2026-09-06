@@ -51,6 +51,71 @@ export interface SourceArtifactIntake {
   discard(artifact: StoredSourceArtifact): Promise<void>;
 }
 
+export type AgentSessionMode = "case_review_report" | "adaptive_recovery";
+
+export type AgentTerminalReason =
+  | "gaps_resolved" | "report_submitted" | "report_not_submitted" | "no_progress" | "conflicting_candidates"
+  | "iteration_budget_exhausted" | "tool_budget_exhausted" | "model_budget_exhausted" | "token_budget_exhausted"
+  | "cost_budget_exhausted" | "timeout" | "tool_failure" | "model_unavailable" | "schema_failure"
+  | "cancelled_by_workflow" | "internal_error";
+
+export type AgentStepOutcome =
+  | "succeeded" | "unknown_tool_rejected" | "schema_rejected" | "authorization_rejected"
+  | "budget_rejected" | "duplicate_resolved" | "failed";
+
+export interface AgentBudgetEnvelope {
+  readonly maxIterations: number;
+  readonly maxToolCalls: number;
+  readonly maxModelCalls: number;
+  readonly maxInputTokens: number;
+  readonly maxOutputTokens: number;
+  readonly maxWallClockMs: number;
+  readonly maxEstimatedCostUsd: number;
+  readonly maxConsecutiveNoProgressSteps: number;
+}
+
+export interface AgentStepTrace {
+  readonly sequence: number;
+  readonly toolName: string;
+  readonly toolVersion?: string;
+  readonly argumentHash: string;
+  readonly outcome: AgentStepOutcome;
+  readonly summary: string;
+  readonly startedAt: string;
+  readonly completedAt: string;
+  readonly budgetState: { readonly iterationsUsed: number; readonly toolCallsUsed: number };
+}
+
+export interface AgentUsageTrace {
+  readonly available: boolean;
+  readonly modelCalls: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+}
+
+export interface AgentSessionTrace {
+  readonly sessionId: string;
+  readonly mode: AgentSessionMode;
+  readonly harnessId: string;
+  readonly harnessVersion: string;
+  readonly modelLabel: string;
+  readonly modelRoute: "fake" | "live";
+  readonly promptVersion: string;
+  readonly promptHash: string;
+  readonly configurationVersion: string;
+  readonly toolRegistryVersion: string;
+  readonly offeredTools: readonly string[];
+  readonly budget: AgentBudgetEnvelope;
+  readonly iterations: number;
+  readonly toolCalls: number;
+  readonly usage: AgentUsageTrace;
+  readonly estimatedCost?: { readonly amount: string; readonly currency: "EUR" };
+  readonly terminalReason: AgentTerminalReason;
+  readonly steps: readonly AgentStepTrace[];
+  readonly startedAt: string;
+  readonly completedAt: string;
+}
+
 export interface OfflineIssueResult {
   readonly code: string;
   readonly description: string;
@@ -86,7 +151,9 @@ export interface OfflineReportResult {
   readonly summary: string;
   readonly issues: readonly OfflineIssueResult[];
   readonly modelLabel: string;
-  readonly estimatedCost: string;
+  readonly estimatedCost?: string;
+  readonly session?: AgentSessionTrace;
+  readonly originalSubmission?: unknown;
 }
 
 export interface OfflineCaseResult extends OfflineDeterministicResult, OfflineReportResult {}
@@ -269,6 +336,14 @@ export interface AgentLogView {
   readonly modelLabel?: string;
   readonly estimatedCost?: { readonly amount: string; readonly currency: "EUR" };
   readonly currentStep: "processing" | "awaiting_human_review" | "review_completed";
+  readonly session?: {
+    readonly harnessLabel: string;
+    readonly mode: AgentSessionMode;
+    readonly terminalReason: AgentTerminalReason;
+    readonly iterations: number;
+    readonly toolCalls: number;
+    readonly usageAvailable: boolean;
+  };
   readonly events: readonly { readonly timestamp: string; readonly activity: string; readonly toolLabel?: string }[];
 }
 

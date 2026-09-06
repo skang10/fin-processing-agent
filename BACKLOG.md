@@ -39,7 +39,7 @@ Validation findings, risk or review signals, and recommended-disposition mapping
 
 ### BL-002 — Bounded Pi Case Review Agent
 
-**Status:** Fake report harness and verifier implemented; real bounded Pi SDK spike pending
+**Status:** Report-mode Pi SDK harness implemented and verified offline (`packages/agent-pi`, pinned `@earendil-works/pi-coding-agent@0.85.1`) with registered tools, budgets, no-progress control, persisted sessions and steps, and a deterministic fake model; adaptive-recovery mode, the live model route acceptance, and the report-tool set beyond findings and references remain pending
 
 Embed the `pi-coding-agent` software development kit as a bounded pre-screening Agent for every processable case. It produces a verified Case Review Brief and may enter Adaptive Extraction mode only for eligible gaps. Disable built-in coding tools, Shell access, arbitrary file and network access, dynamic extensions, runtime package installation, and automatic resource discovery.
 

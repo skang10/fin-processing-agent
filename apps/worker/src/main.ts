@@ -3,7 +3,9 @@ import pino from "pino";
 import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
 import { DocumentSandboxClient, classifySyntheticDemoPages, groupLogicalDocuments } from "@findoc/document-processing";
-import { buildOfflineFixture, OfflineFixtureUnavailableError, runOfflineReport } from "@findoc/offline";
+import type { CaseReviewAgentHarness } from "@findoc/agent";
+import { FAKE_MODEL_SCRIPTS, PiCaseReviewAgentHarness } from "@findoc/agent-pi";
+import { buildOfflineFixture, defaultOfflineHarness, OfflineFixtureUnavailableError, runOfflineReport } from "@findoc/offline";
 import { PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
 import { createMinioObjectStore, readObjectBytes, storeNativeTextArtifact, storeOcrArtifact, storePageRenderArtifact } from "@findoc/storage";
 import { CASE_PROCESSING_QUEUE, OutboxRelay } from "./outbox.js";
@@ -18,6 +20,36 @@ if (!minioEndpoint || !minioAccessKey || !minioSecretKey) throw new Error("MinIO
 const maximumSourceBytes = Number(process.env["MAX_SOURCE_BYTES"] ?? 10_000_000);
 const ocrMode = process.env["OCR_MODE"] === "fake" ? "fake" : "pdf_inspector";
 const ocrModelDirectory = process.env["OCR_MODEL_DIRECTORY"];
+const agentHarnessMode = process.env["AGENT_HARNESS"] === "fake" ? "fake" : "pi";
+const agentModel = process.env["AGENT_MODEL"] ?? "fake";
+const agentModelApiKey = process.env["AGENT_MODEL_API_KEY"];
+if (agentHarnessMode === "pi" && agentModel !== "fake") {
+  if (!/^[a-z0-9-]+\/.+$/.test(agentModel)) throw new Error("AGENT_MODEL must be 'fake' or '<provider>/<model-id>'");
+  if (!agentModelApiKey) throw new Error("AGENT_MODEL_API_KEY is required for a live Agent model");
+} else {
+  process.env["PI_OFFLINE"] ??= "1";
+}
+const piHarnesses = new Map<string, PiCaseReviewAgentHarness>();
+
+/** Select the bounded Case Review Agent harness for one case (ADR-001). Only the demo fixture that must exercise report rejection gets the policy-violation script. */
+function selectAgentHarness(fixtureId: unknown): CaseReviewAgentHarness {
+  if (agentHarnessMode === "fake") return defaultOfflineHarness(fixtureId);
+  if (agentModel !== "fake") {
+    const separator = agentModel.indexOf("/");
+    const key = "live";
+    const existing = piHarnesses.get(key);
+    if (existing) return existing;
+    const harness = new PiCaseReviewAgentHarness({ model: { route: "live", provider: agentModel.slice(0, separator), modelId: agentModel.slice(separator + 1), apiKey: agentModelApiKey ?? "" } });
+    piHarnesses.set(key, harness);
+    return harness;
+  }
+  const scriptLabel = fixtureId === "golden-006-scanned-adaptive-unavailable" ? "policy_violation" : "standard";
+  const existing = piHarnesses.get(scriptLabel);
+  if (existing) return existing;
+  const harness = new PiCaseReviewAgentHarness({ model: { route: "fake", script: FAKE_MODEL_SCRIPTS[scriptLabel], scriptLabel } });
+  piHarnesses.set(scriptLabel, harness);
+  return harness;
+}
 
 const { client, db } = createDatabase(databaseUrl);
 const objectStore = createMinioObjectStore({
@@ -128,8 +160,14 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
     });
     await coordinator.persistOfflineDeterministic(job.data.case_id, job.data.run_id, deterministic);
     const persistedResult = await coordinator.loadOfflineReportInput(job.data.case_id, job.data.run_id);
-    const report = await runOfflineReport(persistedResult, undefined, applicationData["demo_fixture_id"]);
+    const report = await runOfflineReport(persistedResult, selectAgentHarness(applicationData["demo_fixture_id"]), applicationData["demo_fixture_id"]);
     await coordinator.completeOfflineReport(job.data.case_id, job.data.run_id, persistedResult.resultRevisionId, report);
+    logger.info({
+      case_id: job.data.case_id, run_id: job.data.run_id, session_id: report.session?.sessionId,
+      harness_id: report.session?.harnessId, model_label: report.modelLabel, terminal_reason: report.session?.terminalReason,
+      iterations: report.session?.iterations, tool_calls: report.session?.toolCalls, report_availability: report.reportAvailability,
+      report_failure_reason: report.reportFailureReason,
+    }, "agent report session completed");
   } catch (error) {
     if (!(error instanceof OfflineFixtureUnavailableError)) throw error;
     await coordinator.failRun(job.data.case_id, job.data.run_id, "offline_fixture_unavailable");
@@ -157,4 +195,4 @@ async function shutdown() {
 process.once("SIGINT", () => void shutdown());
 process.once("SIGTERM", () => void shutdown());
 
-logger.info({ mode: "offline", queue: CASE_PROCESSING_QUEUE }, "worker ready");
+logger.info({ mode: "offline", queue: CASE_PROCESSING_QUEUE, agent_harness: agentHarnessMode, agent_model: agentModel === "fake" ? "fake" : agentModel }, "worker ready");

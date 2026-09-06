@@ -12,7 +12,7 @@ Pi's official SDK supports programmatic `AgentSession` creation, explicit tool l
 
 ## Decision
 
-The Worker Service will embed the official `@mariozechner/pi-coding-agent` SDK through a project-owned `PiAgentHarness` adapter.
+The Worker Service will embed the official pi-coding-agent SDK through a project-owned `PiCaseReviewAgentHarness` adapter in `packages/agent-pi`. The SDK is published as `@earendil-works/pi-coding-agent`; the former `@mariozechner/pi-coding-agent` scope named in the original decision is deprecated upstream in favour of that package, and the rename does not change this decision.
 
 The adapter will:
 
@@ -24,7 +24,7 @@ The adapter will:
 6. Treat Pi conversation and session memory as ephemeral diagnostic execution state; PostgreSQL, pg-boss, and immutable domain records remain authoritative.
 7. Verify every report and tool result outside Pi before domain use.
 
-The exact Pi package version will be pinned by the implementation lockfile and recorded in the processing-run manifest after the integration spike. This ADR does not select a model provider.
+The implementation pins `@earendil-works/pi-coding-agent`, `@earendil-works/pi-agent-core`, and `@earendil-works/pi-ai` at exact version `0.85.1`, and every Agent session trace records `pi-coding-agent@<version>` as its harness version together with the prompt version and hash, tool-registry version, budget envelope, and configuration version. This ADR does not select a model provider.
 
 ## Rejected Alternatives
 
@@ -59,11 +59,15 @@ The implementation spike must prove that:
 5. Fake-model sessions produce deterministic report and failure fixtures.
 6. Document prompt injection cannot alter tools, rules, dispositions, schemas, or customer-contact authority.
 
+### Spike evidence (2026-09-06, report mode)
+
+The `packages/agent-pi` harness constructs the Pi `AgentSession` directly with an empty base-tool override, an empty allowlist apart from the registered report tools, a resource loader that discovers nothing, in-memory session, settings, credential, and model-runtime stores, compaction and auto-retry disabled, and image input blocked. Automated tests in `packages/agent-pi/src/harness.test.ts` demonstrate items 1, 2, 3, 5, and the tool-authority half of item 6 with the real Pi loop and a scripted fake model: the session exposes exactly `list_findings`, `get_finding_references`, and `submit_case_review_brief`; `bash`, `read`, out-of-scope, and schema-invalid requests are rejected and recorded without executing; tool-call, iteration, token, cost, and wall-clock budgets and the no-progress policy each terminate the session with a stable reason; identical inputs produce identical step records; and a policy-violating brief stays out of the verified report while remaining in the immutable trace. Item 4 is covered by the PostgreSQL session and step records written in the same transaction as the report (`packages/persistence`). The adaptive-recovery mode and the live model route remain unverified: no live provider run has been executed, and adaptive extraction is not implemented.
+
 ## Affected Specifications
 
 This decision constrains `ARC-REQ-040` through `ARC-REQ-049` and the Agent requirements in `components/ADAPTIVE_EXTRACTION_AGENT.md`. Any replacement harness requires a superseding ADR and must preserve those boundaries.
 
 ## References
 
-1. [Pi SDK documentation](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/sdk.md)
+1. [Pi SDK documentation](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/sdk.md) and the `docs/sdk.md` shipped inside the pinned `@earendil-works/pi-coding-agent` package
 2. [`components/ADAPTIVE_EXTRACTION_AGENT.md`](../components/ADAPTIVE_EXTRACTION_AGENT.md)

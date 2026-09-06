@@ -9,6 +9,8 @@ import {
   PostgresCaseQueryService,
   PostgresWorkflowCoordinator,
   agentReports,
+  agentSessions,
+  agentSteps,
   applicationSnapshots,
   artifacts,
   cases,
@@ -199,6 +201,21 @@ describe("PostgresCaseCommandService", () => {
       resultRevisionId,
       reportAvailability: "ready" as const,
       summary: "Synthetic case requires review.", modelLabel: "fake-pi-harness-v1", estimatedCost: "0.0000",
+      session: {
+        sessionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383aaa", mode: "case_review_report" as const,
+        harnessId: "pi-case-review-harness", harnessVersion: "pi-coding-agent@0.85.1", modelLabel: "findoc-fake/case-review-script-v1", modelRoute: "fake" as const,
+        promptVersion: "case-review-report-prompt-1.0.0", promptHash: "abc", configurationVersion: "pi-harness-1.0.0", toolRegistryVersion: "case-review-tools-1.0.0",
+        offeredTools: ["list_findings", "get_finding_references", "submit_case_review_brief"],
+        budget: { maxIterations: 6, maxToolCalls: 8, maxModelCalls: 6, maxInputTokens: 60000, maxOutputTokens: 8000, maxWallClockMs: 60000, maxEstimatedCostUsd: 0.25, maxConsecutiveNoProgressSteps: 2 },
+        iterations: 2, toolCalls: 2, usage: { available: true, modelCalls: 2, inputTokens: 400, outputTokens: 80 },
+        estimatedCost: { amount: "0.0000", currency: "EUR" as const }, terminalReason: "report_submitted" as const,
+        steps: [
+          { sequence: 1, toolName: "list_findings", toolVersion: "1.0.0", argumentHash: "h1", outcome: "succeeded" as const, summary: "Listed deterministic findings", startedAt: "2026-09-06T10:00:00.000Z", completedAt: "2026-09-06T10:00:01.000Z", budgetState: { iterationsUsed: 1, toolCallsUsed: 1 } },
+          { sequence: 2, toolName: "submit_case_review_brief", toolVersion: "1.0.0", argumentHash: "h2", outcome: "succeeded" as const, summary: "Submitted a Case Review Brief", startedAt: "2026-09-06T10:00:02.000Z", completedAt: "2026-09-06T10:00:03.000Z", budgetState: { iterationsUsed: 2, toolCallsUsed: 2 } },
+        ],
+        startedAt: "2026-09-06T10:00:00.000Z", completedAt: "2026-09-06T10:00:04.000Z",
+      },
+      originalSubmission: { schema_version: "1.0.0", summary: "Synthetic case requires review." },
       findings: ruleIds.map((ruleId) => ({
         ruleId, ruleVersion: "1.0.0", ruleSetId: "demo-de-personal-loan-v1", ruleSetVersion: "1.0.0",
         inputSnapshotId: inputRevisionId, resultRevisionId, status: ruleId === "VAL_EMPLOYER_CONSISTENCY_001" ? "failed" : "passed",
@@ -272,8 +289,23 @@ describe("PostgresCaseCommandService", () => {
     await expect(queries.getAgentLog(accepted.caseId)).resolves.toMatchObject({
       availability: "ready", modelLabel: "fake-pi-harness-v1", estimatedCost: { amount: "0.0000", currency: "EUR" },
       currentStep: "awaiting_human_review",
-      events: [{ activity: "Checked 4 facts" }, { activity: "Created 1 review issues" }, { activity: "Generated review report" }],
+      session: { harnessLabel: "pi-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review_report", terminalReason: "report_submitted", iterations: 2, toolCalls: 2, usageAvailable: true },
+      events: [
+        { activity: "Started case review report session" },
+        { activity: "Listed deterministic findings", toolLabel: "list_findings" },
+        { activity: "Submitted a Case Review Brief", toolLabel: "submit_case_review_brief" },
+        { activity: "Session ended: report submitted" },
+        { activity: "Checked 4 facts" }, { activity: "Created 1 review issues" }, { activity: "Generated review report" },
+      ],
     });
+    const [[sessionCount], [stepCount]] = await Promise.all([
+      connection.db.select({ value: count() }).from(agentSessions),
+      connection.db.select({ value: count() }).from(agentSteps),
+    ]);
+    expect([sessionCount?.value, stepCount?.value]).toEqual([1, 2]);
+    const [persistedReport] = await connection.db.select({ sessionId: agentReports.sessionId, originalSubmission: agentReports.originalSubmission }).from(agentReports)
+      .where(eq(agentReports.caseId, accepted.caseId)).limit(1);
+    expect(persistedReport).toMatchObject({ sessionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383aaa", originalSubmission: { schema_version: "1.0.0" } });
     await expect(queries.getFindings(accepted.caseId)).resolves.toHaveLength(5);
     const [transitionCount] = await connection.db.select({ value: count() }).from(caseStateTransitions);
     expect(transitionCount?.value).toBe(2);

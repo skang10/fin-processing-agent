@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANNA_EXAMPLE_FIXTURE_ID, GOLDEN_FIXTURE_IDS, OfflineFixtureUnavailableError, runOfflineFixture } from "./index.js";
+import { ANNA_EXAMPLE_FIXTURE_ID, GOLDEN_FIXTURE_IDS, OfflineFixtureUnavailableError, defaultOfflineHarness, runOfflineFixture } from "./index.js";
 
 describe("offline fixture", () => {
   const context = {
@@ -69,7 +69,11 @@ describe("offline fixture", () => {
       };
       const first = await runOfflineFixture(fixtureId, fixtureContext);
       const second = await runOfflineFixture(fixtureId, fixtureContext);
-      expect(first).toEqual(second);
+      const { session: firstSession, ...firstResult } = first;
+      const { session: secondSession, ...secondResult } = second;
+      expect(firstResult).toEqual(secondResult);
+      const sessionShape = (session: typeof firstSession) => session && { terminalReason: session.terminalReason, steps: session.steps.map((step) => [step.toolName, step.outcome, step.argumentHash]) };
+      expect(sessionShape(firstSession)).toEqual(sessionShape(secondSession));
       expect(first.issues.map((issue) => issue.code)).toEqual(fixtureId === "golden-006-scanned-adaptive-unavailable" ? [] : expectedIssues);
       expect(first.findings.filter((finding) => finding.status !== "passed" && finding.status !== "not_applicable").map((finding) => finding.ruleId)).toEqual(expectedIssues);
       expect(first.findings).toHaveLength(5);
@@ -79,12 +83,10 @@ describe("offline fixture", () => {
   });
 
   it("keeps deterministic results available when the Agent report is rejected", async () => {
-    const policyViolatingHarness = { generate: async () => ({
-      schema_version: "1.0.0", result_revision_id: context.resultRevisionId, report_status: "ready",
-      summary: "Approve the loan.", attention_items: [],
-    }) };
+    const policyViolatingHarness = defaultOfflineHarness("golden-006-scanned-adaptive-unavailable");
     const result = await runOfflineFixture(ANNA_EXAMPLE_FIXTURE_ID, context, policyViolatingHarness);
-    expect(result).toMatchObject({ reportAvailability: "unavailable", reportFailureReason: "policy_rejected" });
+    expect(result).toMatchObject({ reportAvailability: "unavailable", reportFailureReason: "policy_rejected", session: { terminalReason: "report_submitted", toolCalls: 1 } });
+    expect(result.originalSubmission).toMatchObject({ summary: "Approve the loan." });
     expect(result.findings).toHaveLength(5);
     expect(result.recommendedDisposition).toBe("human_review_required");
   });

@@ -2,11 +2,11 @@
 
 Document ID: `AGT`
 
-Version: 2.1.0
+Version: 2.1.1
 
 Status: Approved
 
-Last updated: 2026-09-04
+Last updated: 2026-09-06
 
 ## 1. Purpose
 
@@ -356,6 +356,8 @@ cancelled_by_workflow
 internal_error
 ```
 
+Report-mode sessions additionally use `report_submitted` when the Agent submitted a brief for verification and `report_not_submitted` when the model ended its turn without calling `submit_case_review_brief`. Both are terminal reasons of the session only; report availability is decided by the Report Verifier in section 14.
+
 `AGT-REQ-064` A session must terminate when all bound required gaps have accepted resolution candidates.
 
 `AGT-REQ-065` A session must terminate when a hard budget is exhausted, the deadline passes, workflow cancellation is observed, or no permitted next action remains.
@@ -538,6 +540,7 @@ No unresolved Agent-authority decision blocks review of this document.
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 2.1.1 | 2026-09-06 | Approved | Registered the report-mode terminal reasons `report_submitted` and `report_not_submitted` used by the implemented Pi harness; no authority or budget semantics changed. |
 | 2.1.0 | 2026-09-04 | Approved | Added optional verified applicant-readable requested-change drafts without delivery or decision authority for the V1 review workflow. |
 | 2.0.0 | 2026-09-04 | Approved | Expanded Pi into a per-case pre-screening Agent with a verified Case Review Brief while retaining optional bounded adaptive extraction. |
 | 1.0 | 2026-09-03 | Approved | Approved the bounded Pi harness, Agent-in-the-Loop trigger, context, tool, retry, budget, stopping, persistence, and safety baseline. |

@@ -2,5 +2,5 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "outDir": "dist", "rootDir": "src" },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../contracts" }, { "path": "../core" }]
+  "references": [{ "path": "../agent" }, { "path": "../contracts" }, { "path": "../core" }]
 }

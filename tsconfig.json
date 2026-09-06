@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/agent" },
+    { "path": "packages/agent-pi" },
     { "path": "packages/contracts" },
     { "path": "packages/core" },
     { "path": "packages/document-processing" },

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { reconcileSingleAcceptedCandidate, type CandidateReconciliation, type ExtractionCandidate, type OfflineCaseResult, type OfflineClaimResult, type OfflineDeterministicResult, type OfflineEvidenceResult, type OfflineReportInput, type OfflineReportResult, type PersistedCandidateReconciliation } from "@findoc/core";
-import { FakeCaseReviewAgentHarness, runVerifiedReport, type CaseReviewAgentHarness } from "@findoc/agent";
+import { FAKE_HARNESS_DESCRIPTOR, FakeCaseReviewAgentHarness, buildSyntheticSessionTrace, hashArguments, runVerifiedReport, type CaseReviewAgentHarness } from "@findoc/agent";
 import { evaluateRuleSet, mapDisposition, type MatchResult, type ValidationInput } from "@findoc/validation";
 
 export const ANNA_EXAMPLE_FIXTURE_ID = "anna-example-v1";
@@ -39,11 +39,41 @@ export function buildOfflineFixture(fixtureId: unknown, context: OfflineFixtureC
 }
 
 export async function runOfflineReport(result: OfflineReportInput, harness?: CaseReviewAgentHarness, fixtureId?: unknown): Promise<OfflineReportResult> {
-  const selectedHarness = harness ?? (fixtureId === "golden-006-scanned-adaptive-unavailable"
-    ? { generate: async () => ({ schema_version: "1.0.0", result_revision_id: result.resultRevisionId, report_status: "ready", summary: "Approve the loan.", attention_items: [] }) }
-    : new FakeCaseReviewAgentHarness());
-  const report = await runVerifiedReport(selectedHarness, { resultRevisionId: result.resultRevisionId, findings: result.findings, recommendedDisposition: result.recommendedDisposition, allowedReferences: new Set(result.findings.map((finding) => `finding:${finding.ruleId}`)) });
-  return { reportAvailability: report.verified ? "ready" : "unavailable", ...(report.verified ? {} : { reportFailureReason: report.reason }), summary: report.verified ? report.brief.summary : "Agent report unavailable.", modelLabel: "fake-pi-harness-v1", estimatedCost: "0.0000", issues: report.verified ? report.brief.attention_items.map(issueFromAttentionItem) : [] };
+  const selectedHarness = harness ?? defaultOfflineHarness(fixtureId);
+  const report = await runVerifiedReport(selectedHarness, {
+    resultRevisionId: result.resultRevisionId,
+    findings: result.findings.map((finding) => ({ ruleId: finding.ruleId, ruleVersion: finding.ruleVersion, status: finding.status, reasonCode: finding.reasonCode, references: finding.materialInputRefs })),
+    recommendedDisposition: result.recommendedDisposition,
+    allowedReferences: new Set(result.findings.map((finding) => `finding:${finding.ruleId}`)),
+  });
+  return {
+    reportAvailability: report.verified ? "ready" : "unavailable",
+    ...(report.verified ? {} : { reportFailureReason: report.reason }),
+    summary: report.verified ? report.brief.summary : "Agent report unavailable.",
+    modelLabel: report.trace.modelLabel,
+    ...(report.trace.estimatedCost ? { estimatedCost: report.trace.estimatedCost.amount } : {}),
+    session: report.trace,
+    ...(report.originalSubmission !== undefined ? { originalSubmission: report.originalSubmission } : {}),
+    issues: report.verified ? report.brief.attention_items.map(issueFromAttentionItem) : [],
+  };
+}
+
+/** Default offline harness: the model-free fake, with a policy-violating fixture for the report-unavailable golden case. */
+export function defaultOfflineHarness(fixtureId?: unknown): CaseReviewAgentHarness {
+  if (fixtureId !== "golden-006-scanned-adaptive-unavailable") return new FakeCaseReviewAgentHarness();
+  return {
+    descriptor: FAKE_HARNESS_DESCRIPTOR,
+    generate: async (context) => {
+      const submission = { schema_version: "1.0.0", result_revision_id: context.resultRevisionId, report_status: "ready", summary: "Approve the loan.", attention_items: [] };
+      return {
+        submission,
+        trace: buildSyntheticSessionTrace({
+          descriptor: FAKE_HARNESS_DESCRIPTOR, terminalReason: "report_submitted",
+          steps: [{ toolName: "submit_case_review_brief", toolVersion: "1.0.0", argumentHash: hashArguments(submission), outcome: "succeeded", summary: "Submitted a Case Review Brief" }],
+        }),
+      };
+    },
+  };
 }
 
 export async function runOfflineFixture(fixtureId: unknown, context: OfflineFixtureContext, harness?: CaseReviewAgentHarness): Promise<OfflineCaseResult> {

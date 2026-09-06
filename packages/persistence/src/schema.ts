@@ -386,19 +386,61 @@ export const finalReviews = pgTable("final_reviews", {
   uniqueIndex("final_review_command_uq").on(table.actorId, table.commandId),
 ]);
 
+export const agentSessions = pgTable("agent_sessions", {
+  id: uuid("id").primaryKey(),
+  caseId: uuid("case_id").notNull().references(() => cases.id),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id),
+  resultRevisionId: uuid("result_revision_id").references(() => resultRevisions.id),
+  mode: text("mode").notNull(),
+  harnessId: text("harness_id").notNull(),
+  harnessVersion: text("harness_version").notNull(),
+  modelLabel: text("model_label").notNull(),
+  modelRoute: text("model_route").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  promptHash: text("prompt_hash").notNull(),
+  configurationVersion: text("configuration_version").notNull(),
+  toolRegistryVersion: text("tool_registry_version").notNull(),
+  offeredTools: jsonb("offered_tools").notNull(),
+  budget: jsonb("budget").notNull(),
+  iterations: integer("iterations").notNull(),
+  toolCalls: integer("tool_calls").notNull(),
+  usage: jsonb("usage").notNull(),
+  estimatedCost: text("estimated_cost"),
+  terminalReason: text("terminal_reason").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("agent_session_run_idx").on(table.runId), index("agent_session_case_idx").on(table.caseId)]);
+
+export const agentSteps = pgTable("agent_steps", {
+  id: uuid("id").primaryKey(),
+  sessionId: uuid("session_id").notNull().references(() => agentSessions.id),
+  sequence: integer("sequence").notNull(),
+  toolName: text("tool_name").notNull(),
+  toolVersion: text("tool_version"),
+  argumentHash: text("argument_hash").notNull(),
+  outcome: text("outcome").notNull(),
+  summary: text("summary").notNull(),
+  budgetState: jsonb("budget_state").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+}, (table) => [uniqueIndex("agent_step_sequence_uq").on(table.sessionId, table.sequence)]);
+
 export const agentReports = pgTable("agent_reports", {
   id: uuid("id").primaryKey(),
   caseId: uuid("case_id").notNull().references(() => cases.id),
   runId: uuid("run_id").notNull().references(() => processingRuns.id),
   resultRevisionId: uuid("result_revision_id").references(() => resultRevisions.id),
+  sessionId: uuid("session_id").references(() => agentSessions.id),
   availability: text("availability").notNull(),
   verificationStatus: text("verification_status"),
   verificationFailureReason: text("verification_failure_reason"),
   summary: text("summary").notNull(),
   issueLinks: jsonb("issue_links").notNull(),
   checkedFacts: jsonb("checked_facts").notNull(),
+  originalSubmission: jsonb("original_submission"),
   modelLabel: text("model_label").notNull(),
-  estimatedCost: text("estimated_cost").notNull(),
+  estimatedCost: text("estimated_cost"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("agent_report_run_uq").on(table.runId)]);
 
