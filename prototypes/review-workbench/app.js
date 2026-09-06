@@ -67,6 +67,7 @@ let apiReport = null;
 let activeApplicationPointer = null;
 let caseReadOnly = false;
 const pdfDocuments = new Map();
+const expandedCheckedFacts = new Set();
 let documentRenderSequence = 0;
 let thumbnailRenderSequence = 0;
 const reviewNotes = {};
@@ -1089,10 +1090,21 @@ function renderApiReport(report) {
     return '<button data-report-issue="' + index + '"><b>' + String(index + 1).padStart(2, '0') + '</b><span>' + escapeHtml(issue.title) + '</span><em>→</em></button>';
   }).join('');
   document.querySelector('.checked-facts').innerHTML = report.checked_facts.map(function (fact, index) {
-    const reference = fact.references.find(function (candidate) { return apiEvidenceByReference[candidate]; });
-    return '<button data-checked-reference="' + encodeURIComponent(reference || '') + '" ' + (reference ? '' : 'disabled') + '><i>✓</i><span><strong>' +
-      escapeHtml(fact.statement) + '</strong><small>' + fact.references.length + ' source' + (fact.references.length === 1 ? '' : 's') + ' checked' +
-      '</small><em>Checked fact ' + (index + 1) + '</em></span><b>→</b></button>';
+    const availableReferences = fact.references.filter(function (reference) { return apiEvidenceByReference[reference]; });
+    const expanded = expandedCheckedFacts.has(index);
+    const directReference = availableReferences.length === 1 ? availableReferences[0] : '';
+    const canExpand = fact.references.length > 1;
+    const sourceRows = fact.references.map(function (reference) {
+      const source = evidencePresentation(reference);
+      const available = Boolean(apiEvidenceByReference[reference]);
+      return '<button class="checked-source" data-checked-reference="' + encodeURIComponent(reference) + '" ' + (available ? '' : 'disabled') + '>' +
+        '<span><strong>' + escapeHtml(source.role) + '</strong><small>' + escapeHtml(source.label + ': ' + source.value) + '</small></span><b>' + (available ? '→' : 'Unavailable') + '</b></button>';
+    }).join('');
+    return '<article class="checked-fact ' + (expanded ? 'expanded' : '') + '"><button class="checked-fact-summary" ' +
+      (fact.references.length === 1 && directReference ? 'data-checked-reference="' + encodeURIComponent(directReference) + '"' : canExpand ? 'data-checked-fact-toggle="' + index + '" aria-expanded="' + expanded + '"' : 'disabled') + '>' +
+      '<i>✓</i><span><strong>' + escapeHtml(fact.statement) + '</strong><small>' + fact.references.length + ' source' + (fact.references.length === 1 ? '' : 's') + ' checked</small></span>' +
+      '<b>' + (fact.references.length === 1 && directReference ? '→' : canExpand ? expanded ? '⌃' : '⌄' : 'Unavailable') + '</b></button>' +
+      (canExpand && expanded ? '<div class="checked-sources">' + sourceRows + '</div>' : '') + '</article>';
   }).join('');
   wireReportNavigation();
 }
@@ -1167,6 +1179,14 @@ function wireReportNavigation() {
       openEvidenceReference(decodeURIComponent(button.dataset.checkedReference));
     });
   });
+  document.querySelectorAll('[data-checked-fact-toggle]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      const index = Number(button.dataset.checkedFactToggle);
+      if (expandedCheckedFacts.has(index)) expandedCheckedFacts.delete(index);
+      else expandedCheckedFacts.add(index);
+      renderApiReport(apiReport);
+    });
+  });
 }
 
 async function loadCaseFromApi() {
@@ -1178,6 +1198,7 @@ async function loadCaseFromApi() {
     const report = bundle.report;
     apiCaseRecord = caseRecord;
     apiReport = report;
+    expandedCheckedFacts.clear();
     caseReadOnly = Boolean(caseRecord.final_review_action);
     const findings = bundle.findings;
     const issueRecords = bundle.issues;
