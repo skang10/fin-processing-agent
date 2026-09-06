@@ -13,7 +13,7 @@ import {
 } from "./index.js";
 
 const budget = {
-  maxIterations: 14, maxToolCalls: 18, maxModelCalls: 14, maxInputTokens: 60_000, maxOutputTokens: 8_000,
+  maxAttempts: 3, maxIterations: 14, maxToolCalls: 18, maxModelCalls: 14, maxInputTokens: 60_000, maxOutputTokens: 8_000,
   maxWallClockMs: 60_000, maxEstimatedCostUsd: 0.25, maxVlmCalls: 2, maxOcrPages: 3, maxConsecutiveNoProgressSteps: 2,
 };
 

@@ -64,6 +64,8 @@ export type AgentStepOutcome =
   | "budget_rejected" | "duplicate_resolved" | "failed";
 
 export interface AgentBudgetEnvelope {
+  /** Maximum linked execution attempts before durable workflow policy stops re-entry (AGT-REQ-139). */
+  readonly maxAttempts: number;
   readonly maxIterations: number;
   readonly maxToolCalls: number;
   readonly maxModelCalls: number;
@@ -267,7 +269,7 @@ export type AgentSessionCompatibility =
   | { readonly compatible: false; readonly reasonCodes: readonly string[] };
 
 const BUDGET_KEYS: readonly (keyof AgentBudgetEnvelope)[] = Object.freeze([
-  "maxIterations", "maxToolCalls", "maxModelCalls", "maxInputTokens", "maxOutputTokens",
+  "maxAttempts", "maxIterations", "maxToolCalls", "maxModelCalls", "maxInputTokens", "maxOutputTokens",
   "maxWallClockMs", "maxEstimatedCostUsd", "maxVlmCalls", "maxOcrPages", "maxConsecutiveNoProgressSteps",
 ]);
 

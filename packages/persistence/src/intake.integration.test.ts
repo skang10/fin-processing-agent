@@ -209,7 +209,7 @@ describe("PostgresCaseCommandService", () => {
         harnessId: "pi-agent-led-case-review-harness", harnessVersion: "pi-coding-agent@0.85.1", modelLabel: "findoc-fake/case-review-script-v1", modelRoute: "fake" as const,
         promptVersion: "case-review-prompt-2.0.0", promptHash: "abc", configurationVersion: "pi-harness-1.0.0", toolRegistryVersion: "case-review-tools-2.0.0",
         offeredTools: ["get_extraction_gaps", "inspect_page", "request_reconciliation", "request_validation", "get_current_result", "submit_case_review_brief"],
-        budget: { maxIterations: 6, maxToolCalls: 8, maxModelCalls: 6, maxInputTokens: 60000, maxOutputTokens: 8000, maxWallClockMs: 60000, maxEstimatedCostUsd: 0.25, maxVlmCalls: 2, maxOcrPages: 3, maxConsecutiveNoProgressSteps: 2 },
+        budget: { maxAttempts: 3, maxIterations: 6, maxToolCalls: 8, maxModelCalls: 6, maxInputTokens: 60000, maxOutputTokens: 8000, maxWallClockMs: 60000, maxEstimatedCostUsd: 0.25, maxVlmCalls: 2, maxOcrPages: 3, maxConsecutiveNoProgressSteps: 2 },
         iterations: 2, toolCalls: 2, usage: { available: true, modelCalls: 2, inputTokens: 400, outputTokens: 80 },
         estimatedCost: { amount: "0.0000", currency: "EUR" as const }, terminalReason: "report_submitted" as const,
         steps: [

@@ -52,11 +52,16 @@ export interface CaseReviewProcessingPorts extends RecoveryToolPorts {
 
 export interface AgentLedCaseReviewContext extends AdaptiveRecoveryContext {
   readonly fixtureLabel?: string;
+  /** Required when a durable lifecycle owns the session identity. */
+  readonly caseId?: string;
 }
 
 export interface AgentLedCaseReviewOutcome extends CaseReviewSessionOutcome {
   readonly candidates: readonly SubmittedExtractionCandidate[];
   readonly result?: CaseReviewContext;
+  /** True when this outcome came from a linked recovery attempt rather than the first one. */
+  readonly resumed: boolean;
+  readonly attemptNumber: number;
 }
 
 export interface AgentLedCaseReviewHarness {
@@ -83,8 +88,9 @@ export class AgentReportExecutionError extends Error {
 }
 
 /** Configuration-controlled report-session budget envelope (AGT-REQ-057). */
-export const AGENT_BUDGET_CONFIGURATION_VERSION = "agent-budget-1.0.0";
+export const AGENT_BUDGET_CONFIGURATION_VERSION = "agent-budget-1.1.0";
 export const DEFAULT_AGENT_BUDGET: AgentBudgetEnvelope = Object.freeze({
+  maxAttempts: 3,
   maxIterations: 14,
   maxToolCalls: 18,
   maxModelCalls: 14,

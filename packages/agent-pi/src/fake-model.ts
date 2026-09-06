@@ -18,7 +18,11 @@ export type ScriptedTurn =
 /** A script maps the turn number and the visible conversation to the next scripted assistant message. */
 export type FakeModelScript = (turn: number, context: Context) => ScriptedTurn;
 
-/** Read the latest successful tool result of one tool from the conversation, exactly as the model would see it. */
+/**
+ * Read the latest successful result of one tool from the visible conversation, falling back to the
+ * committed results a resumed attempt was given. The script therefore chooses its next action from
+ * the persisted view and never assumes that earlier Pi messages survived (AGT-REQ-119).
+ */
 export function readToolResult<T>(context: Context, toolName: string): T | undefined {
   for (let index = context.messages.length - 1; index >= 0; index -= 1) {
     const message = context.messages[index];
@@ -27,7 +31,24 @@ export function readToolResult<T>(context: Context, toolName: string): T | undef
     if (!text || text.type !== "text") return undefined;
     try { return JSON.parse(text.text) as T; } catch { return undefined; }
   }
-  return undefined;
+  return readResumedProgress(context)[toolName] as T | undefined;
+}
+
+/** Parse the trusted resumed-progress block the control plane adds to a recovery attempt. */
+export function readResumedProgress(context: Context): Readonly<Record<string, unknown>> {
+  for (const message of context.messages) {
+    if (message.role !== "user") continue;
+    const text = typeof message.content === "string"
+      ? message.content
+      : message.content.map((part) => (part.type === "text" ? part.text : "")).join("");
+    const block = /<resumed_progress trust="trusted_control_metadata">\n([\s\S]*?)\n<\/resumed_progress>/.exec(text);
+    if (!block?.[1]) continue;
+    try {
+      const parsed = JSON.parse(block[1]) as { committed_tool_results?: Record<string, unknown> };
+      return parsed.committed_tool_results ?? {};
+    } catch { return {}; }
+  }
+  return {};
 }
 
 function estimateTokens(text: string): number {

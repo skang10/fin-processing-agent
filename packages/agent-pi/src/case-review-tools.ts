@@ -59,6 +59,8 @@ const requestReconciliationTool: Tool = {
     state.reconciliationReference = result.reference;
     return { summary: `Sent ${state.candidates.length} Agent-proposed ${state.candidates.length === 1 ? "value" : "values"} to deterministic reconciliation`, output: { reference: result.reference } };
   },
+  restore: (output, _scope, state) => { state.reconciliationReference = (output as { reference: string }).reference; },
+  producedReferences: (output) => [{ kind: "reconciliation", id: (output as { reference: string }).reference }],
 };
 
 const requestValidationTool: Tool = {
@@ -70,9 +72,40 @@ const requestValidationTool: Tool = {
   execute: async (_args, scope, state) => {
     state.result = await scope.ports.requestValidation();
     const attentionCount = state.result.findings.filter((finding) => finding.status !== "passed" && finding.status !== "not_applicable").length;
-    return { summary: `Ran registered validation checks; ${attentionCount} ${attentionCount === 1 ? "finding requires" : "findings require"} attention`, output: { result_revision_id: state.result.resultRevisionId } };
+    return {
+      summary: `Ran registered validation checks; ${attentionCount} ${attentionCount === 1 ? "finding requires" : "findings require"} attention`,
+      output: projectResult(state.result),
+    };
   },
+  restore: (output, _scope, state) => { state.result = restoreResult(output); },
+  producedReferences: (output) => [{ kind: "result_revision", id: (output as { result_revision_id: string }).result_revision_id }],
 };
+
+function projectResult(result: CaseReviewContext) {
+  return {
+    result_revision_id: result.resultRevisionId,
+    recommended_disposition: result.recommendedDisposition,
+    findings: result.findings.map((finding) => ({
+      rule_id: finding.ruleId, ...(finding.ruleVersion ? { rule_version: finding.ruleVersion } : {}),
+      status: finding.status, reason_code: finding.reasonCode, reference_key: `finding:${finding.ruleId}`,
+      references: [...(finding.references ?? [])],
+    })),
+  };
+}
+
+/** Rebuild the committed deterministic projection after durable re-entry; it never re-runs a rule. */
+function restoreResult(output: unknown): CaseReviewContext {
+  const committed = output as ReturnType<typeof projectResult>;
+  return {
+    resultRevisionId: committed.result_revision_id,
+    recommendedDisposition: committed.recommended_disposition,
+    findings: committed.findings.map((finding) => ({
+      ruleId: finding.rule_id, ...(finding.rule_version ? { ruleVersion: finding.rule_version } : {}),
+      status: finding.status, reasonCode: finding.reason_code, references: finding.references,
+    })),
+    allowedReferences: new Set(committed.findings.map((finding) => finding.reference_key)),
+  };
+}
 
 const getCurrentResultTool: Tool = {
   name: "get_current_result", version: "1.0.0", label: "Get current result", costClass: "read",
@@ -82,18 +115,7 @@ const getCurrentResultTool: Tool = {
   authorize: (_args, _scope, state) => state.result ? undefined : "validation_required",
   execute: async (_args, _scope, state) => {
     if (!state.result) throw new Error("Validated result is unavailable");
-    return {
-      summary: "Reviewed deterministic findings and document-processing disposition",
-      output: {
-        result_revision_id: state.result.resultRevisionId,
-        recommended_disposition: state.result.recommendedDisposition,
-        findings: state.result.findings.map((finding) => ({
-          rule_id: finding.ruleId, rule_version: finding.ruleVersion, status: finding.status,
-          reason_code: finding.reasonCode, reference_key: `finding:${finding.ruleId}`,
-          references: [...(finding.references ?? [])],
-        })),
-      },
-    };
+    return { summary: "Reviewed deterministic findings and document-processing disposition", output: projectResult(state.result) };
   },
 };
 
@@ -117,7 +139,12 @@ const submitBriefTool: Tool = {
       : state.submission !== undefined ? "report_already_submitted" : undefined,
   execute: async (args, _scope, state) => {
     state.submission = (args as SubmitBriefArguments).brief;
-    return { summary: "Submitted a Case Review Brief", output: { accepted: true }, terminate: true };
+    return { summary: "Submitted a Case Review Brief", output: { accepted: true, brief: state.submission }, terminate: true };
+  },
+  restore: (output, _scope, state) => { state.submission = (output as { brief: unknown }).brief; },
+  producedReferences: (output) => {
+    const brief = (output as { brief?: { result_revision_id?: string } }).brief;
+    return brief?.result_revision_id ? [{ kind: "report_submission", id: brief.result_revision_id }] : [];
   },
 };
 

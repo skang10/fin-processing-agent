@@ -1305,7 +1305,9 @@ type Transaction = Parameters<Parameters<ReturnType<typeof drizzle>["transaction
 async function insertAgentSession(tx: Transaction, caseId: string, runId: string, resultRevisionId: string | null, session: AgentSessionTrace): Promise<void> {
   const [existing] = await tx.select({ id: agentSessions.id }).from(agentSessions).where(eq(agentSessions.id, session.sessionId)).limit(1);
   if (existing) {
-    await tx.update(agentSessions).set({ resultRevisionId }).where(eq(agentSessions.id, session.sessionId));
+    await tx.update(agentSessions)
+      .set({ resultRevisionId, estimatedCost: session.estimatedCost?.amount ?? null, boundGapIds: session.boundGapIds ?? null })
+      .where(eq(agentSessions.id, session.sessionId));
     return;
   }
   await tx.insert(agentSessions).values({

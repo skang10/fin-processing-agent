@@ -7,7 +7,7 @@ import { DocumentSandboxClient, classifySyntheticDemoPages, groupLogicalDocument
 import { evaluateCaseReviewEligibility, type AgentLedCaseReviewHarness, type CaseReviewContext } from "@findoc/agent";
 import { CASE_REVIEW_TOOL_NAMES, PiAgentLedCaseReviewHarness, policyViolationCaseReviewScript, standardCaseReviewScript } from "@findoc/agent-pi";
 import { buildAgentReviewContext, buildOfflineExtraction, buildOfflineFixture, createOfflineRecoveryPorts, OfflineFixtureUnavailableError, runOfflineReport } from "@findoc/offline";
-import { PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
+import { PostgresAgentSessionLifecycle, PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
 import { createMinioObjectStore, readObjectBytes, storeNativeTextArtifact, storeOcrArtifact, storePageRenderArtifact } from "@findoc/storage";
 import { CASE_PROCESSING_QUEUE, OutboxRelay } from "./outbox.js";
 
@@ -29,7 +29,6 @@ if (agentModel !== "fake") {
 } else {
   process.env["PI_OFFLINE"] ??= "1";
 }
-const piHarnesses = new Map<string, PiAgentLedCaseReviewHarness>();
 
 function liveModelRoute(): { route: "live"; provider: string; modelId: string; apiKey: string } | undefined {
   if (agentModel === "fake") return undefined;
@@ -39,23 +38,30 @@ function liveModelRoute(): { route: "live"; provider: string; modelId: string; a
 
 /** Select the bounded Case Review Agent harness for one case (ADR-001). Only the demo fixture that must exercise report rejection gets the policy-violation script. */
 function selectAgentHarness(fixtureId: unknown): AgentLedCaseReviewHarness {
+  const lifecycle = agentLifecycle ?? (agentLifecycle = new PostgresAgentSessionLifecycle(db));
   const live = liveModelRoute();
   if (live) {
     const existing = piHarnesses.get("live");
     if (existing) return existing;
-    const harness = new PiAgentLedCaseReviewHarness({ model: live });
+    const harness = new PiAgentLedCaseReviewHarness({ model: live, lifecycle });
     piHarnesses.set("live", harness);
     return harness;
   }
   const scriptLabel = fixtureId === "golden-006-scanned-adaptive-unavailable" ? "policy_violation" : "standard";
   const existing = piHarnesses.get(scriptLabel);
   if (existing) return existing;
-  const harness = new PiAgentLedCaseReviewHarness({ model: { route: "fake", script: scriptLabel === "policy_violation" ? policyViolationCaseReviewScript : standardCaseReviewScript, scriptLabel } });
+  const harness = new PiAgentLedCaseReviewHarness({
+    model: { route: "fake", script: scriptLabel === "policy_violation" ? policyViolationCaseReviewScript : standardCaseReviewScript, scriptLabel },
+    lifecycle,
+  });
   piHarnesses.set(scriptLabel, harness);
   return harness;
 }
 
 const { client, db } = createDatabase(databaseUrl);
+
+const piHarnesses = new Map<string, PiAgentLedCaseReviewHarness>();
+let agentLifecycle: PostgresAgentSessionLifecycle | undefined;
 const objectStore = createMinioObjectStore({
   endpoint: minioEndpoint, accessKey: minioAccessKey, secretKey: minioSecretKey,
   bucket: process.env["MINIO_BUCKET"] ?? "findoc-artifacts",
@@ -173,7 +179,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
     let deterministicPersisted = false;
     let persistedResult: Awaited<ReturnType<typeof coordinator.loadOfflineReportInput>> | undefined;
     let outcomeCandidates: readonly import("@findoc/agent").SubmittedExtractionCandidate[] = [];
-    const outcome = await selectAgentHarness(applicationData["demo_fixture_id"]).review(reviewContext, {
+    const outcome = await selectAgentHarness(applicationData["demo_fixture_id"]).review({ ...reviewContext, caseId: job.data.case_id }, {
       ...documentPorts,
       requestReconciliation: async (candidates) => {
         outcomeCandidates = candidates;
@@ -203,6 +209,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
       harness_id: report.session?.harnessId, model_label: report.modelLabel, terminal_reason: report.session?.terminalReason,
       iterations: report.session?.iterations, tool_calls: report.session?.toolCalls, report_availability: report.reportAvailability,
       report_failure_reason: report.reportFailureReason,
+      attempt_number: outcome.attemptNumber, resumed: outcome.resumed,
     }, "agent-led case review session completed");
   } catch (error) {
     if (!(error instanceof OfflineFixtureUnavailableError)) throw error;
