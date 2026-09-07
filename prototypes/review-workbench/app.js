@@ -66,6 +66,7 @@ let apiEvidenceByReference = {};
 let apiCaseRecord = null;
 let apiReport = null;
 let activeApplicationPointer = null;
+let activeEvidenceRegion = null;
 let caseReadOnly = false;
 const pdfDocuments = new Map();
 const expandedCheckedFacts = new Set();
@@ -278,7 +279,7 @@ async function renderDocumentPage(documentRecord, pageNumber, sequence) {
   const paper = document.querySelector('#paper');
   try {
     if (documentRecord.media_type !== 'application/pdf') {
-      if (sequence === documentRenderSequence) paper.innerHTML = '<img class="source-image" src="' + escapeHtml(documentRecord.content_url) + '" alt="Submitted document">';
+      if (sequence === documentRenderSequence) paper.innerHTML = '<div class="document-page-layer"><img class="source-image" src="' + escapeHtml(documentRecord.content_url) + '" alt="Submitted document">' + evidenceRegionMarkup(documentRecord, pageNumber) + '</div>';
       return;
     }
     const pdf = await loadPdf(documentRecord);
@@ -295,10 +296,38 @@ async function renderDocumentPage(documentRecord, pageNumber, sequence) {
     if (!context) throw new Error('Canvas is unavailable');
     await page.render({ canvasContext: context, viewport, transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0] }).promise;
     if (sequence !== documentRenderSequence) return;
-    paper.replaceChildren(canvas);
+    const layer = document.createElement('div');
+    layer.className = 'document-page-layer';
+    layer.append(canvas);
+    const overlay = evidenceRegionElement(documentRecord, pageNumber);
+    if (overlay) layer.append(overlay);
+    paper.replaceChildren(layer);
   } catch {
     if (sequence === documentRenderSequence) paper.innerHTML = '<div class="document-loading error">Document preview unavailable</div>';
   }
+}
+
+function selectedRegion(documentRecord, pageNumber) {
+  if (!activeEvidenceRegion || activeEvidenceRegion.evidence_type !== 'page_region') return null;
+  if (activeEvidenceRegion.document_version_id !== documentRecord.document_id || activeEvidenceRegion.page_number !== pageNumber) return null;
+  return activeEvidenceRegion.normalized_region;
+}
+
+function evidenceRegionElement(documentRecord, pageNumber) {
+  const region = selectedRegion(documentRecord, pageNumber);
+  if (!region) return null;
+  const overlay = document.createElement('div');
+  overlay.className = 'evidence-region-overlay';
+  overlay.setAttribute('aria-label', 'Highlighted evidence region');
+  overlay.style.left = (region.x * 100) + '%'; overlay.style.top = (region.y * 100) + '%';
+  overlay.style.width = (region.width * 100) + '%'; overlay.style.height = (region.height * 100) + '%';
+  return overlay;
+}
+
+function evidenceRegionMarkup(documentRecord, pageNumber) {
+  const region = selectedRegion(documentRecord, pageNumber);
+  if (!region) return '';
+  return '<div class="evidence-region-overlay" aria-label="Highlighted evidence region" style="left:' + (region.x * 100) + '%;top:' + (region.y * 100) + '%;width:' + (region.width * 100) + '%;height:' + (region.height * 100) + '%"></div>';
 }
 
 function applicationData(activeIssue) {
@@ -645,6 +674,7 @@ function openEvidenceReference(reference) {
     sourceView = 'application';
     sourceOverride = null;
     activeApplicationPointer = evidence.json_pointer;
+    activeEvidenceRegion = null;
     renderSource(currentIssue());
     toast('Application field selected');
     return;
@@ -653,6 +683,7 @@ function openEvidenceReference(reference) {
   const pageNumber = evidence.page_number;
   sourceView = 'document';
   activeApplicationPointer = null;
+  activeEvidenceRegion = evidence.evidence_type === 'page_region' ? evidence : null;
   sourceOverride = {
     name: documentRecord ? documentRecord.submitted_filename : 'Submitted document',
     page: 'Page ' + pageNumber + (documentRecord ? ' of ' + documentRecord.page_count : ''),

@@ -176,6 +176,20 @@
       "when": 1788795134959,
       "tag": "0024_acoustic_steel_serpent",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788801961303,
+      "tag": "0025_pale_makkari",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788802051466,
+      "tag": "0026_medical_professor_monster",
+      "breakpoints": true
     }
   ]
 }

@@ -29,7 +29,7 @@ function context(overrides: Partial<CaseAssemblyContext> = {}): CaseAssemblyCont
     },
     pages: Array.from({ length: pageCount }, (_, index) => ({
       documentVersionId: DOCUMENT, pageNumber: index + 1, needsOcr: false,
-      nativeCharacterCount: 500, ocrAvailable: false, renderAvailable: true,
+      nativeCharacterCount: 500, ocrAvailable: false, renderAvailable: true, renderWidth: 1200, renderHeight: 1600,
     })),
     logicalDocuments,
     ...overrides,
@@ -142,6 +142,21 @@ describe("multi-page logical documents", () => {
 });
 
 describe("deterministic case assembly", () => {
+  it("preserves a precise Agent source region as page-region evidence", () => {
+    const assembly = context();
+    const plan = buildExtractionPlan(assembly);
+    const submitted = candidatesFor(assembly, CLEAN_VALUES).map((candidate) => candidate.fieldSchemaId === "income.monthly_net"
+      ? { ...candidate, region: { x: 0.2, y: 0.6, width: 0.25, height: 0.04 } }
+      : candidate);
+    const result = assembleCaseResult(assembly, plan, submitted);
+    expect(result.evidence).toContainEqual(expect.objectContaining({
+      evidenceType: "page_region", pageWidth: 1200, pageHeight: 1600, pageRotation: 0,
+      normalizedRegion: { x: 0.2, y: 0.6, width: 0.25, height: 0.04 },
+      originalRegion: { left: 240, top: 960, width: 300, height: 64 },
+      coordinateUnit: "render_pixel", coordinateOrigin: "top_left",
+    }));
+  });
+
   it("turns Agent candidates into evidence, reconciliations, claims, and passing findings", () => {
     const assembly = context();
     const plan = buildExtractionPlan(assembly);

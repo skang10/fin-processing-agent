@@ -639,6 +639,9 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       jsonPointer: evidenceRecords.jsonPointer,
       documentVersionId: evidenceRecords.documentVersionId,
       pageNumber: evidenceRecords.pageNumber,
+      pageWidth: evidenceRecords.pageWidth, pageHeight: evidenceRecords.pageHeight,
+      pageRotation: evidenceRecords.pageRotation, normalizedRegion: evidenceRecords.normalizedRegion,
+      originalRegion: evidenceRecords.originalRegion, coordinateUnit: evidenceRecords.coordinateUnit, coordinateOrigin: evidenceRecords.coordinateOrigin,
       extractionMethod: evidenceRecords.extractionMethod,
       processorVersion: evidenceRecords.processorVersion,
     }).from(evidenceRecords)
@@ -659,6 +662,15 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
         extractionMethod: record.extractionMethod, processorVersion: record.processorVersion,
       };
     }
+    if (record.evidenceType === "page_region" && record.documentVersionId && record.pageNumber !== null
+      && record.pageWidth && record.pageHeight && record.pageRotation !== null && validNormalizedRegion(record.normalizedRegion)
+      && validOriginalRegion(record.originalRegion) && record.coordinateUnit === "render_pixel" && record.coordinateOrigin === "top_left") {
+      return { evidenceId: record.evidenceId, evidenceType: "page_region", documentVersionId: record.documentVersionId,
+        pageNumber: record.pageNumber, pageWidth: record.pageWidth, pageHeight: record.pageHeight, pageRotation: record.pageRotation,
+        normalizedRegion: record.normalizedRegion, originalRegion: record.originalRegion,
+        coordinateUnit: "render_pixel", coordinateOrigin: "top_left",
+        extractionMethod: record.extractionMethod, processorVersion: record.processorVersion };
+    }
     throw new Error("Persisted evidence subtype is invalid");
   }
 
@@ -669,6 +681,9 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       jsonPointer: evidenceRecords.jsonPointer,
       documentVersionId: evidenceRecords.documentVersionId,
       pageNumber: evidenceRecords.pageNumber,
+      pageWidth: evidenceRecords.pageWidth, pageHeight: evidenceRecords.pageHeight,
+      pageRotation: evidenceRecords.pageRotation, normalizedRegion: evidenceRecords.normalizedRegion,
+      originalRegion: evidenceRecords.originalRegion, coordinateUnit: evidenceRecords.coordinateUnit, coordinateOrigin: evidenceRecords.coordinateOrigin,
       extractionMethod: evidenceRecords.extractionMethod,
       processorVersion: evidenceRecords.processorVersion,
     }).from(evidenceRecords)
@@ -683,6 +698,14 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       if (record.evidenceType === "page_level" && record.documentVersionId && record.pageNumber !== null) return [{
         evidenceId: record.evidenceId, evidenceType: "page_level", documentVersionId: record.documentVersionId,
         pageNumber: record.pageNumber, extractionMethod: record.extractionMethod, processorVersion: record.processorVersion,
+      }];
+      if (record.evidenceType === "page_region" && record.documentVersionId && record.pageNumber !== null
+        && record.pageWidth && record.pageHeight && record.pageRotation !== null && validNormalizedRegion(record.normalizedRegion)
+        && validOriginalRegion(record.originalRegion) && record.coordinateUnit === "render_pixel" && record.coordinateOrigin === "top_left") return [{
+        evidenceId: record.evidenceId, evidenceType: "page_region", documentVersionId: record.documentVersionId,
+        pageNumber: record.pageNumber, pageWidth: record.pageWidth, pageHeight: record.pageHeight, pageRotation: record.pageRotation,
+        normalizedRegion: record.normalizedRegion, extractionMethod: record.extractionMethod, processorVersion: record.processorVersion,
+        originalRegion: record.originalRegion, coordinateUnit: "render_pixel", coordinateOrigin: "top_left",
       }];
       return [];
     });
@@ -1209,6 +1232,9 @@ export class PostgresWorkflowCoordinator {
         id: item.evidenceId, runId, evidenceType: item.evidenceType,
         applicationSnapshotId: item.applicationSnapshotId, jsonPointer: item.jsonPointer,
         documentVersionId: item.documentVersionId, pageNumber: item.pageNumber,
+        pageWidth: item.pageWidth, pageHeight: item.pageHeight, pageRotation: item.pageRotation,
+        normalizedRegion: item.normalizedRegion,
+        originalRegion: item.originalRegion, coordinateUnit: item.coordinateUnit, coordinateOrigin: item.coordinateOrigin,
         extractionMethod: item.extractionMethod, processorVersion: item.processorVersion,
       })));
       if (result.candidates.length) {
@@ -1389,6 +1415,25 @@ export class PostgresWorkflowCoordinator {
   }
 }
 
+function validNormalizedRegion(value: unknown): value is { x: number; y: number; width: number; height: number } {
+  if (!value || typeof value !== "object") return false;
+  const region = value as Record<string, unknown>;
+  const numbers = [region["x"], region["y"], region["width"], region["height"]];
+  return numbers.every((item) => typeof item === "number" && Number.isFinite(item))
+    && (region["x"] as number) >= 0 && (region["y"] as number) >= 0
+    && (region["width"] as number) > 0 && (region["height"] as number) > 0
+    && (region["x"] as number) + (region["width"] as number) <= 1
+    && (region["y"] as number) + (region["height"] as number) <= 1;
+}
+
+function validOriginalRegion(value: unknown): value is { left: number; top: number; width: number; height: number } {
+  if (!value || typeof value !== "object") return false;
+  const region = value as Record<string, unknown>;
+  return [region["left"], region["top"], region["width"], region["height"]]
+    .every((item) => typeof item === "number" && Number.isFinite(item) && item >= 0)
+    && (region["width"] as number) > 0 && (region["height"] as number) > 0;
+}
+
 function validateOfflineProvenance(
   result: OfflineDeterministicResult,
   applicationSnapshotId: string,
@@ -1402,10 +1447,14 @@ function validateOfflineProvenance(
   for (const evidence of result.evidence) {
     const structured = evidence.evidenceType === "structured_input" && evidence.applicationSnapshotId && evidence.jsonPointer && !evidence.documentVersionId && evidence.pageNumber === undefined;
     const page = evidence.evidenceType === "page_level" && evidence.documentVersionId && evidence.pageNumber !== undefined && !evidence.applicationSnapshotId && !evidence.jsonPointer;
-    if (!structured && !page) throw new Error("Offline evidence subtype is invalid");
+    const region = evidence.evidenceType === "page_region" && evidence.documentVersionId && evidence.pageNumber !== undefined
+      && evidence.pageWidth && evidence.pageHeight && evidence.pageRotation !== undefined && validNormalizedRegion(evidence.normalizedRegion)
+      && validOriginalRegion(evidence.originalRegion) && evidence.coordinateUnit === "render_pixel" && evidence.coordinateOrigin === "top_left"
+      && !evidence.applicationSnapshotId && !evidence.jsonPointer;
+    if (!structured && !page && !region) throw new Error("Offline evidence subtype is invalid");
     if (structured && evidence.applicationSnapshotId !== applicationSnapshotId) throw new Error("Offline structured evidence is outside the run input");
     if (structured && !jsonPointerExists(applicationContent, evidence.jsonPointer!)) throw new Error("Offline structured evidence pointer is invalid");
-    if (page && !allowedPages.has(`${evidence.documentVersionId}:${evidence.pageNumber}`)) throw new Error("Offline page evidence is outside the run input");
+    if ((page || region) && !allowedPages.has(`${evidence.documentVersionId}:${evidence.pageNumber}`)) throw new Error("Offline page evidence is outside the run input");
   }
   if (result.claims.some((claim) => claim.evidenceIds.length === 0 || claim.evidenceIds.some((id) => !evidenceIds.has(id)))) throw new Error("Offline claim evidence is invalid");
   const candidateIds = new Set(result.candidates.map((item) => item.candidateId));

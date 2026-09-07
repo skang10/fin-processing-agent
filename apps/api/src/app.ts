@@ -254,6 +254,14 @@ export function buildApp(
         processor_version: evidence.processorVersion,
       };
     }
+    if (evidence.evidenceType === "page_region") return {
+      evidence_id: evidence.evidenceId, evidence_type: evidence.evidenceType,
+      document_version_id: evidence.documentVersionId, page_number: evidence.pageNumber,
+      page_width: evidence.pageWidth, page_height: evidence.pageHeight, page_rotation: evidence.pageRotation,
+      normalized_region: evidence.normalizedRegion,
+      original_region: evidence.originalRegion, coordinate_unit: evidence.coordinateUnit, coordinate_origin: evidence.coordinateOrigin,
+      extraction_method: evidence.extractionMethod, processor_version: evidence.processorVersion,
+    };
     return {
       evidence_id: evidence.evidenceId, evidence_type: evidence.evidenceType,
       document_version_id: evidence.documentVersionId, page_number: evidence.pageNumber,
@@ -268,6 +276,12 @@ export function buildApp(
     const evidence = await caseQueries.listEvidence(caseId);
     return { evidence: evidence.map((item) => item.evidenceType === "structured_input" ? {
       evidence_id: item.evidenceId, evidence_type: item.evidenceType, json_pointer: item.jsonPointer,
+      extraction_method: item.extractionMethod, processor_version: item.processorVersion,
+    } : item.evidenceType === "page_region" ? {
+      evidence_id: item.evidenceId, evidence_type: item.evidenceType, document_version_id: item.documentVersionId,
+      page_number: item.pageNumber, page_width: item.pageWidth, page_height: item.pageHeight,
+      page_rotation: item.pageRotation, normalized_region: item.normalizedRegion,
+      original_region: item.originalRegion, coordinate_unit: item.coordinateUnit, coordinate_origin: item.coordinateOrigin,
       extraction_method: item.extractionMethod, processor_version: item.processorVersion,
     } : {
       evidence_id: item.evidenceId, evidence_type: item.evidenceType, document_version_id: item.documentVersionId,

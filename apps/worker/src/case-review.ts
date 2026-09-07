@@ -67,6 +67,7 @@ export async function processAgentLedCaseReview(
       pages: inventory.pages.map((page) => ({
         documentVersionId: page.documentVersionId, pageNumber: page.pageNumber, needsOcr: page.needsOcr,
         nativeCharacterCount: page.nativeCharacterCount, ocrAvailable: Boolean(page.ocr), renderAvailable: Boolean(page.render),
+        ...(page.render ? { renderWidth: page.render.width, renderHeight: page.render.height } : {}),
       })),
       logicalDocuments: inventory.logicalDocuments,
     };

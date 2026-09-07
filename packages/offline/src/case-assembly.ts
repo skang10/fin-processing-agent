@@ -58,6 +58,8 @@ export interface CasePageView {
   readonly nativeCharacterCount: number;
   readonly ocrAvailable: boolean;
   readonly renderAvailable: boolean;
+  readonly renderWidth?: number;
+  readonly renderHeight?: number;
 }
 
 export interface CaseLogicalDocumentView {
@@ -223,7 +225,15 @@ export function assembleCaseResult(
     if (normalizedValue === undefined) continue;
     const key = requirement.requirementId;
     const evidenceId = id("evidence", key);
-    evidence.push({
+    const sourcePage = context.pages.find((page) => page.documentVersionId === proposal.page.documentVersionId && page.pageNumber === proposal.page.pageNumber);
+    evidence.push(proposal.region && !isFullPageRegion(proposal.region) && sourcePage?.renderWidth && sourcePage.renderHeight ? {
+      evidenceId, evidenceType: "page_region", documentVersionId: proposal.page.documentVersionId, pageNumber: proposal.page.pageNumber,
+      pageWidth: sourcePage.renderWidth, pageHeight: sourcePage.renderHeight, pageRotation: 0, normalizedRegion: proposal.region,
+      originalRegion: { left: proposal.region.x * sourcePage.renderWidth, top: proposal.region.y * sourcePage.renderHeight,
+        width: proposal.region.width * sourcePage.renderWidth, height: proposal.region.height * sourcePage.renderHeight },
+      coordinateUnit: "render_pixel", coordinateOrigin: "top_left",
+      extractionMethod: proposal.extractionMethod, processorVersion: proposal.processorVersion,
+    } : {
       evidenceId, evidenceType: "page_level", documentVersionId: proposal.page.documentVersionId, pageNumber: proposal.page.pageNumber,
       extractionMethod: proposal.extractionMethod, processorVersion: proposal.processorVersion,
     });
@@ -250,6 +260,10 @@ export function assembleCaseResult(
     gaps: plan.gaps, gapResolutions: resolutions,
     ...(eligibility ? { eligibility } : {}),
   };
+}
+
+function isFullPageRegion(region: { x: number; y: number; width: number; height: number }): boolean {
+  return region.x === 0 && region.y === 0 && region.width === 1 && region.height === 1;
 }
 
 interface ValidationSources {

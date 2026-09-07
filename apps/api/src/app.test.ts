@@ -261,6 +261,24 @@ describe("case intake", () => {
     await app.close();
   });
 
+  it("returns source-page geometry for precise page-region evidence", async () => {
+    caseQueries.getEvidence.mockResolvedValueOnce({
+      evidenceId: "4c816f67-5f2f-4e21-8c17-7eb1e5383999", evidenceType: "page_region" as const,
+      documentVersionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383998", pageNumber: 2,
+      pageWidth: 1200, pageHeight: 1600, pageRotation: 0,
+      normalizedRegion: { x: 0.2, y: 0.6, width: 0.25, height: 0.04 },
+      originalRegion: { left: 240, top: 960, width: 300, height: 64 },
+      coordinateUnit: "render_pixel" as const, coordinateOrigin: "top_left" as const,
+      extractionMethod: "agent_vlm_extraction", processorVersion: "openai/gpt-5.6-terra",
+    } as never);
+    const app = buildApp({ accept: vi.fn() }, caseQueries);
+    const response = await app.inject({ method: "GET", url: "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/evidence/4c816f67-5f2f-4e21-8c17-7eb1e5383999" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ evidence_type: "page_region", page_number: 2,
+      normalized_region: { x: 0.2, y: 0.6, width: 0.25, height: 0.04 } });
+    await app.close();
+  });
+
   it("lists evidence available to the current case", async () => {
     const app = buildApp({ accept: vi.fn() }, caseQueries);
     const response = await app.inject({

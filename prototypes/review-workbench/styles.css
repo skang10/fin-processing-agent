@@ -400,7 +400,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   transition: transform .15s ease;
 }
 .paper:has(.pdf-page), .paper:has(.source-image) { width: auto; min-height: 0; padding: 0; background: transparent; box-shadow: none; }
+.document-page-layer { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
 .pdf-page, .source-image { display: block; max-width: 100%; height: auto; background: #fff; box-shadow: 0 12px 30px rgba(23,33,40,.13); }
+.evidence-region-overlay { position: absolute; z-index: 2; box-sizing: border-box; border: 3px solid #2457d6; border-radius: 3px; background: rgba(36,87,214,.18); box-shadow: 0 0 0 2px rgba(255,255,255,.9), 0 0 0 5px rgba(36,87,214,.22); pointer-events: none; animation: evidenceRegionPulse .8s ease; }
+@keyframes evidenceRegionPulse { 50% { background: rgba(36,87,214,.32); } }
 .document-loading { min-width: 280px; padding: 48px; color: var(--muted); text-align: center; }
 .document-loading.error { color: var(--danger); }
 .application-data { width: 620px; padding: 28px; background: #fff; box-shadow: 0 7px 22px rgba(35,45,52,.12); }

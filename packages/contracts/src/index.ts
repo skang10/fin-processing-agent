@@ -205,6 +205,25 @@ export const EvidenceProjectionSchema = Type.Union([
     document_version_id: Type.String({ format: "uuid" }),
     page_number: Type.Integer({ minimum: 1 }),
   }, { additionalProperties: false }),
+  Type.Object({
+    ...EvidenceBase,
+    evidence_type: Type.Literal("page_region"),
+    document_version_id: Type.String({ format: "uuid" }),
+    page_number: Type.Integer({ minimum: 1 }),
+    page_width: Type.Integer({ minimum: 1 }),
+    page_height: Type.Integer({ minimum: 1 }),
+    page_rotation: Type.Integer(),
+    normalized_region: Type.Object({
+      x: Type.Number({ minimum: 0, maximum: 1 }), y: Type.Number({ minimum: 0, maximum: 1 }),
+      width: Type.Number({ exclusiveMinimum: 0, maximum: 1 }), height: Type.Number({ exclusiveMinimum: 0, maximum: 1 }),
+    }, { additionalProperties: false }),
+    original_region: Type.Object({
+      left: Type.Number({ minimum: 0 }), top: Type.Number({ minimum: 0 }),
+      width: Type.Number({ exclusiveMinimum: 0 }), height: Type.Number({ exclusiveMinimum: 0 }),
+    }, { additionalProperties: false }),
+    coordinate_unit: Type.Literal("render_pixel"),
+    coordinate_origin: Type.Literal("top_left"),
+  }, { additionalProperties: false }),
 ]);
 
 export const EvidenceListProjectionSchema = Type.Object({

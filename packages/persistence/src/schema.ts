@@ -201,6 +201,13 @@ export const evidenceRecords = pgTable("evidence_records", {
   jsonPointer: text("json_pointer"),
   documentVersionId: uuid("document_version_id").references(() => documentVersions.id),
   pageNumber: integer("page_number"),
+  pageWidth: integer("page_width"),
+  pageHeight: integer("page_height"),
+  pageRotation: integer("page_rotation"),
+  normalizedRegion: jsonb("normalized_region"),
+  originalRegion: jsonb("original_region"),
+  coordinateUnit: text("coordinate_unit"),
+  coordinateOrigin: text("coordinate_origin"),
   extractionMethod: text("extraction_method").notNull(),
   processorVersion: text("processor_version").notNull(),
 }, (table) => [index("evidence_run_idx").on(table.runId)]);

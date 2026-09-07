@@ -472,11 +472,18 @@ export interface OfflineCaseResult extends OfflineDeterministicResult, OfflineRe
 
 export interface OfflineEvidenceResult {
   readonly evidenceId: string;
-  readonly evidenceType: "structured_input" | "page_level";
+  readonly evidenceType: "structured_input" | "page_level" | "page_region";
   readonly applicationSnapshotId?: string;
   readonly jsonPointer?: string;
   readonly documentVersionId?: string;
   readonly pageNumber?: number;
+  readonly pageWidth?: number;
+  readonly pageHeight?: number;
+  readonly pageRotation?: number;
+  readonly normalizedRegion?: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+  readonly originalRegion?: { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
+  readonly coordinateUnit?: "render_pixel";
+  readonly coordinateOrigin?: "top_left";
   readonly extractionMethod: "structured_input" | "offline_fixture" | "pdf_inspector_inspection"
     | "agent_native_text_reading" | "agent_ocr_reading" | "agent_vlm_extraction";
   readonly processorVersion: string;
@@ -690,6 +697,21 @@ export type EvidenceView =
       readonly evidenceType: "page_level";
       readonly documentVersionId: string;
       readonly pageNumber: number;
+      readonly extractionMethod: string;
+      readonly processorVersion: string;
+    }
+  | {
+      readonly evidenceId: string;
+      readonly evidenceType: "page_region";
+      readonly documentVersionId: string;
+      readonly pageNumber: number;
+      readonly pageWidth: number;
+      readonly pageHeight: number;
+      readonly pageRotation: number;
+      readonly normalizedRegion: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+      readonly originalRegion: { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
+      readonly coordinateUnit: "render_pixel";
+      readonly coordinateOrigin: "top_left";
       readonly extractionMethod: string;
       readonly processorVersion: string;
     };
