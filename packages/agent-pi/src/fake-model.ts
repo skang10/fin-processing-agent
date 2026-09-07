@@ -65,6 +65,22 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+/** Estimate text and bounded image inputs without counting base64 transport expansion as tokens. */
+function estimateContextTokens(context: Context): number {
+  let characters = context.systemPrompt?.length ?? 0;
+  let images = 0;
+  for (const message of context.messages) {
+    const content = typeof message.content === "string" ? [message.content] : message.content;
+    for (const part of content) {
+      if (typeof part === "string") characters += part.length;
+      else if (part.type === "text") characters += part.text.length;
+      else if (part.type === "image") images += 1;
+      else characters += JSON.stringify(part).length;
+    }
+  }
+  return Math.ceil(characters / 4) + images * 1_000;
+}
+
 /** Build a StreamFn that replays a script through the real Pi event protocol (AGT-REQ-102). */
 export function createFakeStreamFn(script: FakeModelScript): StreamFn {
   let turn = 0;
@@ -74,7 +90,7 @@ export function createFakeStreamFn(script: FakeModelScript): StreamFn {
     const scripted = script(turn, context);
     const output: AssistantMessage = {
       role: "assistant", content: [], api: model.api, provider: model.provider, model: model.id,
-      usage: { input: estimateTokens(JSON.stringify(context.messages) + (context.systemPrompt ?? "")), output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      usage: { input: estimateContextTokens(context), output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
       stopReason: "stop", timestamp: Date.now(),
     };
     const finish = () => {
@@ -162,7 +178,7 @@ const MONTH_SUFFIX = /\s+(?:January|February|March|April|May|June|July|August|Se
  */
 const FIELD_PATTERNS: Readonly<Record<string, Readonly<Record<string, readonly RegExp[]>>>> = {
   identity_document: {
-    "person.name": [/\*\*FULL NAME\*\*\s*\*\*([^*]+?)\*\*/u, /^#*\s*(?:Applicant|Full name):\s*(.+?)\s*$/miu],
+    "person.name": [/\*\*FULL NAME\*\*\s*\*\*([^*]+?)\*\*/u, /(?:Applicant|Full name):\s*(.+?)(?=\s+Document reference:|$)/miu],
     "identity.expiry_date": [
       /EXPIRY DATE\*\*\s*\*\*[^*]*?(\d{1,2}\s+[A-Za-z]+\s+\d{4})[^*]*?\*\*/u,
       /^#*\s*Expiry(?: date)?:\s*(\d{4}-\d{2}-\d{2})\s*$/miu,
@@ -170,15 +186,15 @@ const FIELD_PATTERNS: Readonly<Record<string, Readonly<Record<string, readonly R
     ],
   },
   payslip: {
-    "person.name": [/\*\*EMPLOYEE PAYROLL PERIOD\*\*\s*\*\*([^*]+?)\*\*/u, /^#*\s*(?:Applicant|Employee):\s*(.+?)\s*$/miu],
-    "organization.name": [/\*\*EMPLOYER\*\*\s*\*\*([^*]+?)\*\*/u, /^#*\s*Employer:\s*(.+?)\s*$/miu],
+    "person.name": [/\*\*EMPLOYEE PAYROLL PERIOD\*\*\s*\*\*([^*]+?)\*\*/u, /(?:Applicant|Employee):\s*(.+?)(?=\s+Employer:|$)/miu],
+    "organization.name": [/\*\*EMPLOYER\*\*\s*\*\*([^*]+?)\*\*/u, /Employer:\s*(.+?)(?=\s+Payroll period:|$)/miu],
     "income.monthly_net": [
       /\|(?:Monthly net pay|Net payment)\|([\d.,]+)\|/u,
-      /^#*\s*(?:Monthly net pay|Net pay|Net payment):\s*(?:EUR\s*)?([\d.,]+)\s*$/miu,
+      /(?:Monthly net pay|Net pay|Net payment):\s*(?:EUR\s*)?([\d.,]+)/miu,
     ],
   },
   bank_statement: {
-    "person.name": [/\*\*ACCOUNT HOLDER MASKED IBAN\*\*\s*\*\*([^*]+?)\*\*/u, /^#*\s*(?:Applicant|Account holder):\s*(.+?)\s*$/miu],
+    "person.name": [/\*\*ACCOUNT HOLDER MASKED IBAN\*\*\s*\*\*([^*]+?)\*\*/u, /(?:Applicant|Account holder):\s*(.+?)(?=\s+(?:Nordblick Demo(?: Bank)?|Bank|Masked IBAN|Date)\b|$)/miu],
     "organization.name": [
       /\*\*([^*]+?)\*\*\s*Salary/u,
       /^#*\s*Salary payment:\s*(.+?)\s*$/miu,

@@ -58,6 +58,13 @@ describe("DocumentSandboxClient", () => {
       delete process.env.FINDOC_SANDBOX_SECRET_TEST;
     }
   });
+
+  it("requires every pinned native-runtime path for real OCR", async () => {
+    await expect(new DocumentSandboxClient().inspectAndRender(Buffer.from("fixture"), "a".repeat(64), {
+      timeoutMs: 5_000, maximumPages: 2, maximumPixelsPerPage: 1_000, targetDpi: 110,
+      ocrMode: "pdf_inspector", ocrModelDirectory: "/models/ocr",
+    })).rejects.toThrow("PDFIUM_LIB_PATH");
+  });
 });
 
 describe("FakeOcrEngine", () => {
@@ -131,6 +138,40 @@ describe("groupLogicalDocuments", () => {
     expect(result.boundaries.map((item) => item.startsNewDocument)).toEqual([true, false, true]);
     expect(classifySyntheticDemoPages([{ pageNumber: 1, nativeMarkdown: "Identity document" }]).classifications[0])
       .toMatchObject({ selectedType: "unknown", qualityStatus: "uncertain" });
+  });
+
+  it("uses committed OCR text for a scanned synthetic page without fixture classification", () => {
+    const result = classifySyntheticDemoPages([{
+      pageNumber: 1,
+      nativeMarkdown: "",
+      ocrMarkdown: "SYNTHETIC DEMO - Payslip\nEmployee Greta Demofall",
+    }]);
+    expect(result.classifications[0]).toMatchObject({
+      selectedType: "payslip",
+      method: "synthetic-demo-ocr-content-classifier",
+      qualityStatus: "accepted",
+    });
+  });
+
+  it("classifies a visibly synthetic OCR page from its bounded content signals when its heading is imperfect", () => {
+    const result = classifySyntheticDemoPages([{
+      pageNumber: 1,
+      nativeMarkdown: "",
+      ocrMarkdown: "SYNTHETIC DEMO SCAN\nAccount holder: Greta Demofall\nDate Description Reference Amount EUR\nSalary payment: Demowerk GmbH",
+    }]);
+    expect(result.classifications[0]).toMatchObject({
+      selectedType: "bank_statement",
+      method: "synthetic-demo-ocr-content-classifier",
+    });
+  });
+
+  it("tolerates a missed account-holder label when bank transaction headings remain readable", () => {
+    const result = classifySyntheticDemoPages([{
+      pageNumber: 1,
+      nativeMarkdown: "",
+      ocrMarkdown: "SYNTHETIC DEMO SCAN\nDate Description Reference Amount EUR\nSalary payment Demowerk GmbH",
+    }]);
+    expect(result.classifications[0]?.selectedType).toBe("bank_statement");
   });
 
   it("creates deterministic contiguous groups and preserves uncertainty", () => {

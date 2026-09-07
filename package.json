@@ -30,6 +30,9 @@
     "dataset:build": "node scripts/dataset.mjs build",
     "evaluate:offline": "node scripts/evaluate.mjs",
     "evaluate:capture": "node scripts/capture-evaluation.mjs",
+    "ocr:setup": "node scripts/ocr-runtime.mjs setup",
+    "ocr:verify": "node scripts/ocr-runtime.mjs verify",
+    "ocr:smoke": "node scripts/ocr-smoke.mjs",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc -b --pretty false"

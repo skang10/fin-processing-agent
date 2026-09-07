@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, realpath, writeFile } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { FakeOcrEngine, PdfInspectorAdapter, PdfInspectorOcrAdapter, PdfiumPageRenderer, runSelectiveOcr } from "./index.js";
 
 const raw = await readStdin(64_000);
@@ -54,7 +54,7 @@ async function readStdin(maximumBytes: number): Promise<string> {
 
 function parseRequest(value: string): {
   source_path: string; source_sha256: string;
-  limits: { maximum_pages: number; maximum_pixels_per_page: number; target_dpi: number; ocr_mode: "fake" | "pdf_inspector"; ocr_model_directory?: string };
+  limits: { maximum_pages: number; maximum_pixels_per_page: number; target_dpi: number; ocr_mode: "fake" | "pdf_inspector"; ocr_model_directory?: string; pdfium_library_path?: string; onnx_runtime_library_path?: string };
 } {
   const parsed: unknown = JSON.parse(value);
   if (!parsed || typeof parsed !== "object" || !("schema_version" in parsed) || parsed.schema_version !== "1.0.0" ||
@@ -67,8 +67,11 @@ function parseRequest(value: string): {
       !Number.isSafeInteger(request.limits.maximum_pixels_per_page) || Number(request.limits.maximum_pixels_per_page) < 1 ||
       typeof request.limits.target_dpi !== "number" || request.limits.target_dpi < 72 || request.limits.target_dpi > 300 ||
       (request.limits.ocr_mode !== "fake" && request.limits.ocr_mode !== "pdf_inspector") ||
-      (request.limits.ocr_mode === "pdf_inspector" && typeof request.limits.ocr_model_directory !== "string")) {
+      (request.limits.ocr_mode === "pdf_inspector" &&
+        (typeof request.limits.ocr_model_directory !== "string" || !isAbsolute(request.limits.ocr_model_directory) ||
+         typeof request.limits.pdfium_library_path !== "string" || !isAbsolute(request.limits.pdfium_library_path) ||
+         typeof request.limits.onnx_runtime_library_path !== "string" || !isAbsolute(request.limits.onnx_runtime_library_path)))) {
     throw new Error("Invalid sandbox limits");
   }
-  return request as { source_path: string; source_sha256: string; limits: { maximum_pages: number; maximum_pixels_per_page: number; target_dpi: number; ocr_mode: "fake" | "pdf_inspector"; ocr_model_directory?: string } };
+  return request as { source_path: string; source_sha256: string; limits: { maximum_pages: number; maximum_pixels_per_page: number; target_dpi: number; ocr_mode: "fake" | "pdf_inspector"; ocr_model_directory?: string; pdfium_library_path?: string; onnx_runtime_library_path?: string } };
 }

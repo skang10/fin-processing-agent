@@ -183,6 +183,16 @@ const DEMO_HEADINGS: readonly { readonly phrase: string; readonly type: Business
   { phrase: "synthetic demo bank statement", type: "bank_statement" },
 ]);
 
+function classifySyntheticDemoText(text: string): BusinessPageType | undefined {
+  const heading = DEMO_HEADINGS.find((candidate) => text.includes(candidate.phrase))?.type;
+  if (heading) return heading;
+  if (text.includes("document reference") && text.includes("expiry")) return "identity_document";
+  if (text.includes("employer") && (text.includes("monthly net pay") || text.includes("payroll period"))) return "payslip";
+  if ((text.includes("account holder") && (text.includes("salary") || text.includes("amount eur"))) ||
+      (text.includes("salary") && text.includes("amount eur"))) return "bank_statement";
+  return undefined;
+}
+
 export interface SyntheticDemoClassificationOptions {
   /**
    * Declared page type for a page that carries no native text. The delivered OCR adapter is a
@@ -194,19 +204,19 @@ export interface SyntheticDemoClassificationOptions {
 }
 
 export function classifySyntheticDemoPages(
-  pages: readonly Pick<InspectedPage, "pageNumber" | "nativeMarkdown">[],
+  pages: readonly (Pick<InspectedPage, "pageNumber" | "nativeMarkdown"> & { readonly ocrMarkdown?: string })[],
   options: SyntheticDemoClassificationOptions = {},
 ): { readonly classifications: readonly PageClassification[]; readonly boundaries: readonly BoundaryPrediction[] } {
   const ordered = [...pages].sort((left, right) => left.pageNumber - right.pageNumber);
   if (ordered.some((page, index) => page.pageNumber !== index + 1)) throw new Error("Demo pages must form one ordered inventory");
   const classifications = ordered.map((page): PageClassification => {
-    const text = normalizedHeading(page.nativeMarkdown);
-    const matched = DEMO_HEADINGS.find((heading) => text.includes(heading.phrase))?.type;
+    const text = normalizedHeading(page.nativeMarkdown || page.ocrMarkdown || "");
+    const matched = classifySyntheticDemoText(text);
     const declared = matched ?? (page.nativeMarkdown.length === 0 ? options.fixturePageType?.(page.pageNumber) : undefined);
     const selectedType: BusinessPageType = declared ?? "unknown";
     return {
       pageNumber: page.pageNumber, selectedType,
-      method: matched ? "synthetic-demo-heading-classifier" : declared ? "synthetic-demo-fixture-page-adapter" : "synthetic-demo-heading-classifier",
+      method: matched ? (page.nativeMarkdown ? "synthetic-demo-heading-classifier" : "synthetic-demo-ocr-content-classifier") : declared ? "synthetic-demo-fixture-page-adapter" : "synthetic-demo-heading-classifier",
       version: "1.0.0",
       qualityStatus: selectedType === "unknown" ? "uncertain" : "accepted",
       rawConfidence: { value: selectedType === "unknown" ? 0 : 1, scale: "zero_to_one", producer: matched ? "deterministic-demo-rule" : declared ? "synthetic-fixture-declaration" : "deterministic-demo-rule" },

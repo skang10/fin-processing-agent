@@ -14,7 +14,7 @@ The system has no deterministic field parser, so every document value comes from
 
 Deterministic code still owns normalization, reconciliation, claims, entity matching, findings, disposition, report verification, and workflow state, and PostgreSQL and pg-boss remain authoritative. The session persists its identity, attempts, steps, tool results, and consumed budgets as it goes, so a Worker that disappears mid-review resumes from committed state, reuses completed work, and cannot duplicate a candidate, result, or report.
 
-The delivered demo defaults to a deterministic scripted fake model, and its OCR output and VLM answers are fixture values: they prove orchestration and the bounded page-scoped path, not recognition or Agent quality. One clear native-text case and one scanned synthetic case have completed the optional live route with verified reports; the scanned run proves bounded image delivery before OCR/VLM, not recognition quality. Corpus-level live acceptance, real OCR and VLM tool ports, crop rendering, and hardened operating-system isolation remain follow-up work. See [`LIMITATIONS.md`](LIMITATIONS.md).
+The delivered demo defaults to a deterministic scripted fake model with fixture OCR and VLM answers. An opt-in, checksum-verified Linux runtime can instead run PDF Inspector's local PP-OCRv6 Small path fully offline; one three-page scanned synthetic case has completed that path with a verified report and no VLM call. One clear native-text case and one scanned synthetic case have also completed optional live-model routes. These are bounded synthetic acceptance results, not corpus-level recognition or production-quality claims. Crop rendering, broader OCR evaluation, and hardened operating-system isolation remain follow-up work. See [`LIMITATIONS.md`](LIMITATIONS.md).
 
 The Review Workbench can load one current case with `?case_id=<uuid>` and hydrates its report, findings, issues, application data, and documents through the V1 API. Review mutations are still prototype-only. The Docker Compose demo starts PostgreSQL, MinIO, migrations, API, Worker, and Web together and includes a visibly synthetic four-page case loader.
 
@@ -26,6 +26,8 @@ pnpm demo:load
 ```
 
 The loader prints the exact Review Workbench URL. `pnpm demo:down` stops the environment while preserving demo data. `pnpm demo:reset` permanently removes its containers, database and object-store volumes, and generated local credentials. `pnpm demo:acceptance` performs an isolated build, startup, migration, health, case-processing, and teardown check.
+
+Real OCR is opt-in and never downloads models during case processing. Install and verify the pinned assets explicitly with `pnpm ocr:setup -- linux-arm64` (or `linux-x64`), then use `compose.ocr.yaml` together with `compose.yaml`. The overlay keeps the default fake Agent and fixture VLM, mounts OCR assets read-only, and requires `OCR_RUNTIME_PLATFORM` plus the matching `OCR_RUNTIME_ORT_DIRECTORY` when overriding its Linux ARM64 defaults. `pnpm ocr:smoke` runs the bounded real-OCR check inside a compatible configured environment.
 
 ## Commands
 
@@ -43,6 +45,9 @@ pnpm demo:load
 pnpm demo:down
 pnpm demo:reset
 pnpm demo:acceptance
+pnpm ocr:setup -- linux-arm64
+pnpm ocr:verify -- linux-arm64
+pnpm ocr:smoke
 ```
 
 Node.js 22.19 or later and pnpm 11.3.0 are required.

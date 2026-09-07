@@ -18,6 +18,8 @@ export interface DocumentSandboxLimits {
   readonly targetDpi: number;
   readonly ocrMode?: "fake" | "pdf_inspector";
   readonly ocrModelDirectory?: string;
+  readonly pdfiumLibraryPath?: string;
+  readonly onnxRuntimeLibraryPath?: string;
 }
 
 export class DocumentSandboxError extends Error {
@@ -53,6 +55,8 @@ export class DocumentSandboxClient {
           target_dpi: limits.targetDpi,
           ocr_mode: limits.ocrMode ?? "pdf_inspector",
           ...(limits.ocrModelDirectory ? { ocr_model_directory: limits.ocrModelDirectory } : {}),
+          ...(limits.pdfiumLibraryPath ? { pdfium_library_path: limits.pdfiumLibraryPath } : {}),
+          ...(limits.onnxRuntimeLibraryPath ? { onnx_runtime_library_path: limits.onnxRuntimeLibraryPath } : {}),
         },
       }, limits.timeoutMs);
       const parsed = parseResponse(response, limits.maximumPages);
@@ -107,13 +111,21 @@ function validateLimits(limits: DocumentSandboxLimits): void {
   if (limits.ocrMode === "fake" && process.env["NODE_ENV"] !== "test" && process.env["FINDOC_SYNTHETIC_DEMO"] !== "true") {
     throw new Error("Fake OCR is restricted to tests and the synthetic demo");
   }
-  if ((limits.ocrMode ?? "pdf_inspector") === "pdf_inspector" && !limits.ocrModelDirectory) throw new Error("OCR_MODEL_DIRECTORY is required for offline PDF Inspector OCR");
+  if ((limits.ocrMode ?? "pdf_inspector") === "pdf_inspector" &&
+      (!limits.ocrModelDirectory || !limits.pdfiumLibraryPath || !limits.onnxRuntimeLibraryPath)) {
+    throw new Error("OCR_MODEL_DIRECTORY, PDFIUM_LIB_PATH, and ORT_DYLIB_PATH are required for offline PDF Inspector OCR");
+  }
 }
 
 async function runTask(entrypoint: string, taskDirectory: string, request: unknown, timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
+    const limits = (request as { limits?: Record<string, unknown> }).limits ?? {};
     const child = spawn(process.execPath, [entrypoint], {
-      cwd: taskDirectory, env: { NODE_ENV: "production" }, shell: false, stdio: ["pipe", "pipe", "pipe"],
+      cwd: taskDirectory, env: {
+        NODE_ENV: "production",
+        ...(typeof limits.pdfium_library_path === "string" ? { PDFIUM_LIB_PATH: limits.pdfium_library_path } : {}),
+        ...(typeof limits.onnx_runtime_library_path === "string" ? { ORT_DYLIB_PATH: limits.onnx_runtime_library_path } : {}),
+      }, shell: false, stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "";
     let stderr = "";

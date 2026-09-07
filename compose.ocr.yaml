@@ -1,0 +1,14 @@
+services:
+  worker:
+    environment:
+      OCR_MODE: pdf_inspector
+      OCR_MODEL_DIRECTORY: /opt/findoc/models/pp-ocrv6-small
+      PDFIUM_LIB_PATH: /opt/findoc/ocr-runtime/lib/libpdfium.so
+      ORT_DYLIB_PATH: /opt/findoc/ocr-runtime/${OCR_RUNTIME_ORT_DIRECTORY:-onnxruntime-linux-aarch64-1.27.0}/lib/libonnxruntime.so.1.27.0
+      AGENT_MODEL: fake
+      AGENT_FAKE_SCRIPT: standard
+      VLM_MODE: fixture
+      PI_OFFLINE: "1"
+    volumes:
+      - ./models/pp-ocrv6-small:/opt/findoc/models/pp-ocrv6-small:ro
+      - ./native-libs/ocr-runtime/${OCR_RUNTIME_PLATFORM:-linux-arm64}:/opt/findoc/ocr-runtime:ro

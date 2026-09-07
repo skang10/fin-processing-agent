@@ -21,7 +21,16 @@ if (!minioEndpoint || !minioAccessKey || !minioSecretKey) throw new Error("MinIO
 const maximumSourceBytes = Number(process.env["MAX_SOURCE_BYTES"] ?? 10_000_000);
 const ocrMode = process.env["OCR_MODE"] === "fake" ? "fake" : "pdf_inspector";
 const ocrModelDirectory = process.env["OCR_MODEL_DIRECTORY"];
+const pdfiumLibraryPath = process.env["PDFIUM_LIB_PATH"];
+const onnxRuntimeLibraryPath = process.env["ORT_DYLIB_PATH"];
+if (ocrMode === "pdf_inspector" && (!ocrModelDirectory || !pdfiumLibraryPath || !onnxRuntimeLibraryPath)) {
+  throw new Error("OCR_MODEL_DIRECTORY, PDFIUM_LIB_PATH, and ORT_DYLIB_PATH are required when OCR_MODE=pdf_inspector");
+}
 const agentModel = process.env["AGENT_MODEL"] ?? "fake";
+const fakeAgentScript = process.env["AGENT_FAKE_SCRIPT"] ?? "auto";
+if (fakeAgentScript !== "auto" && fakeAgentScript !== "standard" && fakeAgentScript !== "policy_violation") {
+  throw new Error("AGENT_FAKE_SCRIPT must be 'auto', 'standard', or 'policy_violation'");
+}
 const vlmMode = process.env["VLM_MODE"] ?? "fixture";
 if (vlmMode !== "fixture" && vlmMode !== "live") throw new Error("VLM_MODE must be 'fixture' or 'live'");
 const vlmModel = process.env["VLM_MODEL"] ?? agentModel;
@@ -60,7 +69,9 @@ function selectAgentHarness(fixtureId: unknown): AgentLedCaseReviewHarness {
     piHarnesses.set("live", harness);
     return harness;
   }
-  const scriptLabel = fixtureId === "golden-006-scanned-adaptive-unavailable" ? "policy_violation" : "standard";
+  const scriptLabel = fakeAgentScript === "auto"
+    ? (fixtureId === "golden-006-scanned-adaptive-unavailable" ? "policy_violation" : "standard")
+    : fakeAgentScript;
   const existing = piHarnesses.get(scriptLabel);
   if (existing) return existing;
   const harness = new PiAgentLedCaseReviewHarness({
@@ -125,10 +136,15 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
       const sandboxResult = await documentSandbox.inspectAndRender(source, document.sha256, {
         timeoutMs: 60_000, maximumPages: 50, maximumPixelsPerPage: 8_000_000, targetDpi: 110,
         ocrMode, ...(ocrModelDirectory ? { ocrModelDirectory } : {}),
+        ...(pdfiumLibraryPath ? { pdfiumLibraryPath } : {}),
+        ...(onnxRuntimeLibraryPath ? { onnxRuntimeLibraryPath } : {}),
       });
       const inspection = sandboxResult.inspection;
       const demoAnalysis = process.env["FINDOC_SYNTHETIC_DEMO"] === "true"
-        ? classifySyntheticDemoPages(inspection.pages, {
+        ? classifySyntheticDemoPages(inspection.pages.map((page) => ({
+          ...page,
+          ocrMarkdown: sandboxResult.ocrOutputs.find((output) => output.pageNumber === page.pageNumber)?.result.rawText,
+        })), {
           // An image-only synthetic page carries no text the fixture OCR adapter can recover, so a
           // registered demo fixture declares its page type. It is recorded with its own method
           // identity so a reviewer can see the type came from a fixture, not from the page.
@@ -206,4 +222,4 @@ async function shutdown() {
 process.once("SIGINT", () => void shutdown());
 process.once("SIGTERM", () => void shutdown());
 
-logger.info({ mode: "offline", queue: CASE_PROCESSING_QUEUE, agent_harness: "pi", agent_model: agentModel === "fake" ? "fake" : agentModel, vlm_mode: vlmMode, ...(vlmMode === "live" ? { vlm_model: vlmModel } : {}) }, "worker ready");
+logger.info({ mode: "offline", queue: CASE_PROCESSING_QUEUE, agent_harness: "pi", agent_model: agentModel === "fake" ? "fake" : agentModel, ocr_mode: ocrMode, ...(ocrMode === "pdf_inspector" ? { ocr_model: "PP-OCRv6-small@oar-ocr-v0.7.0" } : {}), vlm_mode: vlmMode, ...(vlmMode === "live" ? { vlm_model: vlmModel } : {}) }, "worker ready");

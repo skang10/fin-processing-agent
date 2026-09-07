@@ -25,6 +25,7 @@ export interface RuntimeDocumentPortOptions {
 }
 
 interface CommittedOcrArtifact {
+  readonly rawText?: string;
   readonly spans?: readonly { readonly text: string; readonly bbox: readonly number[]; readonly confidence?: { readonly value?: number } }[];
 }
 
@@ -66,14 +67,18 @@ export function createRuntimeDocumentPorts(options: RuntimeDocumentPortOptions):
       const committed = JSON.parse(bytes.toString("utf8")) as CommittedOcrArtifact;
       const width = page.render?.width ?? 0;
       const height = page.render?.height ?? 0;
+      const preciseLines = (committed.spans ?? []).slice(0, MAXIMUM_OCR_LINES).map((span) => ({
+        text: span.text,
+        region: normalizeBoundingBox(span.bbox, width, height) ?? fullPage,
+        rawConfidence: span.confidence?.value ?? 0,
+      }));
+      const lines = preciseLines.length > 0 ? preciseLines : (committed.rawText ?? "").split(/\r?\n/u)
+        .map((text) => text.trim()).filter(Boolean).slice(0, MAXIMUM_OCR_LINES)
+        .map((text) => ({ text, region: fullPage, rawConfidence: 0 }));
       return {
         engine: page.ocr.engine, engineVersion: page.ocr.engineVersion, modelAssetVersion: page.ocr.modelAssetVersion,
         reusedCommittedOutput: true,
-        lines: (committed.spans ?? []).slice(0, MAXIMUM_OCR_LINES).map((span) => ({
-          text: span.text,
-          region: normalizeBoundingBox(span.bbox, width, height) ?? fullPage,
-          rawConfidence: span.confidence?.value ?? 0,
-        })),
+        lines,
       };
     },
 

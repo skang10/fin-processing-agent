@@ -1,5 +1,13 @@
 # Evaluation Results
 
+## Real offline OCR acceptance — 2026-09-07
+
+One explicit Linux ARM64 run used only `golden-006-scanned-adaptive-unavailable` with PDF Inspector 1.17.0, PDFium 153.0.7988.0, ONNX Runtime 1.27.0, and `pp-ocrv6-small@oar-ocr-v0.7.0`. All assets were downloaded from their pinned release URLs, SHA-256 verified against `config/ocr-runtime-assets.json`, mounted read-only, and executed with container networking disabled for the component smoke check. The end-to-end Compose run used the same mounted assets and the deterministic fake Agent in `standard` mode; it made no VLM call.
+
+Runtime case `ee0663a5-b7e5-4851-aad8-a0ed78d1e01a`, run/result revision `afe947fe-78f5-4bd1-877f-2e8d2c60e23e`, and session `9984dd35-ff2d-4235-91e8-88744809ebdf` produced a verified report with the expected sole `VAL_INCOME_CONSISTENCY_001` `failed` / `income_conflict` finding; the other four rules passed. The Agent visually inspected and ran OCR on all three routed pages, submitted seven OCR-derived document candidates, requested deterministic reconciliation and all five rules, then submitted the report. Persisted usage was 9 iterations, 15 tool calls, 9 fake-model calls, 3 OCR pages, 0 VLM calls, 54,674 input tokens, 600 output tokens, and zero external-model cost. All three page classifications used `synthetic-demo-ocr-content-classifier`; no fixture page-type or fixture VLM result entered the run.
+
+A compatible Worker restart and same-run redelivery returned the same terminal session with `resumed=true`, `submitted_candidates=0`, one attempt, 15 immutable invocations, and unchanged OCR, token, and cost usage. This single synthetic run is runtime acceptance only, not a corpus-level OCR quality, latency, real-data, lending, or production-performance result.
+
 ## Budgeted live Agent subset — v0.1.2 `golden-003`
 
 **Recorded:** 2026-09-07
