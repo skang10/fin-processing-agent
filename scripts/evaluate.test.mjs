@@ -24,4 +24,16 @@ describe("offline evaluator", () => {
   it("requires a complete component-version manifest", () => {
     expect(() => evaluateDataset(golden, { ...base, versions: {}, cases: [] })).toThrow("case_package");
   });
+
+  it("retains the explicit whole-run cost budget in the report", () => {
+    const cost_budget = { maximum_total_usd: 0.5, maximum_per_case_usd: 0.25 };
+    expect(evaluateDataset(golden, { ...base, cost_budget, cases: [] }).cost_budget).toEqual(cost_budget);
+  });
+
+  it("retains structured reasons for cases skipped by the run budget", () => {
+    const actual = { ...base, cases: [{ case_id: "golden-1", processable: false, issues: [], checked_facts: [], report: { availability: "unavailable", verified: false, failure_reason: "whole_run_cost_budget_exhausted", verifier: { schema_valid: false, reference_valid: false, registered_code_valid: false, prohibited_content_valid: false } }, operations: {} }] };
+    const report = evaluateDataset(golden, actual);
+    expect(report.metrics.case_completion).toEqual({ total: 1, completed: 0, excluded: 1, excluded_case_reasons: { whole_run_cost_budget_exhausted: 1 } });
+    expect(report.cases[0]).toMatchObject({ outcome: "excluded", reason: "whole_run_cost_budget_exhausted" });
+  });
 });

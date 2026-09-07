@@ -29,16 +29,18 @@ export function evaluateDataset(goldenCases, actualRun) {
     }
     if (actual.processable) { processable += 1; if (actual.report.verified) verified += 1; }
     const expectedAvailability = golden.truth_candidate.report_availability === "ready" ? "ready" : "unavailable";
-    return { case_id: golden.case_id, outcome: "evaluated", missed_issues: missed, additional_issues: additional, grounding: { correct: caseCorrect, total: caseTotal }, report: actual.report.availability, expected_report: expectedAvailability, verifier: actual.report.verifier, operations: actual.operations };
+    return { case_id: golden.case_id, outcome: actual.processable ? "evaluated" : "excluded", ...(!actual.processable ? { reason: actual.report.failure_reason ?? "not_processable" } : {}), missed_issues: missed, additional_issues: additional, grounding: { correct: caseCorrect, total: caseTotal }, report: actual.report.availability, expected_report: expectedAvailability, verifier: actual.report.verifier, operations: actual.operations };
   });
   for (const extra of actualRun.cases.filter((item) => !goldenCases.some((golden) => golden.case_id === item.case_id))) cases.push({ case_id: extra.case_id, outcome: "excluded", reason: "not_in_dataset_release" });
   return {
     schema_version: "1.0.0", evaluation_id: digest({ dataset: actualRun.versions.dataset, run: actualRun.run_id, cases }), limitation: "Synthetic demonstration and regression data; not representative of production performance.",
     executed_at: actualRun.executed_at, environment: actualRun.environment, source_revision: actualRun.source_revision, versions: actualRun.versions,
+    ...(actualRun.cost_budget ? { cost_budget: actualRun.cost_budget } : {}),
     metrics: {
       issue_detection: { true_positive: tp, false_positive: fp, false_negative: fn, micro_precision: ratio(tp, tp + fp), micro_recall: ratio(tp, tp + fn) },
       evidence_grounding: { correct: grounded, total: groundingTotal, unsupported, correct_grounding_rate: ratio(grounded, groundingTotal), unsupported_claim_rate: ratio(unsupported, groundingTotal) },
       report_validity: { verified, processable, verified_report_completion_rate: ratio(verified, processable), failure_categories: countFailures(actualRun.cases) },
+      case_completion: summarizeCaseCompletion(goldenCases, actualRun.cases),
     },
     operations: summarizeOperations(actualRun.cases), cases,
   };
@@ -75,6 +77,20 @@ function validateRun(run) {
 function intersects(left, right) { return left.some((value) => right.includes(value)); }
 function ratio(numerator, denominator) { return { numerator, denominator, value: denominator === 0 ? null : numerator / denominator }; }
 function countFailures(cases) { const counts = {}; for (const item of cases) if (item.processable && !item.report.verified) { const reason = item.report.failure_reason ?? "unavailable"; counts[reason] = (counts[reason] ?? 0) + 1; } return counts; }
+function summarizeCaseCompletion(goldenCases, actualCases) {
+  const actualById = new Map(actualCases.map((item) => [item.case_id, item]));
+  const excludedCaseReasons = {};
+  let completed = 0;
+  for (const golden of goldenCases) {
+    const actual = actualById.get(golden.case_id);
+    if (actual?.processable) completed += 1;
+    else {
+      const reason = actual?.report?.failure_reason ?? "missing_actual_run_case";
+      excludedCaseReasons[reason] = (excludedCaseReasons[reason] ?? 0) + 1;
+    }
+  }
+  return { total: goldenCases.length, completed, excluded: goldenCases.length - completed, excluded_case_reasons: excludedCaseReasons };
+}
 function summarizeOperations(cases) {
   const values = (key) => cases.map((item) => item.operations?.[key]).filter((value) => typeof value === "number");
   const sum = (items) => items.reduce((total, value) => total + value, 0);

@@ -546,10 +546,10 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     return {
       availability: report ? (report.availability === "ready" ? "ready" : "unavailable") : "pending",
       ...(report ? { modelLabel: report.modelLabel } : currentSession ? { modelLabel: currentSession.modelLabel } : {}),
-      ...(report?.estimatedCost != null
-        ? { estimatedCost: { amount: report.estimatedCost, currency: "EUR" as const } }
-        : currentSession && currentSession.usageAvailable
-          ? { estimatedCost: { amount: (currentSession.costMicroUsd / COST_MICRO_SCALE).toFixed(6), currency: "USD" as const } }
+      ...(currentSession?.modelRoute === "live" && currentSession.usageAvailable
+        ? { estimatedCost: { amount: (currentSession.costMicroUsd / COST_MICRO_SCALE).toFixed(6), currency: "USD" as const } }
+        : report?.estimatedCost != null
+          ? { estimatedCost: { amount: report.estimatedCost, currency: "EUR" as const } }
           : {}),
       currentStep,
       ...(currentSession ? { session: view(currentSession) } : {}),
