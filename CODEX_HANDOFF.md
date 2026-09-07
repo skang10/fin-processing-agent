@@ -85,16 +85,16 @@ Do not edit frozen truth. The divergences above motivated the reviewed candidate
 
 **Broaden real OCR acceptance and establish compatible corpus evidence (`BL-003`, `BL-006`).**
 
-The initial two-configuration VLM selection gate is complete. Next extend real OCR to the remaining supported platform and JPEG/PNG/crop paths, then plan corpus-level OCR and live-model evidence. Any additional live-model call requires fresh explicit approval immediately before execution.
+The initial two-configuration VLM selection gate is complete. The user explicitly deferred native Linux x64 runtime acceptance until the main functional path is complete. Next implement JPEG/PNG OCR and crop/region rendering on the accepted Linux ARM64 path, then plan corpus-level OCR and live-model evidence. Any additional live-model call requires fresh explicit approval immediately before execution.
 
 ### Global next steps
 
 After the immediate task, proceed in this order:
 
-1. **Broaden real OCR acceptance** (`BL-003`) across the remaining supported platform, JPEG/PNG and crop/region paths, then measure the frozen corpus.
+1. **Broaden real OCR acceptance** (`BL-003`) with JPEG/PNG and crop/region paths on Linux ARM64, then measure the frozen corpus. Defer native Linux x64 execution until the main functional path is complete.
 2. **Establish the formal measured baseline** (`BL-006`) from compatible live-model and real-runtime evidence without claiming real-world OCR or banking performance; obtain fresh approval before any paid calls.
-4. **Expand from six to twenty golden cases**, prioritizing meaningful document variation over nearly identical templates.
-5. **Finish V1 hardening and demonstration evidence**: crop rendering, native-text coordinates, JPEG/PNG execution, OS resource and network isolation, observability evidence, browser acceptance coverage, README/demo limitations, and a reproducible acceptance run.
+3. **Expand from six to twenty golden cases**, prioritizing meaningful document variation over nearly identical templates.
+4. **Finish V1 hardening and demonstration evidence**: crop rendering, native-text coordinates, JPEG/PNG execution, OS resource and network isolation, observability evidence, browser acceptance coverage, README/demo limitations, and a reproducible acceptance run.
 
 Corpus-level OCR and live-VLM measurement, crop rendering, and hardened operating-system resource isolation all remain pending. The accepted single-case OCR and live-VLM results do not establish real-world extraction quality or production fitness.
 

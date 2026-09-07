@@ -65,7 +65,7 @@ The implementation spike must prove:
 
 The default OCR result remains deterministic fixture output and must not be presented as recognition evidence. The explicit real-runtime mode now proves offline PDF OCR execution, persisted provenance, Agent OCR reading, deterministic reconciliation and validation, and report generation for one bounded synthetic case. Remaining work:
 
-1. Extend the accepted `processPdfWithOcr` offline smoke path beyond Linux ARM64 to the remaining supported delivered platforms.
+1. Extend the accepted `processPdfWithOcr` offline smoke path beyond Linux ARM64 to Linux x64 after the main functional path is complete; the assets remain pinned and checksum-verifiable, but native x64 execution is explicitly deferred and must not be claimed as accepted.
 2. Add release-manifest integration for the committed OCR runtime asset manifest.
 3. JPEG and PNG OCR execution, bounded region and crop OCR, and mixed-language quality tuning.
 4. OCR quality, latency, and resource measurements on the versioned synthetic dataset.
