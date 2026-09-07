@@ -1,8 +1,8 @@
 # Release notes
 
-## v0.1.0-interview-demo
+## v0.1.0 demonstration release
 
-Financial Document AI Agent is an interview demonstration and production-shaped prototype for evidence-linked review of synthetic German personal-loan documents. It is not a production banking system and does not approve or reject applications, determine creditworthiness, contact applicants, or make AML or KYC decisions.
+Financial Document AI Agent is a production-shaped demonstration prototype for evidence-linked review of synthetic German personal-loan documents. It is not a production banking system and does not approve or reject applications, determine creditworthiness, contact applicants, or make AML or KYC decisions.
 
 ### Demonstrated
 

@@ -6,7 +6,7 @@ Date: 2026-09-05
 
 ## Context
 
-V1 needs five finite demonstration validation rules with deterministic findings and recommended-disposition mapping. Models and runtime users must not create, edit, upload, or activate validation logic. A general rule language would add parsing, sandboxing, governance, and debugging complexity without serving the interview demonstration.
+V1 needs five finite demonstration validation rules with deterministic findings and recommended-disposition mapping. Models and runtime users must not create, edit, upload, or activate validation logic. A general rule language would add parsing, sandboxing, governance, and debugging complexity without serving the bounded demonstration.
 
 ## Decision
 

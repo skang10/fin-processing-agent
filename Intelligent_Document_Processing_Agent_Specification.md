@@ -6,7 +6,7 @@ Version: 2.0
 
 Status: Superseded
 
-Project type: Interview demonstration and production-shaped machine learning prototype
+Project type: Production-shaped machine learning prototype
 
 Reference scenario: Single-applicant personal-loan document review in Germany
 

@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 3.9.0
+Version: 3.9.1
 
 Status: Approved
 
@@ -12,7 +12,7 @@ Last updated: 2026-09-07
 
 This index is the entry point and authority map for the Financial Document AI Agent specification set. It defines the specification boundaries, document ownership, terminology, requirement identifiers, lifecycle states, dependency order, and migration rules for the project.
 
-The project is an interview demonstration and production-shaped machine learning prototype. It is not a production banking system. [`LIMITATIONS.md`](../LIMITATIONS.md) is required reading and defines constraints that must remain visible in project documentation and demonstrations.
+The project is a production-shaped machine learning prototype. It is not a production banking system. [`LIMITATIONS.md`](../LIMITATIONS.md) is required reading and defines constraints that must remain visible in project documentation and demonstrations.
 
 ## 2. Specification Authority
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.0, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.1.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.5.0, `components/REVIEW_WORKBENCH.md` version 3.4.0, and `API_CONTRACTS.md` version 1.8.0. All four ADRs are accepted; ADR-003 selects the opt-in live default and fallback from bounded synthetic benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
+All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.1, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.1.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.5.0, `components/REVIEW_WORKBENCH.md` version 3.4.0, and `API_CONTRACTS.md` version 1.8.0. All four ADRs are accepted; ADR-003 selects the opt-in live default and fallback from bounded synthetic benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
 
 ## 3. Product Baseline
 
@@ -367,6 +367,7 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.9.1 | 2026-09-07 | Approved | Removed audience-specific project-positioning language without changing scope, authority, or requirements; registered Product and Scope 4.0.1. |
 | 3.9.0 | 2026-09-07 | Approved | Approved the immutable `FD-YYYY-NNNN` reviewer-facing case reference across the data model, API projections, and Review Workbench while retaining UUID routing and relationships. |
 | 3.8.0 | 2026-09-07 | Approved | Accepted ADR-003 after the bounded two-configuration live-VLM benchmark selected `openai/gpt-5.6-terra` as default and `openai/gpt-5.6-sol` as fallback. |
 | 3.7.0 | 2026-09-07 | Approved | Approved Agent component 3.5.0, using PDF Inspector `needsOcr` as the interim routing signal and requiring visual inspection before OCR or VLM on routed pages. |

@@ -8,7 +8,7 @@ It is not a normative product specification. Approved specifications and Archite
 
 ## Project Boundary
 
-Financial Document AI Agent is an interview demonstration and production-shaped machine learning prototype for synthetic German personal-loan documents. It is not a production banking system.
+Financial Document AI Agent is a production-shaped machine learning prototype for synthetic German personal-loan documents. It is not a production banking system.
 
 Agents must not add or imply capabilities to:
 

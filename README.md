@@ -1,12 +1,12 @@
 # Financial Document AI Agent
 
-Production-shaped interview prototype for evidence-linked processing and human review of synthetic German personal-loan documents.
+Production-shaped prototype for evidence-linked processing and human review of synthetic German personal-loan documents.
 
 The project does not approve or reject loans, determine creditworthiness, contact applicants, or make final AML or KYC decisions. See [`LIMITATIONS.md`](LIMITATIONS.md).
 
-## Interview demo release
+## Demonstration release
 
-Version `0.1.0` is an interview demonstration and production-shaped prototype. It provides separate API, Worker, and Review Web entry points, durable asynchronous processing, a bounded Agent workflow, deterministic validation, evidence-linked review, and synthetic evaluation paths. It is not production-ready and must be used only with synthetic or explicitly demo-safe data.
+Version `0.1.0` is a production-shaped demonstration prototype. It provides separate API, Worker, and Review Web entry points, durable asynchronous processing, a bounded Agent workflow, deterministic validation, evidence-linked review, and synthetic evaluation paths. It is not production-ready and must be used only with synthetic or explicitly demo-safe data.
 
 Case intake accepts multipart PDF/JPEG/PNG streams, stores source bytes through MinIO, and transactionally registers immutable artifact and document-version metadata. The Worker then inspects, renders, and selectively OCRs every page, and every processable case enters one bounded `pi-coding-agent` review session that leads the document review.
 

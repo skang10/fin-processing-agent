@@ -2,17 +2,17 @@
 
 Document ID: `PRD`
 
-Version: 4.0.0
+Version: 4.0.1
 
 Status: Approved
 
-Last updated: 2026-09-06
+Last updated: 2026-09-07
 
 ## 1. Purpose
 
 This specification defines the product intent, users, initial-release scope, supported scenario, expected outcomes, exclusions, product requirements, and acceptance criteria for Financial Document AI Agent.
 
-The product is an interview demonstration and production-shaped machine learning prototype. It demonstrates reliable document understanding and human review patterns without claiming to be a production banking system.
+The product is a production-shaped machine learning prototype. It demonstrates reliable document understanding and human review patterns without claiming to be a production banking system.
 
 ## 2. Authority and Related Documents
 
@@ -464,6 +464,7 @@ The following evidence-dependent choices are intentionally owned elsewhere and r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 4.0.1 | 2026-09-07 | Approved | Removed audience-specific project-positioning language without changing product scope, behavior, or authority boundaries. |
 | 4.0.0 | 2026-09-06 | Approved | Replaced the two-mode recovery-and-report product flow with one bounded Agent-led case review that selects registered PDF Inspector and extraction tools while retaining deterministic results and mandatory human review; aligned the safety-path acceptance test with the V1 issue-review workflow. |
 | 3.1.1 | 2026-09-05 | Approved | Added the removed `PRD-REQ-102` tombstone so the published identifier remains machine-verifiable. |
 | 3.1.0 | 2026-09-04 | Approved | Reduced the first vertical slice to six golden cases and deferred the separate aggregate Agent-monitoring surface while retaining the bounded case Agent log. |

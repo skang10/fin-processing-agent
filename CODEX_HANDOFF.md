@@ -115,7 +115,7 @@ Project name: Financial Document AI Agent
 
 Short name: FinDoc AI Agent
 
-Project type: Interview demonstration and production-shaped machine learning prototype
+Project type: Production-shaped machine learning prototype
 
 Reference domain: Banking and financial services
 
