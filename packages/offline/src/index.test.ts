@@ -196,6 +196,19 @@ describe("deterministic case assembly", () => {
       ...CLEAN_VALUES, payslip_monthly_net_income: "2980.00",
     }));
     expect(issuesOf(result)).toEqual(["VAL_INCOME_CONSISTENCY_001"]);
+    expect(result.findings.find((finding) => finding.ruleId === "VAL_INCOME_CONSISTENCY_001"))
+      .toMatchObject({ status: "failed", reasonCode: "income_conflict" });
+  });
+
+  it("normalizes an observed EUR prefix before comparing income", () => {
+    const assembly = context();
+    const result = assembleCaseResult(assembly, buildExtractionPlan(assembly), candidatesFor(assembly, {
+      ...CLEAN_VALUES, payslip_monthly_net_income: "EUR 2980.00",
+    }));
+    expect(result.claims.find((claim) => claim.rawValue === "EUR 2980.00"))
+      .toMatchObject({ normalizedValue: { amount: "2980.00", currency: "EUR" } });
+    expect(result.findings.find((finding) => finding.ruleId === "VAL_INCOME_CONSISTENCY_001"))
+      .toMatchObject({ status: "failed", reasonCode: "income_conflict" });
   });
 
   it("reports the missing document and the account holder it could not confirm", () => {
@@ -264,6 +277,11 @@ describe("deterministic normalization", () => {
     expect(normalizeAmount("3.200,00")).toBe("3200.00");
     expect(normalizeAmount("3200")).toBe("3200.00");
     expect(normalizeAmount("-1,120.30")).toBe("-1120.30");
+    expect(normalizeAmount("EUR 2980.00")).toBe("2980.00");
+    expect(normalizeAmount("2.980,00 EUR")).toBe("2980.00");
+    expect(normalizeAmount("€ 2.980,00")).toBe("2980.00");
+    expect(normalizeAmount("USD 2980.00")).toBeUndefined();
+    expect(normalizeAmount("EUR 2980.00 €")).toBeUndefined();
     expect(normalizeAmount("+???.??")).toBeUndefined();
   });
 

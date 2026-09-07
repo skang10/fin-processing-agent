@@ -17,7 +17,7 @@ import { evaluateRuleSet, mapDisposition, type MatchResult, type ValidationInput
  */
 
 export const EXTRACTION_REQUIREMENT_SET_VERSION = "document-field-requirements-1.0.0";
-export const CASE_NORMALIZATION_VERSION = "case-normalization-1.0.0";
+export const CASE_NORMALIZATION_VERSION = "case-normalization-1.1.0";
 
 export type RequiredDocumentType = "identity_document" | "payslip" | "bank_statement";
 export type RequirementRole = "identity_holder" | "employee" | "account_holder" | "payslip_employer" | "payment_counterparty" | "payslip_income";
@@ -370,7 +370,9 @@ export function normalizeValue(valueType: "string" | "money" | "date", rawValue:
 
 /** Accept `3200.00`, `3,200.00`, `3.200,00`, and `3200`; the last separator decides the decimal mark. */
 export function normalizeAmount(rawValue: string): string | undefined {
-  const cleaned = rawValue.replace(/[\s €]/gu, "");
+  const match = /^\s*(?:(EUR|€)\s*)?(-?[\d.,\s ]+?)(?:\s*(EUR|€))?\s*$/iu.exec(rawValue);
+  if (!match || (match[1] !== undefined && match[3] !== undefined)) return undefined;
+  const cleaned = (match[2] ?? "").replace(/[\s ]/gu, "");
   if (!/^-?[\d.,]+$/u.test(cleaned) || !/\d/u.test(cleaned)) return undefined;
   const negative = cleaned.startsWith("-");
   const digitsAndMarks = cleaned.replace(/^-/u, "");
