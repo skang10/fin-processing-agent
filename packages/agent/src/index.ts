@@ -186,11 +186,17 @@ export function attentionItemsForFindings(findings: readonly ReportFindingView[]
     });
 }
 
+export function reviewSummary(attentionItemCount: number): string {
+  if (attentionItemCount === 0) return "No issues require review.";
+  if (attentionItemCount === 1) return "1 issue requires review.";
+  return `${attentionItemCount} issues require review.`;
+}
+
 export function buildFakeBrief(context: CaseReviewContext): CaseReviewBriefCandidate {
   const attentionItems = attentionItemsForFindings(context.findings);
   return {
     schema_version: "1.0.0", result_revision_id: context.resultRevisionId, report_status: "ready",
-    summary: `Document processing completed with ${attentionItems.length} items requiring human review.`,
+    summary: reviewSummary(attentionItems.length),
     attention_items: attentionItems,
   };
 }

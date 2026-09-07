@@ -1,5 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createIssue, editIssue, loadCaseBundle, loadCaseQueue, loadDemoCase, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
+import { createIssue, editIssue, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
+
+describe('formatQueueSummary', () => {
+  it('uses concise, grammatical issue counts', () => {
+    expect(formatQueueSummary(0, 'ready_for_review')).toBe('No issues require review.');
+    expect(formatQueueSummary(1, 'ready_for_review')).toBe('1 issue requires review.');
+    expect(formatQueueSummary(2, 'ready_for_review')).toBe('2 issues require review.');
+  });
+
+  it('describes active processing instead of an incomplete issue count', () => {
+    expect(formatQueueSummary(0, 'processing')).toBe('Document processing is in progress.');
+  });
+});
 
 describe('loadCaseQueue', () => {
   it('loads the selected authoritative queue', async () => {

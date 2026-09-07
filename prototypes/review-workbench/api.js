@@ -24,6 +24,13 @@ export async function loadCaseQueue(view = 'review', fetcher = fetch) {
   return response.json();
 }
 
+export function formatQueueSummary(issueCount, workflowStatus) {
+  if (workflowStatus === 'processing') return 'Document processing is in progress.';
+  if (issueCount === 0) return 'No issues require review.';
+  if (issueCount === 1) return '1 issue requires review.';
+  return issueCount + ' issues require review.';
+}
+
 export async function loadDemoCase(fetcher = fetch, wait = function () { return new Promise(function (resolve) { setTimeout(resolve, 500); }); }, random = Math.random) {
   const selected = demoCases[Math.min(demoCases.length - 1, Math.floor(Math.max(0, random()) * demoCases.length))];
   const documentResponse = await fetcher(selected.documentUrl);

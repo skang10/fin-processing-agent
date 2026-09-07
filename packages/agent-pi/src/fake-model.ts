@@ -1,6 +1,6 @@
 import { createAssistantMessageEventStream, type AssistantMessage, type Context, type Model, type ToolCall } from "@earendil-works/pi-ai";
 import type { StreamFn } from "@earendil-works/pi-agent-core";
-import { attentionItemsForFindings, type ReportFindingView } from "@findoc/agent";
+import { attentionItemsForFindings, reviewSummary, type ReportFindingView } from "@findoc/agent";
 
 /** Deterministic offline model route used by default demo and CI paths (AGT-REQ-102). It performs no recognition or reasoning. */
 export const FAKE_MODEL: Model<"findoc-fake"> = Object.freeze({
@@ -344,7 +344,7 @@ export const standardCaseReviewScript: FakeModelScript = (_turn, context) => {
   if (!result) return { kind: "tool_calls", calls: [{ name: "get_current_result", args: {} }] };
   const findings: ReportFindingView[] = result.findings.map((finding) => ({ ruleId: finding.rule_id, ...(finding.rule_version ? { ruleVersion: finding.rule_version } : {}), status: finding.status, reasonCode: finding.reason_code }));
   const items = attentionItemsForFindings(findings);
-  return { kind: "tool_calls", calls: [{ name: "submit_case_review_brief", args: { brief: { schema_version: "1.0.0", result_revision_id: result.result_revision_id, report_status: "ready", summary: `Document processing completed with ${items.length} items requiring human review.`, attention_items: items } } }] };
+  return { kind: "tool_calls", calls: [{ name: "submit_case_review_brief", args: { brief: { schema_version: "1.0.0", result_revision_id: result.result_revision_id, report_status: "ready", summary: reviewSummary(items.length), attention_items: items } } }] };
 };
 
 export const policyViolationCaseReviewScript: FakeModelScript = (turn, context) => {

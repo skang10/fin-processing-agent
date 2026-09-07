@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_AGENT_BUDGET, InMemoryAgentSessionLifecycle, AgentReportExecutionError, FAKE_HARNESS_DESCRIPTOR, FakeCaseReviewAgentHarness, buildSyntheticSessionTrace, canonicalJson, evaluateCaseReviewEligibility, hashArguments, runVerifiedReport, verifyCaseReviewBrief, type CaseReviewContext } from "./index.js";
+import { DEFAULT_AGENT_BUDGET, InMemoryAgentSessionLifecycle, AgentReportExecutionError, FAKE_HARNESS_DESCRIPTOR, FakeCaseReviewAgentHarness, buildSyntheticSessionTrace, canonicalJson, evaluateCaseReviewEligibility, hashArguments, reviewSummary, runVerifiedReport, verifyCaseReviewBrief, type CaseReviewContext } from "./index.js";
 import { AgentAttemptSupersededError, AgentInvocationConflictError, AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError, type AgentSessionConfiguration } from "@findoc/core";
 
 function context(): CaseReviewContext {
@@ -12,6 +12,12 @@ function context(): CaseReviewContext {
 }
 
 describe("Case Review Brief verification", () => {
+  it("uses grammatical deterministic review summaries", () => {
+    expect(reviewSummary(0)).toBe("No issues require review.");
+    expect(reviewSummary(1)).toBe("1 issue requires review.");
+    expect(reviewSummary(2)).toBe("2 issues require review.");
+  });
+
   it("accepts the deterministic fake Agent report and records a session trace", async () => {
     const result = await runVerifiedReport(new FakeCaseReviewAgentHarness(), context());
     expect(result).toMatchObject({ verified: true, brief: { report_status: "ready" }, trace: { terminalReason: "report_submitted", harnessId: "fake-case-review-harness", toolCalls: 1 } });

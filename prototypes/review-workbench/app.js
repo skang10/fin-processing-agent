@@ -1,4 +1,4 @@
-import { createIssue, editIssue, loadCaseBundle, loadCaseQueue, loadDemoCase, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
+import { createIssue, editIssue, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
 import { presentIssue } from './issue-presentation.js';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -135,7 +135,7 @@ async function refreshQueue(view = activeQueueView, updateLocation = true) {
     cases = payload.cases.map(function (record) {
       const status = record.workflow_status === 'ready_for_review' ? 'ready' : record.workflow_status === 'processing' ? 'in-progress' : record.workflow_status.replaceAll('_', '-');
       const labels = { processing: 'In progress', ready_for_review: 'Ready for review', escalated: 'Escalated', changes_requested: 'Changes requested', ready_for_handoff: 'Ready for handoff' };
-      return { name: record.applicant_display_name, id: record.case_code, routeId: record.case_id, summary: record.summary,
+      return { name: record.applicant_display_name, id: record.case_code, routeId: record.case_id, summary: formatQueueSummary(record.issue_count, record.workflow_status),
         status, statusLabel: labels[record.workflow_status], issues: record.issue_count, waiting: waitingLabel(record.waiting_since) };
     });
     document.querySelector('.page-heading h1').textContent = view === 'changes_requested' ? 'Changes requested' : view === 'completed' ? 'Completed' : 'Review queue';
