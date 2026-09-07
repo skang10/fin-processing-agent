@@ -1,6 +1,7 @@
 import type { NormalizedRegion, PageReference, RecoveryToolPorts } from "@findoc/agent";
 import type { CaseDocumentInventory, CaseInventoryPage } from "@findoc/persistence";
 import type { FixtureScannedPageAdapter } from "@findoc/offline";
+import { cropPageRender, IMAGE_PROCESSOR_VERSION } from "@findoc/document-processing";
 
 const MAXIMUM_ARTIFACT_BYTES = 2_000_000;
 const MAXIMUM_OCR_LINES = 200;
@@ -60,7 +61,7 @@ export function createRuntimeDocumentPorts(options: RuntimeDocumentPortOptions):
       return { available: true, text: bytes.toString("utf8"), truncated: false };
     },
 
-    runOcr: async (reference) => {
+    runOcr: async (reference, region) => {
       const page = find(reference);
       if (!page.ocr) throw new Error("Page has no committed OCR output");
       const bytes = await options.readArtifact(page.ocr.objectKey, MAXIMUM_ARTIFACT_BYTES);
@@ -78,18 +79,25 @@ export function createRuntimeDocumentPorts(options: RuntimeDocumentPortOptions):
       return {
         engine: page.ocr.engine, engineVersion: page.ocr.engineVersion, modelAssetVersion: page.ocr.modelAssetVersion,
         reusedCommittedOutput: true,
-        lines,
+        lines: region ? lines.filter((line) => preciseLines.length > 0 && regionsIntersect(line.region, region)) : lines,
       };
     },
 
-    // Crop rendering is not implemented yet, so a region selection resolves to the committed
-    // full-page render rather than a new cropped artifact. See LIMITATIONS.md.
-    renderPageRegion: async (reference) => {
+    renderPageRegion: async (reference, region) => {
       const page = find(reference);
       if (!page.render) throw new Error("Page has no committed render");
       const bytes = await options.readArtifact(page.render.objectKey, MAXIMUM_ARTIFACT_BYTES);
+      if (!sameRegion(region, fullPage)) {
+        const crop = await cropPageRender(bytes, region);
+        return {
+          artifactReference: page.render.objectKey, width: crop.width, height: crop.height,
+          region, processorVersion: crop.processorVersion,
+          image: { data: crop.bytes.toString("base64"), mimeType: "image/png" },
+        };
+      }
       return {
         artifactReference: page.render.objectKey, width: page.render.width, height: page.render.height,
+        region, processorVersion: IMAGE_PROCESSOR_VERSION,
         image: { data: bytes.toString("base64"), mimeType: "image/png" },
       };
     },
@@ -118,7 +126,10 @@ export function createRuntimeDocumentPorts(options: RuntimeDocumentPortOptions):
       const page = find(request.page);
       if (options.vlmExtractor) {
         if (!page.render) throw new Error("Page has no committed render for VLM extraction");
-        const bytes = await options.readArtifact(page.render.objectKey, MAXIMUM_ARTIFACT_BYTES);
+        const source = await options.readArtifact(page.render.objectKey, MAXIMUM_ARTIFACT_BYTES);
+        const bytes = request.region && !sameRegion(request.region, fullPage)
+          ? (await cropPageRender(source, request.region)).bytes
+          : source;
         return options.vlmExtractor({
           image: { data: bytes.toString("base64"), mimeType: "image/png" },
           fieldSchemaId: request.fieldSchemaId,
@@ -137,6 +148,15 @@ export function createRuntimeDocumentPorts(options: RuntimeDocumentPortOptions):
       };
     },
   };
+}
+
+function sameRegion(left: NormalizedRegion, right: NormalizedRegion): boolean {
+  return left.x === right.x && left.y === right.y && left.width === right.width && left.height === right.height;
+}
+
+function regionsIntersect(left: NormalizedRegion, right: NormalizedRegion): boolean {
+  return left.x < right.x + right.width && left.x + left.width > right.x
+    && left.y < right.y + right.height && left.y + left.height > right.y;
 }
 
 /** OCR spans are stored in render pixels with a top-left origin; evidence regions are normalized. */

@@ -39,6 +39,50 @@ export interface PageRenderer {
   render(source: Buffer, request: PageRenderRequest): Promise<PageRenderResult>;
 }
 
+export interface NormalizedCropRegion {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface CroppedPageRender {
+  readonly bytes: Buffer;
+  readonly width: number;
+  readonly height: number;
+  readonly sourcePixelBounds: { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
+  readonly processorVersion: typeof IMAGE_PROCESSOR_VERSION;
+}
+
+/** Crop a committed PNG page render using normalized source-page coordinates. */
+export async function cropPageRender(
+  source: Buffer,
+  region: NormalizedCropRegion,
+  maximumPixels = 8_000_000,
+): Promise<CroppedPageRender> {
+  if (!validNormalizedCrop(region) || !Number.isSafeInteger(maximumPixels) || maximumPixels <= 0) {
+    throw new Error("Crop request is invalid");
+  }
+  const image = sharp(source, { failOn: "error", limitInputPixels: maximumPixels });
+  const metadata = await image.metadata();
+  if (metadata.format !== "png" || !metadata.width || !metadata.height) throw new Error("Crop source must be a decodable PNG render");
+  const left = Math.floor(region.x * metadata.width + 1e-9);
+  const top = Math.floor(region.y * metadata.height + 1e-9);
+  const right = Math.min(metadata.width, Math.ceil((region.x + region.width) * metadata.width - 1e-9));
+  const bottom = Math.min(metadata.height, Math.ceil((region.y + region.height) * metadata.height - 1e-9));
+  const width = right - left;
+  const height = bottom - top;
+  if (width <= 0 || height <= 0 || width * height > maximumPixels) throw new Error("Crop resolves outside the permitted pixel bounds");
+  const bytes = await image.extract({ left, top, width, height }).png().toBuffer();
+  return { bytes, width, height, sourcePixelBounds: { left, top, width, height }, processorVersion: IMAGE_PROCESSOR_VERSION };
+}
+
+function validNormalizedCrop(region: NormalizedCropRegion): boolean {
+  return [region.x, region.y, region.width, region.height].every(Number.isFinite)
+    && region.x >= 0 && region.y >= 0 && region.width > 0 && region.height > 0
+    && region.x + region.width <= 1 + 1e-9 && region.y + region.height <= 1 + 1e-9;
+}
+
 export interface OcrRequest {
   readonly pageNumber: number;
   readonly languages: readonly ("de" | "en")[];

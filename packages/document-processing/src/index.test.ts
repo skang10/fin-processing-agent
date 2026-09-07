@@ -3,7 +3,28 @@ import { fileURLToPath } from "node:url";
 import { PageContentSource, PdfType } from "@firecrawl/pdf-inspector";
 import sharp from "sharp";
 import { createHash } from "node:crypto";
-import { DocumentSandboxClient, FakeOcrEngine, PdfInspectorAdapter, PdfInspectorOcrAdapter, PdfiumPageRenderer, classifySyntheticDemoPages, groupLogicalDocuments, prepareImageDocument, runSelectiveOcr, type BoundaryPrediction, type OcrEngine, type PageClassification, type PdfInspectorEngine } from "./index.js";
+import { DocumentSandboxClient, FakeOcrEngine, PdfInspectorAdapter, PdfInspectorOcrAdapter, PdfiumPageRenderer, classifySyntheticDemoPages, cropPageRender, groupLogicalDocuments, prepareImageDocument, runSelectiveOcr, type BoundaryPrediction, type OcrEngine, type PageClassification, type PdfInspectorEngine } from "./index.js";
+
+describe("cropPageRender", () => {
+  it("resolves normalized coordinates to a real bounded PNG crop", async () => {
+    const source = await sharp({
+      create: { width: 200, height: 100, channels: 3, background: { r: 255, g: 255, b: 255 } },
+    }).png().toBuffer();
+    const crop = await cropPageRender(source, { x: 0.25, y: 0.2, width: 0.5, height: 0.4 });
+    expect(crop).toMatchObject({
+      width: 100, height: 40,
+      sourcePixelBounds: { left: 50, top: 20, width: 100, height: 40 },
+      processorVersion: "sharp-0.35.4",
+    });
+    await expect(sharp(crop.bytes).metadata()).resolves.toMatchObject({ format: "png", width: 100, height: 40 });
+  });
+
+  it("rejects empty and out-of-bounds regions", async () => {
+    const source = await sharp({ create: { width: 10, height: 10, channels: 3, background: "white" } }).png().toBuffer();
+    await expect(cropPageRender(source, { x: 0.9, y: 0, width: 0.2, height: 1 })).rejects.toThrow("invalid");
+    await expect(cropPageRender(source, { x: 0, y: 0, width: 0, height: 1 })).rejects.toThrow("invalid");
+  });
+});
 
 describe("PdfInspectorAdapter", () => {
   it("translates zero-based native pages into project-owned one-based pages", async () => {

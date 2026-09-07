@@ -61,13 +61,13 @@ The implementation spike must prove:
 
 ### BL-003 — PDF Inspector Integration Baseline
 
-**Status:** The pinned PDF Inspector PP-OCRv6 Small runtime is accepted on Linux ARM64 for scanned PDF, JPEG, and PNG synthetic inputs. Linux x64 assets are pinned and checksum-verified but native execution is deferred. Default demo/CI remain fixture-backed. Crop/region OCR, hardened OS resource isolation, cross-platform smoke evidence, and corpus-level quality/latency/resource measurement remain pending.
+**Status:** The pinned PDF Inspector PP-OCRv6 Small runtime is accepted on Linux ARM64 for scanned PDF, JPEG, and PNG synthetic inputs. Linux x64 assets are pinned and checksum-verified but native execution is deferred. Default demo/CI remain fixture-backed. Real bounded PNG cropping and coordinate-based filtering of committed OCR spans are implemented. Crop-only OCR-engine execution, separate immutable crop-artifact persistence, hardened OS resource isolation, cross-platform smoke evidence, and corpus-level quality/latency/resource measurement remain pending.
 
 The default OCR result remains deterministic fixture output and must not be presented as recognition evidence. The explicit real-runtime mode now proves offline PDF OCR execution, persisted provenance, Agent OCR reading, deterministic reconciliation and validation, and report generation for one bounded synthetic case. Remaining work:
 
 1. Extend the accepted `processPdfWithOcr` offline smoke path beyond Linux ARM64 to Linux x64 after the main functional path is complete; the assets remain pinned and checksum-verifiable, but native x64 execution is explicitly deferred and must not be claimed as accepted.
 2. Add release-manifest integration for the committed OCR runtime asset manifest.
-3. Bounded region and crop OCR, plus mixed-language quality tuning. JPEG and PNG full-page execution is accepted on Linux ARM64.
+3. Run the OCR engine directly on bounded crops and persist crops as immutable derived artifacts. The current boundary crops pixels for Agent/VLM delivery and filters already committed coordinate-bearing OCR spans; JPEG and PNG full-page execution is accepted on Linux ARM64.
 4. OCR quality, latency, and resource measurements on the versioned synthetic dataset.
 
 Use `firecrawl/pdf-inspector` as the initial PDF classification, native text and coordinate extraction, layout, table, rendering integration, selective OCR-routing, and PP-OCRv6 Small execution foundation. Keep its OCR result behind the project-owned adapter contract.
@@ -171,7 +171,7 @@ Remaining work:
 
 1. Extend the requirement set beyond the seven demonstration fields once more document variation exists.
 2. Attach normalized evidence regions to native-text candidates; PDF Inspector layout coordinates are not exposed through the current native-text boundary, so those candidates carry a page reference without a bounding box.
-3. Keep the fixture scanned-page adapter only for default fixture mode; the explicit real-OCR route now resolves the scanned demonstration fields locally. Implement crop rendering so a Vision Language Model receives a region rather than a full page.
+3. Keep the fixture scanned-page adapter only for default fixture mode; the explicit real-OCR route now resolves the scanned demonstration fields locally. A bounded VLM request receives a real pixel crop rather than the full page. Persist that crop as its own immutable derived artifact before claiming complete `DOC-REQ-054` acceptance.
 4. Frozen `v0.1.2` now makes `golden-003-multiple-review-issues` carry two document-supported conflicts and no longer claims boundary-uncertainty coverage that the current deterministic router cannot produce.
 5. The explicit real-OCR route classifies the three scanned golden-006 pages from committed OCR content under `synthetic-demo-ocr-content-classifier`; it does not use the fixture page-type declaration. The fixture declaration remains visibly identified and limited to default fixture mode.
 6. Move page rendering, OCR, classification, and grouping from the current eager pre-session pass into idempotent Agent-requested sandbox operations. The implemented visual boundary lets Pi inspect authorized uploaded-document page renders, but those renders are still generated before the session; do not describe the runtime as fully demand-driven until this item is complete.
