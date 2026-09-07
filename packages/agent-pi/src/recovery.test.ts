@@ -7,6 +7,7 @@ import {
 import { PiAgentLedCaseReviewHarness } from "./harness.js";
 import { standardCaseReviewScript } from "./fake-model.js";
 import { reviewContext, reviewPorts } from "./durable-session.test.js";
+import { createRecoveryToolState, resolveEvidenceSource } from "./recovery-tools.js";
 
 const RUN_ID = "11111111-2222-4333-8444-555555555555";
 
@@ -55,6 +56,28 @@ async function crashThenResume(loseAfterSteps: number, ports: CaseReviewProcessi
 const toolNames = (steps: readonly { toolName: string }[]) => steps.map((step) => step.toolName);
 const calls = (ports: CaseReviewProcessingPorts, name: keyof CaseReviewProcessingPorts) =>
   (ports[name] as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+
+describe("native-text evidence geometry", () => {
+  it("attaches the same-pass native span when the submitted value appears verbatim", () => {
+    const state = createRecoveryToolState();
+    const region = { x: 0.2, y: 0.3, width: 0.15, height: 0.04 };
+    state.nativeTextByPage.set("document-1:1", {
+      text: "Monthly net EUR 2980.00",
+      lines: [{ text: "EUR 2980.00", region }],
+    });
+
+    expect(resolveEvidenceSource(
+      state,
+      { documentVersionId: "document-1", pageNumber: 1 },
+      "gap-1",
+      "EUR 2980.00",
+    )).toEqual({
+      extractionMethod: "agent_native_text_reading",
+      processorVersion: "agent-native-text-reading-1.1.0",
+      region,
+    });
+  });
+});
 
 describe("durable re-entry after Worker loss", () => {
   it("continues after a committed inspection step without repeating it", async () => {

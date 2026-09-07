@@ -32,19 +32,19 @@ describe("PdfInspectorAdapter", () => {
       classify: async () => ({ pdfType: PdfType.Mixed, pageCount: 2, pagesNeedingOcr: [1], confidence: 0.7 }),
       extract: async () => ({
         pages: [
-          { page: 0, markdown: "native", needsOcr: false },
-          { page: 1, markdown: "", needsOcr: true, ocrReason: "no_text" },
+          { page: 0, markdown: "native", nativeItems: [{ text: "native", x: 10, y: 20, width: 30, height: 8, itemType: "Text" }], needsOcr: false },
+          { page: 1, markdown: "", nativeItems: [], needsOcr: true, ocrReason: "no_text" },
         ],
         pagesWithTables: [1], pagesWithColumns: [], pagesNeedingOcr: [2],
         ocrReasonsByPage: [{ page: 2, reasons: ["no_text"] }], isComplex: true,
       }),
     };
-    const result = await new PdfInspectorAdapter(engine).inspect(Buffer.from("fixture"));
+    const result = await new PdfInspectorAdapter(engine).inspect(Buffer.from("fixture"), 144);
 
     expect(result).toMatchObject({ pdfType: "mixed", pageCount: 2, routingSignal: 0.7 });
     expect(result.pages).toEqual([
-      { pageNumber: 1, nativeMarkdown: "native", needsOcr: false, hasTable: true, hasColumns: false },
-      { pageNumber: 2, nativeMarkdown: "", needsOcr: true, ocrReason: "no_text", hasTable: false, hasColumns: false },
+      { pageNumber: 1, nativeMarkdown: "native", nativeSpans: [{ text: "native", bbox: [20, 40, 80, 56] }], needsOcr: false, hasTable: true, hasColumns: false },
+      { pageNumber: 2, nativeMarkdown: "", nativeSpans: [], needsOcr: true, ocrReason: "no_text", hasTable: false, hasColumns: false },
     ]);
   });
 

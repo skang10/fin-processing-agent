@@ -165,7 +165,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
         ...page,
         nativeCharacterCount: page.nativeMarkdown.length,
         ...(page.nativeMarkdown.length > 0 ? { nativeTextArtifact: {
-          ...await storeNativeTextArtifact(page.nativeMarkdown, objectStore,
+          ...await storeNativeTextArtifact({ rawText: page.nativeMarkdown, spans: page.nativeSpans }, objectStore,
             `derived/${job.data.case_id}/${document.documentVersionId}/native-text/page-${page.pageNumber}`),
           caseId: job.data.case_id,
         } } : {}),

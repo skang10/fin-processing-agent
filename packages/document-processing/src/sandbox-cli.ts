@@ -11,7 +11,7 @@ if (createHash("sha256").update(source).digest("hex") !== request.source_sha256)
 const preparedImage = request.media_type === "application/pdf" ? undefined : await prepareImageDocument(
   source, request.source_sha256, request.media_type, request.limits.target_dpi, request.limits.maximum_pixels_per_page,
 );
-const inspection = preparedImage?.inspection ?? await new PdfInspectorAdapter().inspect(source);
+const inspection = preparedImage?.inspection ?? await new PdfInspectorAdapter().inspect(source, request.limits.target_dpi);
 if (inspection.pageCount > request.limits.maximum_pages) throw new Error("Sandbox page limit exceeded");
 const renderer = new PdfiumPageRenderer();
 const renders = [];

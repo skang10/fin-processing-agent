@@ -1,3 +1,56 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index f62f168..d06edb4 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -413,6 +413,8 @@ pub struct PageMarkdown {
+     pub page: u32,
+     /// Formatted markdown for this page.
+     pub markdown: String,
++    /// Positioned native items produced by the same parse, in PDF points with a top-left origin.
++    pub native_items: Vec<TextItem>,
+     /// `true` when text on this page is unreliable (GID-encoded fonts,
+     /// encoding issues, garbage text, or empty extraction).
+     pub needs_ocr: bool,
+@@ -577,6 +579,7 @@ fn extract_pages_markdown_mem_impl(
+             results.push(PageMarkdown {
+                 page: page_0idx,
+                 markdown: String::new(),
++                native_items: Vec::new(),
+                 needs_ocr: true,
+                 ocr_reason: None,
+             });
+@@ -649,6 +652,23 @@ fn extract_pages_markdown_mem_impl(
+             ..markdown_options.clone()
+         };
+ 
++        let mut native_items = page_items.clone();
++        let page_height = lopdf_pages
++            .get(&page_1idx)
++            .and_then(|&page_id| get_page_height(&doc, page_id))
++            .unwrap_or(792.0);
++        let coord_space = infer_region_coord_space(&native_items);
++        for item in &mut native_items {
++            let [x1, y1, x2, y2] = extracted_bbox_to_page_top_left(
++                [item.x, item.y, item.x + item.width, item.y + item.height],
++                page_height,
++                coord_space,
++            );
++            item.x = x1;
++            item.y = y1;
++            item.width = x2 - x1;
++            item.height = y2 - y1;
++        }
+         let md = if has_text_quality_issue {
+             String::new()
+         } else {
+@@ -708,6 +728,7 @@ fn extract_pages_markdown_mem_impl(
+             } else {
+                 md
+             },
++            native_items: if needs_ocr { Vec::new() } else { native_items },
+             needs_ocr,
+             ocr_reason,
+         });
 diff --git a/src/vision/fusion.rs b/src/vision/fusion.rs
 index 3872f96..b1c71a9 100644
 --- a/src/vision/fusion.rs
@@ -34,7 +87,7 @@ index 3872f96..b1c71a9 100644
                  page_number,
                  source,
 diff --git a/napi/src/lib.rs b/napi/src/lib.rs
-index 7801df3..45300ba 100644
+index 7801df3..9ae8c6d 100644
 --- a/napi/src/lib.rs
 +++ b/napi/src/lib.rs
 @@ -206,9 +206,22 @@ pub struct OcrPageResult {
@@ -82,3 +135,105 @@ index 7801df3..45300ba 100644
                      provenance: OcrPageProvenance {
                          page_number: provenance.page_number,
                          source: convert_page_content_source(provenance.source),
+@@ -495,33 +523,32 @@ pub fn extract_text_with_positions(
+                 .map_err(|e| to_napi_err(e, "extract_text_with_positions"))?,
+         };
+ 
+-        Ok(items
+-            .into_iter()
+-            .map(|item| {
+-                let (item_type, link_url) = convert_item_type(&item.item_type);
+-                TextItem {
+-                    text: item.text,
+-                    x: item.x as f64,
+-                    y: item.y as f64,
+-                    width: item.width as f64,
+-                    height: item.height as f64,
+-                    font: item.font,
+-                    font_tag: item.font_tag,
+-                    font_size: item.font_size as f64,
+-                    page: item.page,
+-                    is_bold: item.is_bold,
+-                    is_italic: item.is_italic,
+-                    is_underline: item.is_underline,
+-                    is_strikeout: item.is_strikeout,
+-                    item_type,
+-                    link_url,
+-                    mcid: item.mcid,
+-                }
+-            })
+-            .collect())
++        Ok(items.into_iter().map(to_napi_text_item).collect())
+     })
+ }
+ 
++fn to_napi_text_item(item: pdf_inspector::types::TextItem) -> TextItem {
++    let (item_type, link_url) = convert_item_type(&item.item_type);
++    TextItem {
++        text: item.text,
++        x: item.x as f64,
++        y: item.y as f64,
++        width: item.width as f64,
++        height: item.height as f64,
++        font: item.font,
++        font_tag: item.font_tag,
++        font_size: item.font_size as f64,
++        page: item.page,
++        is_bold: item.is_bold,
++        is_italic: item.is_italic,
++        is_underline: item.is_underline,
++        is_strikeout: item.is_strikeout,
++        item_type,
++        link_url,
++        mcid: item.mcid,
++    }
++}
++
+ /// One structure-tree element reference from a tagged PDF.
+ #[napi(object)]
+ pub struct StructureElementJs {
+@@ -857,6 +884,8 @@ pub struct PageMarkdownResult {
+     pub page: u32,
+     /// Formatted markdown for this page.
+     pub markdown: String,
++    /// Positioned native items from the same parse, in PDF points with a top-left origin.
++    pub native_items: Vec<TextItem>,
+     /// `true` when text on this page is unreliable.
+     pub needs_ocr: bool,
+     /// Machine-readable OCR reason when the cause is known.
+@@ -914,6 +943,7 @@ fn extract_pages_markdown_impl(
+             .map(|r| PageMarkdownResult {
+                 page: r.page,
+                 markdown: r.markdown,
++                native_items: r.native_items.into_iter().map(to_napi_text_item).collect(),
+                 needs_ocr: r.needs_ocr,
+                 ocr_reason: r.ocr_reason,
+             })
+--- a/src/vision/pipeline.rs
++++ b/src/vision/pipeline.rs
+@@ -643,6 +643,7 @@
+         markdown: page.markdown.clone(),
+         needs_ocr: page.needs_ocr,
+         ocr_reason: page.ocr_reason.clone(),
++        native_items: page.native_items.clone(),
+     }
+ }
+ 
+@@ -1182,6 +1183,7 @@
+                 markdown: String::new(),
+                 needs_ocr: true,
+                 ocr_reason: Some(crate::OCR_REASON_SCANNED.to_string()),
++                native_items: Vec::new(),
+             })
+             .collect::<Vec<_>>();
+         let routed_pages = (1..=10).collect::<Vec<_>>();
+--- a/src/vision/fusion.rs
++++ b/src/vision/fusion.rs
+@@ -1068,6 +1076,7 @@
+             markdown: markdown.to_string(),
+             needs_ocr,
+             ocr_reason: needs_ocr.then(|| "scanned".to_string()),
++            native_items: Vec::new(),
+         }
+     }
+ 

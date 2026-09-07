@@ -3,6 +3,23 @@ import sharp from "sharp";
 import { createRuntimeDocumentPorts } from "./document-ports.js";
 
 describe("runtime OCR document port", () => {
+  it("returns positioned native spans while retaining legacy markdown compatibility", async () => {
+    const ports = createRuntimeDocumentPorts({
+      inventory: {
+        inputRevisionId: "input-1", applicationSnapshotId: "application-1", documentProcessorVersion: "processor-1",
+        pages: [{ documentVersionId: "document-1", submittedFilename: "synthetic.pdf", pageNumber: 1,
+          needsOcr: false, hasTable: false, hasColumns: false, nativeCharacterCount: 20, nativeTextObjectKey: "native-1",
+          render: { objectKey: "render-1", width: 100, height: 200, rendererVersion: "pdfium" } }], logicalDocuments: [],
+      },
+      readArtifact: async () => Buffer.from(JSON.stringify({ rawText: "Employee: Greta", spans: [{ text: "Greta", bbox: [20, 40, 60, 60] }] })),
+    });
+    const result = await ports.getNativeText({ documentVersionId: "document-1", pageNumber: 1 });
+    expect(result).toMatchObject({ available: true, text: "Employee: Greta", truncated: false });
+    expect(result.lines?.[0]).toMatchObject({ text: "Greta", region: { x: 0.2, y: 0.2 } });
+    expect(result.lines?.[0]?.region.width).toBeCloseTo(0.4);
+    expect(result.lines?.[0]?.region.height).toBeCloseTo(0.1);
+  });
+
   it("returns bounded raw OCR lines with full-page evidence when the provider exposes no spans", async () => {
     const ports = createRuntimeDocumentPorts({
       inventory: {

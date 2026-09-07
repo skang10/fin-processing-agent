@@ -21,7 +21,7 @@ export interface StoredDerivedArtifact {
   readonly objectKey: string;
   readonly sha256: string;
   readonly byteSize: number;
-  readonly mediaType: "text/markdown";
+  readonly mediaType: "text/markdown" | "application/json";
 }
 
 export interface StoredPageRenderArtifact {
@@ -752,7 +752,7 @@ export interface DocumentPageView {
 export interface NativeTextArtifactView {
   readonly objectKey: string;
   readonly byteSize: number;
-  readonly mediaType: "text/markdown";
+  readonly mediaType: "text/markdown" | "application/json";
 }
 
 export interface SourceDocumentArtifactView {

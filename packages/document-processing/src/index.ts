@@ -410,6 +410,7 @@ function validateRenderRequest(request: PageRenderRequest): void {
 export interface InspectedPage {
   readonly pageNumber: number;
   readonly nativeMarkdown: string;
+  readonly nativeSpans: readonly { readonly text: string; readonly bbox: readonly [number, number, number, number] }[];
   readonly needsOcr: boolean;
   readonly ocrReason?: string;
   readonly hasTable: boolean;
@@ -461,7 +462,7 @@ export async function prepareImageDocument(
     inspection: {
       processor: "image-intake-router", processorVersion: IMAGE_PROCESSOR_VERSION, pageCount: 1,
       pdfType: "image_based", routingSignal: 1, isComplex: false,
-      pages: [{ pageNumber: 1, nativeMarkdown: "", needsOcr: true, ocrReason: "image_input", hasTable: false, hasColumns: false }],
+      pages: [{ pageNumber: 1, nativeMarkdown: "", nativeSpans: [], needsOcr: true, ocrReason: "image_input", hasTable: false, hasColumns: false }],
     },
     render: { bytes: png.data, width, height, targetDpi, colorMode: "color", outputFormat: "png", rendererVersion: IMAGE_PROCESSOR_VERSION },
     ocrPdf: jpegToSinglePagePdf(jpeg.data, jpeg.info.width, jpeg.info.height, targetDpi),
@@ -509,7 +510,8 @@ const nativeEngine: PdfInspectorEngine = {
 export class PdfInspectorAdapter {
   constructor(private readonly engine: PdfInspectorEngine = nativeEngine) {}
 
-  async inspect(buffer: Buffer): Promise<PdfInspection> {
+  async inspect(buffer: Buffer, targetDpi = 72): Promise<PdfInspection> {
+    if (!Number.isFinite(targetDpi) || targetDpi < 72 || targetDpi > 300) throw new Error("Native coordinate target DPI is invalid");
     const [classification, extraction] = await Promise.all([
       this.engine.classify(buffer),
       this.engine.extract(buffer),
@@ -538,6 +540,7 @@ export class PdfInspectorAdapter {
       pages: pages.map((page) => ({
         pageNumber: page.page + 1,
         nativeMarkdown: page.markdown,
+        nativeSpans: positionedNativeSpans(page, targetDpi),
         needsOcr: page.needsOcr,
         ...(page.ocrReason ? { ocrReason: page.ocrReason } : {}),
         hasTable: extraction.pagesWithTables.includes(page.page + 1),
@@ -545,6 +548,19 @@ export class PdfInspectorAdapter {
       })),
     };
   }
+}
+
+interface NativeTextItem { readonly text: string; readonly x: number; readonly y: number; readonly width: number; readonly height: number; readonly itemType: string }
+
+function positionedNativeSpans(page: PagesExtractionResult["pages"][number], targetDpi: number): InspectedPage["nativeSpans"] {
+  const items = (page as typeof page & { readonly nativeItems?: readonly NativeTextItem[] }).nativeItems ?? [];
+  const scale = targetDpi / 72;
+  return items.filter((item) => item.itemType === "Text" && item.text.length > 0).map((item) => {
+    if (![item.x, item.y, item.width, item.height].every(Number.isFinite) || item.x < 0 || item.y < 0 || item.width <= 0 || item.height <= 0) {
+      throw new Error("PDF Inspector returned an invalid positioned native-text span");
+    }
+    return { text: item.text, bbox: [item.x * scale, item.y * scale, (item.x + item.width) * scale, (item.y + item.height) * scale] as const };
+  });
 }
 
 function normalizePdfType(value: PdfClassification["pdfType"]): PdfInspection["pdfType"] {

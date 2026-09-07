@@ -795,8 +795,8 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       .innerJoin(artifacts, eq(pages.nativeTextArtifactId, artifacts.id))
       .where(and(eq(physicalDocuments.caseId, caseId), eq(documentVersions.id, documentId), eq(pages.pageNumber, pageNumber))).limit(1);
     if (!record) throw new CaseNotFoundError();
-    if (record.mediaType !== "text/markdown") throw new Error("Persisted native-text media type is invalid");
-    return { objectKey: record.objectKey, byteSize: record.byteSize, mediaType: "text/markdown" };
+    if (record.mediaType !== "text/markdown" && record.mediaType !== "application/json") throw new Error("Persisted native-text media type is invalid");
+    return { objectKey: record.objectKey, byteSize: record.byteSize, mediaType: record.mediaType };
   }
 
   async getPageRenderArtifact(caseId: string, documentId: string, pageNumber: number): Promise<PageRenderArtifactView> {

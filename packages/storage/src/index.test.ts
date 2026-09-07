@@ -63,6 +63,23 @@ describe("derived native-text storage", () => {
     expect(storedMediaType).toBe("text/markdown");
     expect(stored.toString("utf8")).toBe("# Synthetic page");
   });
+
+  it("stores positioned native text as a JSON artifact", async () => {
+    let storedMediaType = "";
+    let stored = Buffer.alloc(0);
+    const store: ObjectStore = {
+      async put(_key, content, mediaType) {
+        storedMediaType = mediaType;
+        for await (const chunk of content) stored = Buffer.concat([stored, Buffer.from(chunk)]);
+      },
+      async remove() {}, async get() { return chunks(); },
+    };
+    const payload = { rawText: "Synthetic", spans: [{ text: "Synthetic", bbox: [1, 2, 3, 4] }] };
+    const result = await storeNativeTextArtifact(payload, store, "derived/case-1/page-1");
+    expect(result.mediaType).toBe("application/json");
+    expect(storedMediaType).toBe("application/json");
+    expect(JSON.parse(stored.toString("utf8"))).toEqual(payload);
+  });
 });
 
 describe("MinIO bucket initialization", () => {

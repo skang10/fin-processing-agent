@@ -42,10 +42,10 @@ try {
   } else if (platform.startsWith("linux-")) {
     const dockerPlatform = platform === "linux-arm64" ? "linux/arm64" : "linux/amd64";
     run("docker", ["run", "--rm", "--platform", dockerPlatform,
-      "-v", `${sourceRoot}:/source:ro`, "-v", `${join(cacheRoot, "cargo")}:/usr/local/cargo`,
+      "-v", `${sourceRoot}:/source:ro`, "-v", `${join(cacheRoot, "cargo")}:/cargo-cache`,
       "-v", `${join(cacheRoot, "target")}:/target`, "-v", `${outputDirectory}:/output`,
-      source.rust_image, "bash", "-lc",
-      `CARGO_TARGET_DIR=/target cargo build --release --manifest-path /source/napi/Cargo.toml && cp /target/release/libpdf_inspector_napi.so /output/${source.library_name}`,
+      source.rust_image, "bash", "-c",
+      `CARGO_HOME=/cargo-cache CARGO_TARGET_DIR=/target cargo build --release --manifest-path /source/napi/Cargo.toml && cp -f /target/release/libpdf_inspector_napi.so /output/${source.library_name}`,
     ]);
   } else throw new Error(`Cross-building ${platform} is unsupported`);
   await chmod(output, 0o755);

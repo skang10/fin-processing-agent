@@ -30,6 +30,11 @@ interface CommittedOcrArtifact {
   readonly spans?: readonly { readonly text: string; readonly bbox: readonly number[]; readonly confidence?: { readonly value?: number } }[];
 }
 
+interface CommittedNativeTextArtifact {
+  readonly rawText?: string;
+  readonly spans?: readonly { readonly text: string; readonly bbox: readonly number[] }[];
+}
+
 /**
  * Registered document tools backed by committed run state: PDF Inspector page metadata, the stored
  * native-text artifact, the stored selective-OCR output, the stored page render, and the persisted
@@ -58,7 +63,25 @@ export function createRuntimeDocumentPorts(options: RuntimeDocumentPortOptions):
       const page = find(reference);
       if (!page.nativeTextObjectKey || page.nativeCharacterCount === 0) return { available: false, text: "", truncated: false };
       const bytes = await options.readArtifact(page.nativeTextObjectKey, MAXIMUM_ARTIFACT_BYTES);
-      return { available: true, text: bytes.toString("utf8"), truncated: false };
+      const stored = bytes.toString("utf8");
+      let text = stored;
+      let spans: CommittedNativeTextArtifact["spans"] = [];
+      try {
+        const parsed = JSON.parse(stored) as CommittedNativeTextArtifact;
+        if (typeof parsed.rawText === "string" && Array.isArray(parsed.spans)) {
+          text = parsed.rawText;
+          spans = parsed.spans;
+        }
+      } catch { /* Legacy native-text artifacts are markdown. */ }
+      const width = page.render?.width ?? 0;
+      const height = page.render?.height ?? 0;
+      return {
+        available: true, text, truncated: false,
+        lines: spans.slice(0, MAXIMUM_OCR_LINES).flatMap((span) => {
+          const region = normalizeBoundingBox(span.bbox, width, height);
+          return region && typeof span.text === "string" && span.text.length > 0 ? [{ text: span.text, region }] : [];
+        }),
+      };
     },
 
     runOcr: async (reference) => {

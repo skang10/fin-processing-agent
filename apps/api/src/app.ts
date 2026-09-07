@@ -374,6 +374,11 @@ export function buildApp(
     const { case_id: caseId, document_id: documentId, page_number: rawPageNumber } = request.params as { case_id: string; document_id: string; page_number: string };
     const artifact = await caseQueries.getNativeTextArtifact(caseId, documentId, Number(rawPageNumber));
     const content = await readObjectBytes(artifactStore, artifact.objectKey, Math.max(artifact.byteSize, 1));
+    if (artifact.mediaType === "application/json") {
+      const parsed = JSON.parse(content.toString("utf8")) as { rawText?: unknown };
+      if (typeof parsed.rawText !== "string") throw new Error("Persisted native-text artifact is invalid");
+      return reply.type("text/markdown; charset=utf-8").send(parsed.rawText);
+    }
     return reply.type("text/markdown; charset=utf-8").send(content);
   });
 

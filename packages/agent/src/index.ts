@@ -317,7 +317,7 @@ export interface PageReference {
 /** Scoped service capabilities held by tool wrappers, never by the model (AGT-REQ-027). */
 export interface RecoveryToolPorts {
   inspectPage(page: PageReference): Promise<{ readonly needsOcr: boolean; readonly ocrReason?: string; readonly hasTable: boolean; readonly hasColumns: boolean; readonly nativeCharacterCount: number; readonly renderAvailable: boolean; readonly ocrAvailable: boolean }>;
-  getNativeText(page: PageReference): Promise<{ readonly available: boolean; readonly text: string; readonly truncated: boolean }>;
+  getNativeText(page: PageReference): Promise<{ readonly available: boolean; readonly text: string; readonly truncated: boolean; readonly lines?: readonly { readonly text: string; readonly region: NormalizedRegion }[] }>;
   runOcr(page: PageReference): Promise<{ readonly engine: string; readonly engineVersion: string; readonly modelAssetVersion: string; readonly lines: readonly { readonly text: string; readonly region: NormalizedRegion; readonly rawConfidence: number }[]; readonly reusedCommittedOutput: boolean }>;
   renderPageRegion(page: PageReference, region: NormalizedRegion): Promise<{
     readonly artifactReference: string;
@@ -349,7 +349,7 @@ export interface SubmittedExtractionCandidate {
   readonly valueType: "string" | "money" | "date";
   readonly rawValue: string;
   readonly page: PageReference;
-  /** Present only when the source tool returned coordinates; native text has none. */
+  /** Present only when the selected source text was returned with precise coordinates. */
   readonly region?: NormalizedRegion;
   readonly extractionMethod: AgentExtractionMethod;
   readonly processorVersion: string;

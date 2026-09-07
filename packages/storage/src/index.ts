@@ -133,15 +133,17 @@ function isAlreadyOwnedBucketError(error: unknown): boolean {
 }
 
 export async function storeNativeTextArtifact(
-  content: string,
+  content: string | { readonly rawText: string; readonly spans: readonly { readonly text: string; readonly bbox: readonly number[] }[] },
   store: ObjectStore,
   keyPrefix: string,
 ): Promise<StoredDerivedArtifact> {
-  const bytes = Buffer.from(content, "utf8");
+  const structured = typeof content !== "string";
+  const bytes = Buffer.from(structured ? JSON.stringify(content) : content, "utf8");
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const objectKey = `${keyPrefix}/${sha256}`;
-  await store.put(objectKey, (async function* () { yield bytes; })(), "text/markdown");
-  return { objectKey, sha256, byteSize: bytes.byteLength, mediaType: "text/markdown" };
+  const mediaType = structured ? "application/json" as const : "text/markdown" as const;
+  await store.put(objectKey, (async function* () { yield bytes; })(), mediaType);
+  return { objectKey, sha256, byteSize: bytes.byteLength, mediaType };
 }
 
 export async function storePageRenderArtifact(
