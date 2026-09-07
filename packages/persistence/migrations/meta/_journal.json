@@ -169,6 +169,13 @@
       "when": 1788711811434,
       "tag": "0023_vengeful_dorian_gray",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788795134959,
+      "tag": "0024_acoustic_steel_serpent",
+      "breakpoints": true
     }
   ]
 }

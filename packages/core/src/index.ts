@@ -611,6 +611,7 @@ export interface ReviewCommandService {
 
 export interface CaseStatus {
   readonly caseId: CaseId;
+  readonly caseCode: string;
   readonly applicantDisplayName: string;
   readonly lifecycle: "processing" | "ready_for_review" | "review_complete" | "processing_exception";
   readonly progress: "submitted" | "extracted" | "agent_checked" | "human_review" | "outcome";
@@ -626,6 +627,7 @@ export interface CaseQueryService {
 
 export interface QueueCaseView {
   readonly caseId: CaseId;
+  readonly caseCode: string;
   readonly applicantDisplayName: string;
   readonly summary: string;
   readonly issueCount: number;

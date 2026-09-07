@@ -16,12 +16,13 @@ function multipartPayload() {
 describe("case intake", () => {
   const caseQueries = {
     list: vi.fn(async () => [{
-      caseId: "4c816f67-5f2f-4e21-8c17-7eb1e53838bd", applicantDisplayName: "Anna Beispiel",
+      caseId: "4c816f67-5f2f-4e21-8c17-7eb1e53838bd", caseCode: "FD-2026-0042", applicantDisplayName: "Anna Beispiel",
       summary: "Three items require review.", issueCount: 1, workflowStatus: "ready_for_review" as const,
       lifecycle: "ready_for_review" as const, waitingSince: "2026-09-01T10:00:00.000Z", version: 2,
     }]),
     get: vi.fn(async () => ({
       caseId: "4c816f67-5f2f-4e21-8c17-7eb1e53838bd",
+      caseCode: "FD-2026-0042",
       applicantDisplayName: "Anna Beispiel",
       lifecycle: "processing" as const,
       progress: "submitted" as const,
@@ -208,6 +209,7 @@ describe("case intake", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
+      case_code: "FD-2026-0042",
       lifecycle: "processing",
       result_availability: "pending",
       links: { agent_report: "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/agent-report" },
@@ -219,7 +221,7 @@ describe("case intake", () => {
     const app = buildApp({ accept: vi.fn() }, caseQueries);
     const response = await app.inject({ method: "GET", url: "/api/v1/cases?view=changes_requested" });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ cases: [{ applicant_display_name: "Anna Beispiel", issue_count: 1 }] });
+    expect(response.json()).toMatchObject({ cases: [{ case_code: "FD-2026-0042", applicant_display_name: "Anna Beispiel", issue_count: 1 }] });
     expect(caseQueries.list).toHaveBeenCalledWith("changes_requested");
     await app.close();
   });

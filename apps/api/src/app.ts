@@ -144,7 +144,7 @@ export function buildApp(
     const view = (request.query as { view?: "review" | "changes_requested" | "completed" }).view ?? "review";
     const records = await caseQueries.list(view);
     return { view, cases: records.map((record) => ({
-      case_id: record.caseId, applicant_display_name: record.applicantDisplayName,
+      case_id: record.caseId, case_code: record.caseCode, applicant_display_name: record.applicantDisplayName,
       summary: record.summary, issue_count: record.issueCount, workflow_status: record.workflowStatus,
       lifecycle: record.lifecycle, waiting_since: record.waitingSince, version: record.version,
     })) };
@@ -165,6 +165,7 @@ export function buildApp(
     const base = `/api/v1/cases/${record.caseId}`;
     return {
       case_id: record.caseId,
+      case_code: record.caseCode,
       applicant_display_name: record.applicantDisplayName,
       lifecycle: record.lifecycle,
       progress: record.progress,

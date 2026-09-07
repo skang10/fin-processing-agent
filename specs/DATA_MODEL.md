@@ -2,11 +2,11 @@
 
 Document ID: `DAT`
 
-Version: 3.0.0
+Version: 3.1.0
 
 Status: Approved
 
-Last updated: 2026-09-06
+Last updated: 2026-09-07
 
 ## 1. Purpose
 
@@ -184,7 +184,7 @@ Note: Claim-to-finding and finding-to-disposition associations also require expl
 
 A Case is the document-review container for one synthetic applicant scenario. It is not a loan, account, credit decision, KYC decision, or AML decision.
 
-`DAT-REQ-013` A case must have one stable case identifier and exactly one case-lifecycle value from `IDX` section 12.1.
+`DAT-REQ-013` A case must have one stable technical identifier, one unique immutable reviewer-facing reference formatted `FD-YYYY-NNNN` or with additional sequence digits after `NNNN`, and exactly one case-lifecycle value from `IDX` section 12.1. The year is the UTC case-creation year and the numeric suffix is allocated from a concurrency-safe database sequence; the reviewer-facing reference must not replace the technical identifier in relationships or API routing.
 
 `DAT-REQ-014` A case must record creation time, current lifecycle projection, and the identifiers needed to correlate its audit history.
 
@@ -658,6 +658,7 @@ The following details are intentionally deferred to later owning specifications:
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.1.0 | 2026-09-07 | Approved | Added the immutable `FD-YYYY-NNNN` reviewer-facing case reference while retaining the UUID as the relational technical identifier. |
 | 3.0.0 | 2026-09-06 | Approved | Replaced separate recovery and report sessions with one case-review session, added phase-aware Agent steps, immutable tool invocation results and reuse lineage, deterministic request links, and durable re-entry invariants. |
 | 2.3.0 | 2026-09-06 | Approved | Defined immutable page native-text artifacts and their provenance boundary. |
 | 2.2.0 | 2026-09-06 | Approved | Defined the immutable downstream-ready projection derived from a cleared final document review. |

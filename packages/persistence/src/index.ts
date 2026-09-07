@@ -16,6 +16,10 @@ import { agentEligibilityDecisions, agentReports, agentSessionAttempts, agentSes
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
 
+function caseCode(createdAt: Date, displayNumber: number): string {
+  return `FD-${createdAt.getUTCFullYear()}-${String(displayNumber).padStart(4, "0")}`;
+}
+
 function asFinalAction(value: string): "request_changes" | "escalate_review" | "clear_for_downstream" {
   if (value === "request_changes" || value === "escalate_review" || value === "clear_for_downstream") return value;
   throw new Error("Persisted final-review action is invalid");
@@ -352,7 +356,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
 
   async list(view: "review" | "changes_requested" | "completed"): Promise<readonly QueueCaseView[]> {
     const records = await this.db.select({
-      caseId: cases.id, applicantDisplayName: cases.applicantDisplayName,
+      caseId: cases.id, displayNumber: cases.displayNumber, applicantDisplayName: cases.applicantDisplayName,
       lifecycle: cases.lifecycle, version: cases.version, createdAt: cases.createdAt,
     }).from(cases).orderBy(asc(cases.createdAt), asc(cases.id)).limit(100);
     const projected = await Promise.all(records.map(async (record): Promise<QueueCaseView | null> => {
@@ -374,7 +378,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
           : action === "escalate_review" ? "escalated"
             : record.lifecycle === "processing" ? "processing" : "ready_for_review";
       return {
-        caseId: record.caseId, applicantDisplayName: record.applicantDisplayName,
+        caseId: record.caseId, caseCode: caseCode(record.createdAt, record.displayNumber), applicantDisplayName: record.applicantDisplayName,
         summary: report?.summary ?? (workflowStatus === "processing" ? "Document processing is in progress." : "Review result available."),
         issueCount: issueRows.length, workflowStatus, lifecycle: asCaseLifecycle(record.lifecycle),
         waitingSince: (finalReview?.createdAt ?? record.createdAt).toISOString(), version: record.version,
@@ -386,9 +390,11 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
   async get(caseId: string): Promise<CaseStatus> {
     const [record] = await this.db.select({
       caseId: cases.id,
+      displayNumber: cases.displayNumber,
       applicantDisplayName: cases.applicantDisplayName,
       lifecycle: cases.lifecycle,
       version: cases.version,
+      createdAt: cases.createdAt,
     }).from(cases).where(eq(cases.id, caseId)).limit(1);
     if (!record) throw new CaseNotFoundError();
 
@@ -396,7 +402,10 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     const [finalReview] = await this.db.select({ action: finalReviews.action }).from(finalReviews)
       .where(eq(finalReviews.caseId, caseId)).limit(1);
     return {
-      ...record,
+      caseId: record.caseId,
+      caseCode: caseCode(record.createdAt, record.displayNumber),
+      applicantDisplayName: record.applicantDisplayName,
+      version: record.version,
       lifecycle,
       progress: lifecycle === "processing" ? "submitted" : lifecycle === "ready_for_review" ? "human_review" : "outcome",
       resultAvailability: lifecycle === "processing" ? "pending" : lifecycle === "processing_exception" ? "unavailable" : "ready",

@@ -18,6 +18,7 @@ export const CaseAcceptedSchema = Type.Object({
 
 export const CaseProjectionSchema = Type.Object({
   case_id: Type.String({ minLength: 1 }),
+  case_code: Type.String({ pattern: "^FD-[0-9]{4}-[0-9]{4,}$" }),
   applicant_display_name: Type.String({ minLength: 1 }),
   lifecycle: CaseLifecycleSchema,
   progress: Type.Union([
@@ -97,6 +98,7 @@ export const CaseQueueSchema = Type.Object({
   view: CaseQueueViewSchema,
   cases: Type.Array(Type.Object({
     case_id: Type.String({ format: "uuid" }),
+    case_code: Type.String({ pattern: "^FD-[0-9]{4}-[0-9]{4,}$" }),
     applicant_display_name: Type.String(),
     summary: Type.String(),
     issue_count: Type.Integer({ minimum: 0 }),

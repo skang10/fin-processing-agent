@@ -1,14 +1,15 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, pgTable, serial, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 export const cases = pgTable("cases", {
   id: uuid("id").primaryKey(),
+  displayNumber: serial("display_number").notNull(),
   applicantDisplayName: text("applicant_display_name").notNull(),
   lifecycle: text("lifecycle").notNull(),
   version: integer("version").notNull().default(1),
   currentRunId: uuid("current_run_id").references((): AnyPgColumn => processingRuns.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [uniqueIndex("case_display_number_uq").on(table.displayNumber)]);
 
 export const applicationSnapshots = pgTable("application_snapshots", {
   id: uuid("id").primaryKey(),

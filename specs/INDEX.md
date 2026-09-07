@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 3.8.0
+Version: 3.9.0
 
 Status: Approved
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.0, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.0.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.5.0, and `components/REVIEW_WORKBENCH.md` version 3.3.0. All four ADRs are accepted; ADR-003 selects the opt-in live default and fallback from bounded synthetic benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
+All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.0, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.1.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.5.0, `components/REVIEW_WORKBENCH.md` version 3.4.0, and `API_CONTRACTS.md` version 1.8.0. All four ADRs are accepted; ADR-003 selects the opt-in live default and fallback from bounded synthetic benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
 
 ## 3. Product Baseline
 
@@ -367,6 +367,7 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.9.0 | 2026-09-07 | Approved | Approved the immutable `FD-YYYY-NNNN` reviewer-facing case reference across the data model, API projections, and Review Workbench while retaining UUID routing and relationships. |
 | 3.8.0 | 2026-09-07 | Approved | Accepted ADR-003 after the bounded two-configuration live-VLM benchmark selected `openai/gpt-5.6-terra` as default and `openai/gpt-5.6-sol` as fallback. |
 | 3.7.0 | 2026-09-07 | Approved | Approved Agent component 3.5.0, using PDF Inspector `needsOcr` as the interim routing signal and requiring visual inspection before OCR or VLM on routed pages. |
 | 3.6.0 | 2026-09-07 | Approved | Approved Review Workbench 3.3.0 with German local second-precision Agent-log timestamps. |

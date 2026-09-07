@@ -2,7 +2,7 @@
 
 Document ID: `API`
 
-Version: 1.7.0
+Version: 1.8.0
 
 Status: Approved
 
@@ -138,9 +138,9 @@ GET  /api/v1/cases/{case_id}/events
 
 `API-REQ-034` Structured application data must be schema validated and versioned independently from document bytes; reviewer projections may expose masked contact preferences and initial-submission, latest-submission, and latest-update times when present.
 
-`API-REQ-035` `GET /cases` must provide the Review Queue projection: case identifier, applicant display name, concise review summary, issue count, reviewer workflow status, waiting-since time, lifecycle, and version.
+`API-REQ-035` `GET /cases` must provide the Review Queue projection: technical case identifier, immutable reviewer-facing `case_code`, applicant display name, concise review summary, issue count, reviewer workflow status, waiting-since time, lifecycle, and version.
 
-`API-REQ-036` `GET /cases/{case_id}` must return the current authorized case projection containing case identity, applicant display data, lifecycle, compact progress, current result availability, and links to separately loadable report, issues, application data, documents, final review, case Agent log, and downstream handoff.
+`API-REQ-036` `GET /cases/{case_id}` must return the current authorized case projection containing the technical case identifier, immutable reviewer-facing `case_code`, applicant display data, lifecycle, compact progress, current result availability, and links to separately loadable report, issues, application data, documents, final review, case Agent log, and downstream handoff. Routes continue to use the technical case identifier.
 
 `API-REQ-037` `POST /cases/{case_id}/runs` must create a new immutable processing run only when its declared input and version preconditions are valid, and must return `202 Accepted` without executing long-running work in the request handler.
 
@@ -341,6 +341,7 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.8.0 | 2026-09-07 | Approved | Added the immutable reviewer-facing `case_code` to queue and case projections while retaining UUID-based routes. |
 | 1.7.0 | 2026-09-07 | Approved | Added bounded session duration, model-call count, and available token totals to the case Agent-log projection so evaluation capture can satisfy operational reporting without exposing model or document payloads. |
 | 1.6.0 | 2026-09-06 | Approved | Added case-scoped delivery of immutable PDFium page-render artifacts. |
 | 1.5.0 | 2026-09-06 | Approved | Added case-scoped source-document streaming for the PDF.js and image review viewers. |

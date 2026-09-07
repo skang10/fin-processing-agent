@@ -2,7 +2,7 @@
 
 Document ID: `UI`
 
-Version: 3.3.0
+Version: 3.4.0
 
 Status: Approved
 
@@ -284,9 +284,9 @@ The workbench presents `clear_for_downstream` as **Complete document review** so
 
 `UI-REQ-157` Opening a review case must present its current verified Case Review Brief as the default view beside the document workspace; its issues, compact progress, and bounded Agent activity must remain reachable without a nested case dashboard.
 
-`UI-REQ-158` The Review Queue must display case identifier, applicant, concise review summary, issue count, reviewer workflow status, and waiting time. Technical run identifiers, unsupported priority labels, and recommended-disposition detail must remain outside the default queue.
+`UI-REQ-158` The Review Queue must display the immutable reviewer-facing `FD-YYYY-NNNN` case reference, applicant, concise review summary, issue count, reviewer workflow status, and waiting time. The technical case UUID, technical run identifiers, unsupported priority labels, and recommended-disposition detail must remain outside the default queue.
 
-`UI-REQ-159` The case header must identify the case, applicant, review-required state, compact shared progression, latest reviewer-readable Agent activity, and no separate case overview or Pipeline view.
+`UI-REQ-159` The case header must identify the case by its immutable reviewer-facing `FD-YYYY-NNNN` reference, applicant, review-required state, compact shared progression, latest reviewer-readable Agent activity, and no separate case overview or Pipeline view. The UUID may remain in the route but must not be the ordinary visible case label.
 
 `UI-REQ-160` The shared progression must distinguish completed, current, and pending checkpoints without exposing internal stage-execution detail.
 
@@ -458,6 +458,7 @@ No unresolved Review Workbench boundary decision blocks review of this document.
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.4.0 | 2026-09-07 | Approved | Replaced visible case UUIDs with immutable `FD-YYYY-NNNN` reviewer references while retaining UUID routing. |
 | 3.3.0 | 2026-09-07 | Approved | Standardized visible Agent-log timestamps as German local `DD.MM.YYYY, HH:mm:ss` values without milliseconds while retaining full authoritative timestamps for event ordering. |
 | 3.2.0 | 2026-09-06 | Approved | Selected confirmed requested-change drafts for the message by default while retaining reviewer opt-out. |
 | 3.1.1 | 2026-09-05 | Approved | Added individual deprecated and removed requirement tombstones so all published UI identifiers remain machine-verifiable. |

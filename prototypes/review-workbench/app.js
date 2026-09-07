@@ -91,7 +91,7 @@ function renderCases() {
       (item.name + ' ' + item.id + ' ' + item.summary).toLowerCase().includes(query);
   });
   caseList.innerHTML = visible.map(function (item) {
-    return '<tr class="case-row" data-case-id="' + escapeHtml(item.id) + '" tabindex="0" aria-label="Open ' + item.id + ', ' + item.name + '">' +
+    return '<tr class="case-row" data-route-id="' + escapeHtml(item.routeId || item.id) + '" tabindex="0" aria-label="Open ' + item.id + ', ' + item.name + '">' +
       '<td><strong>' + item.id + '</strong></td><td><strong>' + item.name + '</strong></td>' +
       '<td><strong>' + item.summary + '</strong></td><td><span class="issue-number">' + item.issues + '</span></td>' +
       '<td><span class="state-label ' + item.status + '"><i></i>' + item.statusLabel + '</span></td>' +
@@ -100,11 +100,11 @@ function renderCases() {
   }).join('');
   document.querySelector('#empty-state').hidden = visible.length > 0;
   caseList.querySelectorAll('.case-row').forEach(function (row) {
-    row.addEventListener('click', function () { openQueueCase(row.dataset.caseId); });
+    row.addEventListener('click', function () { openQueueCase(row.dataset.routeId); });
     row.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        openQueueCase(row.dataset.caseId);
+        openQueueCase(row.dataset.routeId);
       }
     });
   });
@@ -134,7 +134,7 @@ async function refreshQueue(view = activeQueueView, updateLocation = true) {
     cases = payload.cases.map(function (record) {
       const status = record.workflow_status === 'ready_for_review' ? 'ready' : record.workflow_status === 'processing' ? 'in-progress' : record.workflow_status.replaceAll('_', '-');
       const labels = { processing: 'In progress', ready_for_review: 'Ready for review', escalated: 'Escalated', changes_requested: 'Changes requested', ready_for_handoff: 'Ready for handoff' };
-      return { name: record.applicant_display_name, id: record.case_id, summary: record.summary,
+      return { name: record.applicant_display_name, id: record.case_code, routeId: record.case_id, summary: record.summary,
         status, statusLabel: labels[record.workflow_status], issues: record.issue_count, waiting: waitingLabel(record.waiting_since) };
     });
     document.querySelector('.page-heading h1').textContent = view === 'changes_requested' ? 'Changes requested' : view === 'completed' ? 'Completed' : 'Review queue';
@@ -1231,7 +1231,7 @@ async function loadCaseFromApi() {
       includedRequests[index] = record.requested_change.included;
     });
     current = 0;
-    document.querySelectorAll('.case-id').forEach(function (element) { element.textContent = caseRecord.case_id; });
+    document.querySelectorAll('.case-id').forEach(function (element) { element.textContent = caseRecord.case_code; });
     document.querySelectorAll('.case-identity strong').forEach(function (element) { element.textContent = caseRecord.applicant_display_name; });
     const statusBadge = document.querySelector('.status-badge');
     statusBadge.textContent = caseRecord.final_review_action === 'clear_for_downstream' ? 'Ready for handoff'
