@@ -24,4 +24,20 @@ describe('issue presentation', () => {
     expect(presentIssue({ code: 'VAL_DOC_COMPLETENESS_001', supporting_references: [] }, finding, 0, [document], evidence))
       .toMatchObject({ title: 'Bank statement missing', pageNumber: undefined, pageLabel: 'No page evidence', references: [], sourceLabel: 'Deterministic document check' });
   });
+
+  it('uses precise page-region evidence as the issue default page', () => {
+    const evidence = {
+      application: { evidence_type: 'structured_input' },
+      payslip: {
+        evidence_type: 'page_region', document_version_id: 'document-1', page_number: 2,
+        normalized_region: { x: 0.05, y: 0.24, width: 0.28, height: 0.02 },
+      },
+    };
+    expect(presentIssue(
+      { code: 'VAL_INCOME_CONSISTENCY_001', supporting_references: ['application', 'payslip'] },
+      undefined, 0, [document], evidence,
+    )).toMatchObject({
+      title: 'Monthly income', pageNumber: 2, pageLabel: 'Page 2 of 3', sourceDocument: document,
+    });
+  });
 });

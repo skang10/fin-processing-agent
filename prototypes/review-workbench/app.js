@@ -260,7 +260,7 @@ function renderSource(issue) {
 }
 
 function selectedDocumentSource(issue) {
-  const documentRecord = sourceOverride?.document || apiDocuments[0];
+  const documentRecord = sourceOverride?.document || issue.sourceDocument || apiDocuments[0];
   return { document: documentRecord, pageNumber: sourceOverride?.pageNumber || issue.pageNumber || 1 };
 }
 
@@ -377,7 +377,7 @@ function renderIssueList() {
 }
 
 function renderThumbnails(activePage) {
-  const documentRecord = sourceOverride?.document || apiDocuments[0];
+  const documentRecord = sourceOverride?.document || currentIssue().sourceDocument || apiDocuments[0];
   const pageCount = documentRecord ? documentRecord.page_count : 5;
   const sequence = ++thumbnailRenderSequence;
   document.querySelector('#thumbnails').innerHTML = Array.from({ length: pageCount }, function (_, index) { return index + 1; }).map(function (page) {
@@ -392,7 +392,7 @@ function renderThumbnails(activePage) {
   document.querySelectorAll('.thumbnail').forEach(function (button) {
     button.addEventListener('click', function () {
       const pageNumber = Number(button.dataset.pageNumber);
-      const selectedDocument = sourceOverride?.document || apiDocuments[0];
+      const selectedDocument = sourceOverride?.document || currentIssue().sourceDocument || apiDocuments[0];
       sourceOverride = {
         name: selectedDocument ? selectedDocument.submitted_filename : currentIssue().doc,
         page: 'Page ' + pageNumber + (selectedDocument ? ' of ' + selectedDocument.page_count : ''),
@@ -1070,6 +1070,7 @@ function issuePresentation(record, finding, index) {
     why: record.description, recommendation: record.recommended_action,
     doc: presentation.sourceLabel,
     page: presentation.pageLabel,
+    sourceDocument: presentation.sourceDocument,
     pageNumber: presentation.pageNumber, paper: presentation.pageNumber ? pagePaperKind(presentation.pageNumber) : 'boundary',
     value: '', valueLabel: '',
     values: references.map(function (reference) {

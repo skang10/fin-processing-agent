@@ -9,7 +9,9 @@ export function presentIssue(record, finding, index, documents, evidenceByRefere
   const references = requiredDocumentMissing ? [] : suppliedReferences;
   const pageSources = references.map(function (reference) {
     return { reference, evidence: evidenceByReference[reference] };
-  }).filter(function (item) { return item.evidence?.evidence_type === 'page_level'; });
+  }).filter(function (item) {
+    return item.evidence?.evidence_type === 'page_level' || item.evidence?.evidence_type === 'page_region';
+  });
   const primary = pageSources.at(-1);
   const sourceDocument = primary
     ? documents.find(function (document) { return document.document_id === primary.evidence.document_version_id; }) || documents[0]
