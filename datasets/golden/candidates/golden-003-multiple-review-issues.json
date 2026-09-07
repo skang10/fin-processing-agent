@@ -16,15 +16,18 @@
     "native_text",
     "de",
     "multiple_review_issues",
-    "document_boundary",
+    "multi_page_document",
     "implemented_offline_path"
   ],
+  "document_values": {
+    "payslip_monthly_net": "3310.00"
+  },
   "documents": [
     {
       "media_type": "application/pdf",
       "page_count": 4,
       "path": "../documents/golden-003-multiple-review-issues.pdf",
-      "sha256": "d9be90b5f5860ffcb2e0c2516142f91411c6f02de911f2e0ac9b525d301b2612"
+      "sha256": "0bff1a6c66a787c48382850afc5c7dcbc98cc9ddd53a6ca9c4b10d77015cfe50"
     }
   ],
   "generator": {
@@ -36,6 +39,14 @@
   "synthetic_data": true,
   "truth_candidate": {
     "expected_checked_facts": [
+      {
+        "acceptable_evidence": [
+          "page:1",
+          "page:2",
+          "page:4"
+        ],
+        "code": "VAL_DOC_COMPLETENESS_001"
+      },
       {
         "acceptable_evidence": [
           "page:1"
@@ -52,12 +63,6 @@
     "expected_issues": [
       {
         "acceptable_evidence": [
-          "page:3"
-        ],
-        "code": "VAL_DOC_COMPLETENESS_001"
-      },
-      {
-        "acceptable_evidence": [
           "application:/employment/employer",
           "page:4"
         ],
@@ -65,6 +70,7 @@
       },
       {
         "acceptable_evidence": [
+          "application:/income/monthly_net",
           "page:2"
         ],
         "code": "VAL_INCOME_CONSISTENCY_001"
@@ -76,12 +82,10 @@
     ],
     "report_availability": "ready",
     "required_report_content": [
-      "three review issues"
+      "multiple review issues"
     ]
   },
   "verification": {
-    "status": "confirmed",
-    "verified_at": "2026-09-06T13:07:51.879Z",
-    "verified_by": "sulmae"
+    "status": "pending_human_review"
   }
 }

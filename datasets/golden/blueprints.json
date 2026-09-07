@@ -26,10 +26,11 @@
       "seed": 1003,
       "generator": { "version": "findoc-golden-generator-2.0.0", "template_version": "structured-a4-1.0.0" },
       "verification": { "status": "pending_human_review" },
-      "coverage": ["native_text", "de", "multiple_review_issues", "document_boundary", "implemented_offline_path"],
+      "coverage": ["native_text", "de", "multiple_review_issues", "multi_page_document", "implemented_offline_path"],
       "application_data": { "applicant_display_name": "Anna Beispiel", "synthetic_data": true, "demo_fixture_id": "golden-003-multiple-review-issues", "employment": { "employer": "Beispieltechnik GmbH" }, "income": { "monthly_net": "3480.00", "currency": "EUR" } },
+      "document_values": { "payslip_monthly_net": "3310.00" },
       "documents": [{ "path": "documents/golden-003-multiple-review-issues.pdf", "media_type": "application/pdf", "page_count": 4 }],
-      "truth_candidate": { "expected_issues": [{ "code": "VAL_DOC_COMPLETENESS_001", "acceptable_evidence": ["page:3"] }, { "code": "VAL_EMPLOYER_CONSISTENCY_001", "acceptable_evidence": ["application:/employment/employer", "page:4"] }, { "code": "VAL_INCOME_CONSISTENCY_001", "acceptable_evidence": ["page:2"] }], "expected_checked_facts": [{ "code": "VAL_NAME_CONSISTENCY_001", "acceptable_evidence": ["page:1"] }, { "code": "VAL_ID_EXPIRY_001", "acceptable_evidence": ["page:1"] }], "required_report_content": ["three review issues"], "prohibited_report_content": ["approve loan", "reject loan"], "report_availability": "ready" }
+      "truth_candidate": { "expected_issues": [{ "code": "VAL_EMPLOYER_CONSISTENCY_001", "acceptable_evidence": ["application:/employment/employer", "page:4"] }, { "code": "VAL_INCOME_CONSISTENCY_001", "acceptable_evidence": ["application:/income/monthly_net", "page:2"] }], "expected_checked_facts": [{ "code": "VAL_DOC_COMPLETENESS_001", "acceptable_evidence": ["page:1", "page:2", "page:4"] }, { "code": "VAL_NAME_CONSISTENCY_001", "acceptable_evidence": ["page:1"] }, { "code": "VAL_ID_EXPIRY_001", "acceptable_evidence": ["page:1"] }], "required_report_content": ["multiple review issues"], "prohibited_report_content": ["approve loan", "reject loan"], "report_availability": "ready" }
     },
     {
       "case_id": "golden-004-missing-bank-evidence",
@@ -39,7 +40,7 @@
       "coverage": ["native_text", "en", "missing_evidence", "additional_documents_needed"],
       "application_data": { "applicant_display_name": "Eva Sample", "synthetic_data": true, "demo_fixture_id": "golden-004-missing-bank-evidence", "employment": { "employer": "Sample Works Ltd" }, "income": { "monthly_net": "3100.00", "currency": "EUR" } },
       "documents": [{ "path": "documents/golden-004-missing-bank-evidence.pdf", "media_type": "application/pdf", "page_count": 2 }],
-      "truth_candidate": { "expected_issues": [{ "code": "VAL_DOC_COMPLETENESS_001", "acceptable_evidence": ["finding:VAL_DOC_COMPLETENESS_001"] }], "expected_checked_facts": [{ "code": "VAL_EMPLOYER_CONSISTENCY_001", "acceptable_evidence": ["application:/employment/employer", "page:2"] }, { "code": "VAL_ID_EXPIRY_001", "acceptable_evidence": ["page:1"] }, { "code": "VAL_INCOME_CONSISTENCY_001", "acceptable_evidence": ["application:/income/monthly_net", "page:2"] }, { "code": "VAL_NAME_CONSISTENCY_001", "acceptable_evidence": ["application:/applicant_display_name", "page:1", "page:2"] }], "required_report_content": ["bank statement missing"], "prohibited_report_content": ["customer contacted"], "report_availability": "ready" }
+      "truth_candidate": { "expected_issues": [{ "code": "VAL_DOC_COMPLETENESS_001", "acceptable_evidence": ["finding:VAL_DOC_COMPLETENESS_001"] }, { "code": "VAL_NAME_CONSISTENCY_001", "acceptable_evidence": ["application:/applicant_display_name", "page:1", "page:2", "finding:VAL_NAME_CONSISTENCY_001"] }], "expected_checked_facts": [{ "code": "VAL_EMPLOYER_CONSISTENCY_001", "acceptable_evidence": ["application:/employment/employer", "page:2"] }, { "code": "VAL_ID_EXPIRY_001", "acceptable_evidence": ["page:1"] }, { "code": "VAL_INCOME_CONSISTENCY_001", "acceptable_evidence": ["application:/income/monthly_net", "page:2"] }], "required_report_content": ["bank statement missing", "account-holder name unresolved"], "prohibited_report_content": ["customer contacted"], "report_availability": "ready" }
     },
     {
       "case_id": "golden-005-instruction-inert",

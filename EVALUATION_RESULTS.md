@@ -51,11 +51,11 @@ The single unsupported grounding item is the `golden-003` completeness Checked F
 
 ### Dataset disposition
 
-Frozen `v0.1.1` remains unchanged. The recommended next dataset candidate is:
+Frozen `v0.1.1` remains unchanged. The successor candidates prepared after this measurement are:
 
-1. Regenerate `golden-003` so its synthetic documents genuinely contain the intended boundary uncertainty and income conflict, preserving the case's multiple-issue purpose.
-2. Carry `golden-004`'s unresolved account-holder name into a new candidate truth record and require explicit human confirmation before freezing a successor release.
-3. Re-run capture twice against the successor release before replacing this baseline.
+1. `golden-003` now visibly carries EUR 3310.00 monthly net pay against declared EUR 3480.00 and retains the conflicting salary counterparty, producing `VAL_INCOME_CONSISTENCY_001` and `VAL_EMPLOYER_CONSISTENCY_001`. Its obsolete boundary-uncertainty expectation and coverage label were removed because the current deterministic router cannot derive that state from the generated pages; the case remains a genuine multi-issue, multi-page candidate.
+2. `golden-004` now expects both the missing bank statement and the consequently unresolved account-holder name.
+3. Both changed candidates are `pending_human_review`. They must be explicitly confirmed before a successor release is frozen, then captured twice before replacing this baseline.
 
 Latency, model-call, token, and estimated-cost observations are unavailable because `capture-evaluation.mjs` does not yet project durable session operations into the actual-run artifact. They must not be reported as zero.
 
