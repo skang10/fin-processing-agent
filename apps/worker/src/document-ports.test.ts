@@ -30,7 +30,7 @@ describe("runtime OCR document port", () => {
     ]);
   });
 
-  it("crops visual input and limits precise OCR spans to the requested source-page region", async () => {
+  it("crops visual input while OCR retains its original source-page evidence spans", async () => {
     const render = await sharp({ create: { width: 100, height: 200, channels: 3, background: "white" } }).png().toBuffer();
     const ports = createRuntimeDocumentPorts({
       inventory: {
@@ -52,8 +52,8 @@ describe("runtime OCR document port", () => {
     const visual = await ports.renderPageRegion({ documentVersionId: "document-1", pageNumber: 1 }, region);
     expect(visual).toMatchObject({ width: 40, height: 60, region, processorVersion: "sharp-0.35.4" });
     await expect(sharp(Buffer.from(visual.image!.data, "base64")).metadata()).resolves.toMatchObject({ width: 40, height: 60 });
-    const ocr = await ports.runOcr({ documentVersionId: "document-1", pageNumber: 1 }, region);
-    expect(ocr.lines.map((line) => line.text)).toEqual(["inside"]);
+    const ocr = await ports.runOcr({ documentVersionId: "document-1", pageNumber: 1 });
+    expect(ocr.lines.map((line) => line.text)).toEqual(["inside", "outside"]);
     expect(ocr.lines[0]?.region).toMatchObject({ x: 0.2, y: 0.2, width: 0.2 });
     expect(ocr.lines[0]?.region.height).toBeCloseTo(0.1);
   });

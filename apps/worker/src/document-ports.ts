@@ -61,7 +61,7 @@ export function createRuntimeDocumentPorts(options: RuntimeDocumentPortOptions):
       return { available: true, text: bytes.toString("utf8"), truncated: false };
     },
 
-    runOcr: async (reference, region) => {
+    runOcr: async (reference) => {
       const page = find(reference);
       if (!page.ocr) throw new Error("Page has no committed OCR output");
       const bytes = await options.readArtifact(page.ocr.objectKey, MAXIMUM_ARTIFACT_BYTES);
@@ -79,7 +79,7 @@ export function createRuntimeDocumentPorts(options: RuntimeDocumentPortOptions):
       return {
         engine: page.ocr.engine, engineVersion: page.ocr.engineVersion, modelAssetVersion: page.ocr.modelAssetVersion,
         reusedCommittedOutput: true,
-        lines: region ? lines.filter((line) => preciseLines.length > 0 && regionsIntersect(line.region, region)) : lines,
+        lines,
       };
     },
 
@@ -152,11 +152,6 @@ export function createRuntimeDocumentPorts(options: RuntimeDocumentPortOptions):
 
 function sameRegion(left: NormalizedRegion, right: NormalizedRegion): boolean {
   return left.x === right.x && left.y === right.y && left.width === right.width && left.height === right.height;
-}
-
-function regionsIntersect(left: NormalizedRegion, right: NormalizedRegion): boolean {
-  return left.x < right.x + right.width && left.x + left.width > right.x
-    && left.y < right.y + right.height && left.y + left.height > right.y;
 }
 
 /** OCR spans are stored in render pixels with a top-left origin; evidence regions are normalized. */

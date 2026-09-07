@@ -318,7 +318,7 @@ export interface PageReference {
 export interface RecoveryToolPorts {
   inspectPage(page: PageReference): Promise<{ readonly needsOcr: boolean; readonly ocrReason?: string; readonly hasTable: boolean; readonly hasColumns: boolean; readonly nativeCharacterCount: number; readonly renderAvailable: boolean; readonly ocrAvailable: boolean }>;
   getNativeText(page: PageReference): Promise<{ readonly available: boolean; readonly text: string; readonly truncated: boolean }>;
-  runOcr(page: PageReference, region?: NormalizedRegion): Promise<{ readonly engine: string; readonly engineVersion: string; readonly modelAssetVersion: string; readonly lines: readonly { readonly text: string; readonly region: NormalizedRegion; readonly rawConfidence: number }[]; readonly reusedCommittedOutput: boolean }>;
+  runOcr(page: PageReference): Promise<{ readonly engine: string; readonly engineVersion: string; readonly modelAssetVersion: string; readonly lines: readonly { readonly text: string; readonly region: NormalizedRegion; readonly rawConfidence: number }[]; readonly reusedCommittedOutput: boolean }>;
   renderPageRegion(page: PageReference, region: NormalizedRegion): Promise<{
     readonly artifactReference: string;
     readonly width: number;
