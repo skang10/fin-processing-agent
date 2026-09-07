@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import { PageContentSource, PdfType } from "@firecrawl/pdf-inspector";
-import { DocumentSandboxClient, FakeOcrEngine, PdfInspectorAdapter, PdfInspectorOcrAdapter, PdfiumPageRenderer, classifySyntheticDemoPages, groupLogicalDocuments, runSelectiveOcr, type BoundaryPrediction, type OcrEngine, type PageClassification, type PdfInspectorEngine } from "./index.js";
+import sharp from "sharp";
+import { createHash } from "node:crypto";
+import { DocumentSandboxClient, FakeOcrEngine, PdfInspectorAdapter, PdfInspectorOcrAdapter, PdfiumPageRenderer, classifySyntheticDemoPages, groupLogicalDocuments, prepareImageDocument, runSelectiveOcr, type BoundaryPrediction, type OcrEngine, type PageClassification, type PdfInspectorEngine } from "./index.js";
 
 describe("PdfInspectorAdapter", () => {
   it("translates zero-based native pages into project-owned one-based pages", async () => {
@@ -41,6 +43,25 @@ describe("PdfiumPageRenderer", () => {
       sourceSha256: "invalid", pageNumber: 0, targetDpi: 600,
       colorMode: "color", outputFormat: "png", maximumPixels: 0,
     })).rejects.toThrow("checksum");
+  });
+});
+
+describe("prepareImageDocument", () => {
+  for (const mediaType of ["image/jpeg", "image/png"] as const) {
+    it(`decodes a bounded ${mediaType} and produces a one-page OCR wrapper`, async () => {
+      const pipeline = sharp({ create: { width: 120, height: 80, channels: 3, background: "white" } });
+      const source = mediaType === "image/jpeg" ? await pipeline.jpeg().toBuffer() : await pipeline.png().toBuffer();
+      const result = await prepareImageDocument(source, createHash("sha256").update(source).digest("hex"), mediaType, 110, 20_000);
+      expect(result.inspection).toMatchObject({ processor: "image-intake-router", pageCount: 1, pdfType: "image_based" });
+      expect(result.render).toMatchObject({ width: 120, height: 80, outputFormat: "png" });
+      await expect(new PdfInspectorAdapter().inspect(result.ocrPdf)).resolves.toMatchObject({ pageCount: 1 });
+    });
+  }
+
+  it("rejects a declared media type that does not match decoded content", async () => {
+    const source = await sharp({ create: { width: 10, height: 10, channels: 3, background: "white" } }).png().toBuffer();
+    await expect(prepareImageDocument(source, createHash("sha256").update(source).digest("hex"), "image/jpeg", 110, 1_000))
+      .rejects.toThrow("does not match");
   });
 });
 

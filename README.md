@@ -27,7 +27,7 @@ pnpm demo:load
 
 The loader prints the exact Review Workbench URL. `pnpm demo:down` stops the environment while preserving demo data. `pnpm demo:reset` permanently removes its containers, database and object-store volumes, and generated local credentials. `pnpm demo:acceptance` performs an isolated build, startup, migration, health, case-processing, and teardown check.
 
-Real OCR is opt-in and never downloads models during case processing. Install and verify the pinned assets explicitly with `pnpm ocr:setup -- linux-arm64` (or `linux-x64`), then use `compose.ocr.yaml` together with `compose.yaml`. The overlay keeps the default fake Agent and fixture VLM, mounts OCR assets read-only, and requires `OCR_RUNTIME_PLATFORM` plus the matching `OCR_RUNTIME_ORT_DIRECTORY` when overriding its Linux ARM64 defaults. `pnpm ocr:smoke` runs the bounded real-OCR check inside a compatible configured environment.
+Real OCR is opt-in and never downloads models during case processing. Install and verify the pinned assets explicitly with `pnpm ocr:setup -- linux-arm64` (or `linux-x64`), then use `compose.ocr.yaml` together with `compose.yaml`. The overlay keeps the default fake Agent and fixture VLM and mounts OCR assets read-only. PDF, JPEG, and PNG full-page paths are accepted on Linux ARM64; `pnpm ocr:smoke` and `pnpm ocr:image-smoke` run bounded component checks. Native Linux x64 and crop/region acceptance remain deferred.
 
 ## Commands
 
@@ -48,6 +48,8 @@ pnpm demo:acceptance
 pnpm ocr:setup -- linux-arm64
 pnpm ocr:verify -- linux-arm64
 pnpm ocr:smoke
+pnpm ocr:image-smoke
+pnpm ocr:image-acceptance
 ```
 
 Node.js 22.19 or later and pnpm 11.3.0 are required.

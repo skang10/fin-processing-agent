@@ -14,6 +14,7 @@ import sharp from "sharp";
 
 export const PDF_INSPECTOR_VERSION = "1.17.0";
 export const PDFIUM_RENDERER_VERSION = "@hyzyla/pdfium-2.1.13";
+export const IMAGE_PROCESSOR_VERSION = "sharp-0.35.4";
 
 export interface PageRenderRequest {
   readonly sourceSha256: string;
@@ -340,13 +341,83 @@ export interface InspectedPage {
 }
 
 export interface PdfInspection {
-  readonly processor: "firecrawl/pdf-inspector";
+  readonly processor: "firecrawl/pdf-inspector" | "image-intake-router";
   readonly processorVersion: string;
   readonly pageCount: number;
   readonly pdfType: "text_based" | "scanned" | "image_based" | "mixed";
   readonly routingSignal: number;
   readonly isComplex: boolean;
   readonly pages: readonly InspectedPage[];
+}
+
+export interface PreparedImageDocument {
+  readonly inspection: PdfInspection;
+  readonly render: PageRenderResult;
+  readonly ocrPdf: Buffer;
+}
+
+/** Decode one supported image, normalize it to a bounded PNG render, and wrap it for the pinned PDF OCR adapter. */
+export async function prepareImageDocument(
+  source: Buffer,
+  sourceSha256: string,
+  mediaType: "image/jpeg" | "image/png",
+  targetDpi: number,
+  maximumPixels: number,
+): Promise<PreparedImageDocument> {
+  if (createHash("sha256").update(source).digest("hex") !== sourceSha256) throw new Error("Image source checksum does not match the supplied bytes");
+  if (!Number.isFinite(targetDpi) || targetDpi < 72 || targetDpi > 300 || !Number.isSafeInteger(maximumPixels) || maximumPixels < 1) {
+    throw new Error("Image processing limits are invalid");
+  }
+  const decoder = sharp(source, { failOn: "error", limitInputPixels: maximumPixels }).rotate();
+  const metadata = await decoder.metadata();
+  const expectedFormat = mediaType === "image/jpeg" ? "jpeg" : "png";
+  if (metadata.format !== expectedFormat) throw new Error("Decoded image type does not match the detected media type");
+  const normalized = decoder.flatten({ background: "white" }).toColourspace("srgb");
+  const [png, jpeg] = await Promise.all([
+    normalized.clone().png().toBuffer({ resolveWithObject: true }),
+    normalized.clone().jpeg({ quality: 95, chromaSubsampling: "4:4:4" }).toBuffer({ resolveWithObject: true }),
+  ]);
+  const { width, height } = png.info;
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1 || width * height > maximumPixels) {
+    throw new Error("Decoded image exceeds the configured pixel limit");
+  }
+  return {
+    inspection: {
+      processor: "image-intake-router", processorVersion: IMAGE_PROCESSOR_VERSION, pageCount: 1,
+      pdfType: "image_based", routingSignal: 1, isComplex: false,
+      pages: [{ pageNumber: 1, nativeMarkdown: "", needsOcr: true, ocrReason: "image_input", hasTable: false, hasColumns: false }],
+    },
+    render: { bytes: png.data, width, height, targetDpi, colorMode: "color", outputFormat: "png", rendererVersion: IMAGE_PROCESSOR_VERSION },
+    ocrPdf: jpegToSinglePagePdf(jpeg.data, jpeg.info.width, jpeg.info.height, targetDpi),
+  };
+}
+
+function jpegToSinglePagePdf(jpeg: Buffer, width: number, height: number, dpi: number): Buffer {
+  const pageWidth = width * 72 / dpi;
+  const pageHeight = height * 72 / dpi;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`,
+    Buffer.concat([Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`, "ascii"), jpeg, Buffer.from("\nendstream", "ascii")]),
+    streamObject(`q\n${pageWidth} 0 0 ${pageHeight} 0 0 cm\n/Im0 Do\nQ\n`),
+  ];
+  const chunks: Buffer[] = [Buffer.from("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n", "binary")];
+  const offsets = [0];
+  for (let index = 0; index < objects.length; index += 1) {
+    offsets.push(Buffer.concat(chunks).length);
+    const item = objects[index]!;
+    const body: Buffer = typeof item === "string" ? Buffer.from(item, "ascii") : item;
+    chunks.push(Buffer.from(`${index + 1} 0 obj\n`, "ascii"), body, Buffer.from("\nendobj\n", "ascii"));
+  }
+  const xrefOffset = Buffer.concat(chunks).length;
+  chunks.push(Buffer.from(`xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n `).join("\n")}\ntrailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`, "ascii"));
+  return Buffer.concat(chunks);
+}
+
+function streamObject(value: string): Buffer {
+  const bytes = Buffer.from(value, "ascii");
+  return Buffer.concat([Buffer.from(`<< /Length ${bytes.length} >>\nstream\n`, "ascii"), bytes, Buffer.from("endstream", "ascii")]);
 }
 
 export interface PdfInspectorEngine {

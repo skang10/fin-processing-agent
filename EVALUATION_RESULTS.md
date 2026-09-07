@@ -1,5 +1,13 @@
 # Evaluation Results
 
+## JPEG/PNG real-OCR acceptance — 2026-09-07
+
+A no-network, read-only Linux ARM64 component smoke derived the visibly synthetic payslip page from frozen `golden-006-scanned-adaptive-unavailable`, encoded it independently as JPEG and PNG, and passed both through the sandboxed `image-intake-router` and the pinned PDF Inspector 1.17.0 / PP-OCRv6 Small `oar-ocr-v0.7.0` adapter. Both inputs produced one bounded render, one OCR result, and the expected synthetic name, employer, and `2980.00` markers. The source image is content-decoded with Sharp 0.35.4, checked against its detected media type and pixel ceiling, normalized, and wrapped as a one-page in-memory PDF only at the private OCR-adapter boundary.
+
+End-to-end runtime case `8ff44666-b4c4-4ec0-9b54-067208393dcc`, run/result `be0c41b5-d60d-45bd-9f14-c9213fd58bec`, and session `e3bdd1b6-e23f-43b0-83cf-62291923672a` submitted two JPEG documents and one PNG document derived from the three frozen synthetic pages. Every image persisted one rendered, OCR-routed page with `firecrawl/pdf-inspector-oar` 1.17.0 / `pp-ocrv6-small@oar-ocr-v0.7.0`; all classifications used OCR content, and seven document candidates used `agent_ocr_reading`. The deterministic five-rule registry produced the expected sole `VAL_INCOME_CONSISTENCY_001` `failed` / `income_conflict` finding and a verified report. The standard fake Agent used 9 iterations, 15 tool calls, 9 model calls, 3 OCR pages, 54,811 input and 600 output tokens, zero VLM calls, and zero external-model cost.
+
+This proves only bounded synthetic full-page image execution on Linux ARM64. It does not establish crop/region OCR, native Linux x64 support, corpus-level quality, real-document fitness, or production performance.
+
 ## Initial VLM selection benchmark — 2026-09-07
 
 With explicit paid-run approval, `openai/gpt-5.6-terra` and `openai/gpt-5.6-sol` each processed only `golden-006-scanned-adaptive-unavailable` from frozen synthetic release `v0.1.2` at source `6a1c27c`. Each isolated configuration had equal USD 0.25 per-case and whole-run caps. Both inspected and rendered all three routed pages before fixture OCR and seven live VLM extractions, returned the expected seven scalar values with schema-valid outputs, ran deterministic reconciliation and all five rules, and produced a verified report containing only the expected `VAL_INCOME_CONSISTENCY_001` income conflict.

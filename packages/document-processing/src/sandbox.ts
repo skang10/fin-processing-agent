@@ -42,14 +42,15 @@ interface SandboxResponse {
 export class DocumentSandboxClient {
   constructor(private readonly entrypoint = fileURLToPath(new URL("./sandbox-cli.js", import.meta.url))) {}
 
-  async inspectAndRender(source: Buffer, sourceSha256: string, limits: DocumentSandboxLimits): Promise<DocumentSandboxResult> {
+  async inspectAndRender(source: Buffer, sourceSha256: string, limits: DocumentSandboxLimits, mediaType: "application/pdf" | "image/jpeg" | "image/png" = "application/pdf"): Promise<DocumentSandboxResult> {
     validateLimits(limits);
     const taskDirectory = await mkdtemp(join(tmpdir(), "findoc-sandbox-"));
     try {
-      const sourcePath = join(taskDirectory, "source.pdf");
+      const sourcePath = join(taskDirectory, "source.bin");
       await writeFile(sourcePath, source, { mode: 0o600 });
       const response = await runTask(this.entrypoint, taskDirectory, {
-        schema_version: "1.0.0", operation: "inspect_and_render_pdf", source_path: sourcePath,
+        schema_version: "1.0.0", operation: "inspect_and_render_document", source_path: sourcePath,
+        media_type: mediaType,
         source_sha256: sourceSha256, limits: {
           maximum_pages: limits.maximumPages, maximum_pixels_per_page: limits.maximumPixelsPerPage,
           target_dpi: limits.targetDpi,

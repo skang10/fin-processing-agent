@@ -131,69 +131,64 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   const fixtureScannedPages = findFixtureScannedPageAdapter(applicationData["demo_fixture_id"], applicationData);
   const documents = await coordinator.loadUninspectedDocuments(job.data.case_id, job.data.run_id);
   for (const document of documents) {
-    if (document.mediaType === "application/pdf") {
-      const source = await readObjectBytes(objectStore, document.objectKey, maximumSourceBytes);
-      const sandboxResult = await documentSandbox.inspectAndRender(source, document.sha256, {
+    if (document.mediaType !== "application/pdf" && document.mediaType !== "image/jpeg" && document.mediaType !== "image/png") {
+      throw new Error("Persisted document media type is unsupported");
+    }
+    const source = await readObjectBytes(objectStore, document.objectKey, maximumSourceBytes);
+    const sandboxResult = await documentSandbox.inspectAndRender(source, document.sha256, {
         timeoutMs: 60_000, maximumPages: 50, maximumPixelsPerPage: 8_000_000, targetDpi: 110,
         ocrMode, ...(ocrModelDirectory ? { ocrModelDirectory } : {}),
         ...(pdfiumLibraryPath ? { pdfiumLibraryPath } : {}),
         ...(onnxRuntimeLibraryPath ? { onnxRuntimeLibraryPath } : {}),
-      });
-      const inspection = sandboxResult.inspection;
-      const demoAnalysis = process.env["FINDOC_SYNTHETIC_DEMO"] === "true"
-        ? classifySyntheticDemoPages(inspection.pages.map((page) => ({
-          ...page,
-          ocrMarkdown: sandboxResult.ocrOutputs.find((output) => output.pageNumber === page.pageNumber)?.result.rawText,
-        })), {
-          // An image-only synthetic page carries no text the fixture OCR adapter can recover, so a
-          // registered demo fixture declares its page type. It is recorded with its own method
-          // identity so a reviewer can see the type came from a fixture, not from the page.
-          ...(fixtureScannedPages ? { fixturePageType: (pageNumber: number) => fixtureScannedPages.pageType(pageNumber) } : {}),
-        })
-        : undefined;
-      const pages = [];
-      for (const page of inspection.pages) {
-        const rendered = sandboxResult.renders.find((candidate) => candidate.pageNumber === page.pageNumber);
-        if (!rendered) throw new Error("Document sandbox omitted a page render");
-        const ocrOutput = sandboxResult.ocrOutputs.find((candidate) => candidate.pageNumber === page.pageNumber);
-        if (page.needsOcr !== Boolean(ocrOutput)) throw new Error("Document sandbox OCR routing output is inconsistent");
-        pages.push({
-          ...page,
-          nativeCharacterCount: page.nativeMarkdown.length,
-          ...(page.nativeMarkdown.length > 0 ? { nativeTextArtifact: {
-            ...await storeNativeTextArtifact(page.nativeMarkdown, objectStore,
-              `derived/${job.data.case_id}/${document.documentVersionId}/native-text/page-${page.pageNumber}`),
-            caseId: job.data.case_id,
-          } } : {}),
-          renderArtifact: {
-            ...await storePageRenderArtifact(rendered.bytes, rendered, objectStore,
-              `derived/${job.data.case_id}/${document.documentVersionId}/render/page-${page.pageNumber}`),
-            caseId: job.data.case_id,
-          },
-          ...(ocrOutput ? { ocrArtifact: {
-            ...await storeOcrArtifact(ocrOutput.result, {
-              engine: ocrOutput.result.engine, engineVersion: ocrOutput.result.engineVersion,
-              modelAssetVersion: ocrOutput.result.modelAssetVersion, languages: ocrOutput.result.languages,
-            }, objectStore, `derived/${job.data.case_id}/${document.documentVersionId}/ocr/page-${page.pageNumber}`),
-            caseId: job.data.case_id, coordinateSpace: ocrOutput.result.coordinateSpace,
-          } } : {}),
-        });
-      }
-      await coordinator.persistInspection(job.data.run_id, document, {
-        ...inspection,
-        pages,
-        ...(demoAnalysis ? {
-          ...demoAnalysis,
-          logicalDocuments: groupLogicalDocuments(demoAnalysis.classifications, demoAnalysis.boundaries),
-        } : {}),
-      });
-    } else {
-      await coordinator.persistInspection(job.data.run_id, document, {
-        processor: "image-intake-router", processorVersion: "1.0.0",
-        pdfType: "image", routingSignal: 1, isComplex: false,
-        pages: [{ pageNumber: 1, needsOcr: true, ocrReason: "image_input", hasTable: false, hasColumns: false, nativeCharacterCount: 0 }],
+      }, document.mediaType);
+    const inspection = sandboxResult.inspection;
+    const demoAnalysis = process.env["FINDOC_SYNTHETIC_DEMO"] === "true"
+      ? classifySyntheticDemoPages(inspection.pages.map((page) => ({
+        ...page,
+        ocrMarkdown: sandboxResult.ocrOutputs.find((output) => output.pageNumber === page.pageNumber)?.result.rawText,
+      })), {
+        // An image-only synthetic page carries no text the fixture OCR adapter can recover, so a
+        // registered demo fixture declares its page type. It is recorded with its own method
+        // identity so a reviewer can see the type came from a fixture, not from the page.
+        ...(fixtureScannedPages ? { fixturePageType: (pageNumber: number) => fixtureScannedPages.pageType(pageNumber) } : {}),
+      })
+      : undefined;
+    const pages = [];
+    for (const page of inspection.pages) {
+      const rendered = sandboxResult.renders.find((candidate) => candidate.pageNumber === page.pageNumber);
+      if (!rendered) throw new Error("Document sandbox omitted a page render");
+      const ocrOutput = sandboxResult.ocrOutputs.find((candidate) => candidate.pageNumber === page.pageNumber);
+      if (page.needsOcr !== Boolean(ocrOutput)) throw new Error("Document sandbox OCR routing output is inconsistent");
+      pages.push({
+        ...page,
+        nativeCharacterCount: page.nativeMarkdown.length,
+        ...(page.nativeMarkdown.length > 0 ? { nativeTextArtifact: {
+          ...await storeNativeTextArtifact(page.nativeMarkdown, objectStore,
+            `derived/${job.data.case_id}/${document.documentVersionId}/native-text/page-${page.pageNumber}`),
+          caseId: job.data.case_id,
+        } } : {}),
+        renderArtifact: {
+          ...await storePageRenderArtifact(rendered.bytes, rendered, objectStore,
+            `derived/${job.data.case_id}/${document.documentVersionId}/render/page-${page.pageNumber}`),
+          caseId: job.data.case_id,
+        },
+        ...(ocrOutput ? { ocrArtifact: {
+          ...await storeOcrArtifact(ocrOutput.result, {
+            engine: ocrOutput.result.engine, engineVersion: ocrOutput.result.engineVersion,
+            modelAssetVersion: ocrOutput.result.modelAssetVersion, languages: ocrOutput.result.languages,
+          }, objectStore, `derived/${job.data.case_id}/${document.documentVersionId}/ocr/page-${page.pageNumber}`),
+          caseId: job.data.case_id, coordinateSpace: ocrOutput.result.coordinateSpace,
+        } } : {}),
       });
     }
+    await coordinator.persistInspection(job.data.run_id, document, {
+      ...inspection,
+      pages,
+      ...(demoAnalysis ? {
+        ...demoAnalysis,
+        logicalDocuments: groupLogicalDocuments(demoAnalysis.classifications, demoAnalysis.boundaries),
+      } : {}),
+    });
   }
   const stage = await processAgentLedCaseReview({
     coordinator, selectHarness: selectAgentHarness, logger,

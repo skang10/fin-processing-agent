@@ -61,13 +61,13 @@ The implementation spike must prove:
 
 ### BL-003 — PDF Inspector Integration Baseline
 
-**Status:** The pinned PDF Inspector PP-OCRv6 Small runtime is accepted on Linux ARM64 for one three-page scanned synthetic end-to-end case; Linux x64 assets are also pinned and checksum-verified by the setup workflow. Default demo/CI remain fixture-backed. JPEG/PNG OCR, crop/region OCR, hardened OS resource isolation, cross-platform smoke evidence, and corpus-level quality/latency/resource measurement remain pending.
+**Status:** The pinned PDF Inspector PP-OCRv6 Small runtime is accepted on Linux ARM64 for scanned PDF, JPEG, and PNG synthetic inputs. Linux x64 assets are pinned and checksum-verified but native execution is deferred. Default demo/CI remain fixture-backed. Crop/region OCR, hardened OS resource isolation, cross-platform smoke evidence, and corpus-level quality/latency/resource measurement remain pending.
 
 The default OCR result remains deterministic fixture output and must not be presented as recognition evidence. The explicit real-runtime mode now proves offline PDF OCR execution, persisted provenance, Agent OCR reading, deterministic reconciliation and validation, and report generation for one bounded synthetic case. Remaining work:
 
 1. Extend the accepted `processPdfWithOcr` offline smoke path beyond Linux ARM64 to Linux x64 after the main functional path is complete; the assets remain pinned and checksum-verifiable, but native x64 execution is explicitly deferred and must not be claimed as accepted.
 2. Add release-manifest integration for the committed OCR runtime asset manifest.
-3. JPEG and PNG OCR execution, bounded region and crop OCR, and mixed-language quality tuning.
+3. Bounded region and crop OCR, plus mixed-language quality tuning. JPEG and PNG full-page execution is accepted on Linux ARM64.
 4. OCR quality, latency, and resource measurements on the versioned synthetic dataset.
 
 Use `firecrawl/pdf-inspector` as the initial PDF classification, native text and coordinate extraction, layout, table, rendering integration, selective OCR-routing, and PP-OCRv6 Small execution foundation. Keep its OCR result behind the project-owned adapter contract.

@@ -33,12 +33,15 @@
     "ocr:setup": "node scripts/ocr-runtime.mjs setup",
     "ocr:verify": "node scripts/ocr-runtime.mjs verify",
     "ocr:smoke": "node scripts/ocr-smoke.mjs",
+    "ocr:image-smoke": "node scripts/ocr-image-smoke.mjs",
+    "ocr:image-acceptance": "node scripts/image-ocr-acceptance.mjs",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc -b --pretty false"
   },
   "devDependencies": {
     "@types/node": "26.4.1",
+    "sharp": "0.35.4",
     "typescript": "5.9.3",
     "vitest": "5.0.0"
   }
