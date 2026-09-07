@@ -363,13 +363,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   align-items: center;
   justify-content: space-between;
 }
-.document-bar > div:first-child { display: flex; align-items: center; gap: 8px; }
-.source-switch { margin-left: auto; margin-right: 10px; padding: 3px; border: 1px solid var(--line); border-radius: 4px; background: #fff; display: flex; }
-.source-switch button { min-height: 25px; padding: 0 9px; border: 0; border-radius: 3px; background: transparent; color: var(--muted); font-size: 10px; cursor: pointer; }
+.document-bar > div:first-child { min-width: 0; flex: 1 1 auto; display: flex; align-items: center; gap: 8px; overflow: hidden; }
+.source-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-switch { order: 3; width: 178px; flex: 0 0 178px; margin-left: 10px; padding: 3px; border: 1px solid var(--line); border-radius: 4px; background: #fff; display: flex; box-sizing: border-box; }
+.source-switch button { min-height: 25px; padding: 0 9px; border: 0; border-radius: 3px; background: transparent; color: var(--muted); font-size: 10px; white-space: nowrap; cursor: pointer; }
+.source-switch button:first-child { width: 106px; }
+.source-switch button:last-child { width: 64px; }
 .source-switch button.active { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
 .document-bar strong { font-size: 11px; }
 .document-bar > div:first-child span { color: var(--muted); font-size: 10px; }
-.document-tools { display: flex; align-items: center; gap: 3px; }
+.document-tools { order: 2; flex: 0 0 auto; margin-left: 10px; display: flex; align-items: center; gap: 3px; }
 .document-tools > span:not(.tool-divider) { width: 40px; color: var(--muted); font-size: 9px; text-align: center; }
 .tool-button { width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; cursor: pointer; }
 .tool-button:hover { background: #e9edf0; }
