@@ -24,20 +24,13 @@ export async function loadCaseQueue(view = 'review', fetcher = fetch) {
   return response.json();
 }
 
-export async function loadDemoCase(fetcher = fetch, wait = function () { return new Promise(function (resolve) { setTimeout(resolve, 500); }); }) {
-  const documentResponse = await fetcher('/case-package.pdf');
+export async function loadDemoCase(fetcher = fetch, wait = function () { return new Promise(function (resolve) { setTimeout(resolve, 500); }); }, random = Math.random) {
+  const selected = demoCases[Math.min(demoCases.length - 1, Math.floor(Math.max(0, random()) * demoCases.length))];
+  const documentResponse = await fetcher(selected.documentUrl);
   if (!documentResponse.ok) throw new Error('Demo document could not be loaded');
-  const submittedAt = new Date().toISOString();
-  const applicationData = {
-    applicant_display_name: 'Anna Beispiel', demo_fixture_id: 'anna-example-v1',
-    contact: { email: 'anna@example.invalid', phone: '+49 170 1234567' },
-    employment: { employer: 'Beispieltechnik GmbH', type: 'permanent', started_on: '2022-01-01' },
-    income: { monthly_net: '3480.00', currency: 'EUR', basis: 'net' },
-    initial_submitted_at: submittedAt, latest_submitted_at: submittedAt, application_data_updated_at: submittedAt,
-  };
   const form = new FormData();
-  form.set('application_data', JSON.stringify(applicationData));
-  form.set('documents', new Blob([await documentResponse.arrayBuffer()], { type: 'application/pdf' }), 'case-package.pdf');
+  form.set('application_data', JSON.stringify(selected.applicationData));
+  form.set('documents', new Blob([await documentResponse.arrayBuffer()], { type: 'application/pdf' }), selected.caseId + '.pdf');
   const createdResponse = await fetcher('/api/v1/cases', {
     method: 'POST', headers: { 'Idempotency-Key': 'demo-' + crypto.randomUUID() }, body: form,
   });
@@ -88,3 +81,41 @@ export function saveRequestedChange(caseId, issueId, body, fetcher = fetch) {
 export function submitFinalReview(caseId, body, fetcher = fetch) {
   return sendJson('/api/v1/cases/' + encodeURIComponent(caseId) + '/final-review', 'POST', body, fetcher);
 }
+const demoCases = [
+  {
+    caseId: 'golden-001-native-clear', applicantDisplayName: 'Clara Muster', employer: 'Mustertechnik GmbH', monthlyNet: '3200.00',
+    documentUrl: new URL('../../datasets/golden/releases/v0.1.2/documents/golden-001-native-clear/golden-001-native-clear.pdf', import.meta.url).href,
+  },
+  {
+    caseId: 'golden-002-employer-conflict', applicantDisplayName: 'David Beispiel', employer: 'Nordwerk Demo GmbH', monthlyNet: '2900.00',
+    documentUrl: new URL('../../datasets/golden/releases/v0.1.2/documents/golden-002-employer-conflict/golden-002-employer-conflict.pdf', import.meta.url).href,
+  },
+  {
+    caseId: 'golden-003-multiple-review-issues', applicantDisplayName: 'Anna Beispiel', employer: 'Beispieltechnik GmbH', monthlyNet: '3480.00',
+    documentUrl: new URL('../../datasets/golden/releases/v0.1.2/documents/golden-003-multiple-review-issues/golden-003-multiple-review-issues.pdf', import.meta.url).href,
+  },
+  {
+    caseId: 'golden-004-missing-bank-evidence', applicantDisplayName: 'Eva Sample', employer: 'Sample Works Ltd', monthlyNet: '3100.00',
+    documentUrl: new URL('../../datasets/golden/releases/v0.1.2/documents/golden-004-missing-bank-evidence/golden-004-missing-bank-evidence.pdf', import.meta.url).href,
+  },
+  {
+    caseId: 'golden-005-instruction-inert', applicantDisplayName: 'Felix Test', employer: 'Testbetrieb GmbH', monthlyNet: '2750.00',
+    documentUrl: new URL('../../datasets/golden/releases/v0.1.2/documents/golden-005-instruction-inert/golden-005-instruction-inert.pdf', import.meta.url).href,
+  },
+  {
+    caseId: 'golden-006-scanned-adaptive-unavailable', applicantDisplayName: 'Greta Demofall', employer: 'Demowerk GmbH', monthlyNet: '3050.00',
+    documentUrl: new URL('../../datasets/golden/releases/v0.1.2/documents/golden-006-scanned-adaptive-unavailable/golden-006-scanned-adaptive-unavailable.pdf', import.meta.url).href,
+  },
+].map(function (candidate) {
+  return {
+    caseId: candidate.caseId,
+    applicationData: {
+      applicant_display_name: candidate.applicantDisplayName,
+      demo_fixture_id: candidate.caseId,
+      employment: { employer: candidate.employer },
+      income: { currency: 'EUR', monthly_net: candidate.monthlyNet },
+      synthetic_data: true,
+    },
+    documentUrl: candidate.documentUrl,
+  };
+});

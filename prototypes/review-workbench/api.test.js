@@ -72,12 +72,26 @@ describe('loadDemoCase', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ case_id: 'case-1', lifecycle: 'ready_for_review' }) });
     const wait = vi.fn(async () => {});
 
-    await expect(loadDemoCase(fetcher, wait)).resolves.toMatchObject({ case_id: 'case-1', lifecycle: 'ready_for_review' });
-    expect(fetcher.mock.calls[0][0]).toBe('/case-package.pdf');
+    await expect(loadDemoCase(fetcher, wait, function () { return 0; })).resolves.toMatchObject({ case_id: 'case-1', lifecycle: 'ready_for_review' });
+    expect(fetcher.mock.calls[0][0]).toContain('golden-001-native-clear.pdf');
     expect(fetcher.mock.calls[1][0]).toBe('/api/v1/cases');
     expect(fetcher.mock.calls[1][1]).toMatchObject({ method: 'POST' });
     expect(fetcher.mock.calls[1][1].body).toBeInstanceOf(FormData);
+    expect(fetcher.mock.calls[1][1].body.get('application_data')).toContain('golden-001-native-clear');
     expect(wait).toHaveBeenCalledTimes(1);
+  });
+
+  it('selects across all six frozen synthetic cases', async () => {
+    const selectedDocuments = [];
+    for (const random of [0, 0.2, 0.4, 0.6, 0.8, 0.999]) {
+      const fetcher = vi.fn()
+        .mockImplementationOnce(async (url) => { selectedDocuments.push(url); return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) }; })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ status_url: '/api/v1/cases/case-1' }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ case_id: 'case-1', lifecycle: 'ready_for_review' }) });
+      await loadDemoCase(fetcher, async function () {}, function () { return random; });
+    }
+    expect(new Set(selectedDocuments).size).toBe(6);
+    expect(selectedDocuments.every(function (url) { return url.includes('/v0.1.2/documents/golden-'); })).toBe(true);
   });
 });
 

@@ -950,7 +950,7 @@ document.querySelector('#load-demo-case').addEventListener('click', async functi
   } catch (error) {
     toast(error instanceof Error ? error.message : 'Demo case could not be loaded');
     button.disabled = false;
-    button.textContent = 'Load demo case';
+    button.textContent = 'Load random demo case';
   }
 });
 
