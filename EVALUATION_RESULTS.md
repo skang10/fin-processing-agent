@@ -1,12 +1,73 @@
 # Evaluation Results
 
+## Offline Agent-led regression baseline — v0.1.1
+
+**Recorded:** 2026-09-07
+
+**Purpose:** Demonstration regression and diagnosis against the existing frozen truth
+
+This result uses all six manually confirmed synthetic cases, the deterministic fake Case Review Agent model, fixture OCR, and the explicit fixture scanned-page adapter. It evaluates the current Agent-led extraction path and incurs no external model cost. It is not a live-model, OCR-quality, real-data, lending, or production-performance result.
+
+### Configuration
+
+| Component | Version |
+|---|---|
+| Dataset | `v0.1.1` |
+| Source revision | `1f72965` |
+| Environment | `local-compose-infrastructure-pnpm-fake-model` |
+| Model | `findoc-fake/case-review-script-v1#standard` |
+| Prompt | `case-review-prompt-3.5.0` |
+| Agent | `pi-coding-agent@0.85.1;pi-harness-2.2.0;agent-budget-2.0.0` |
+| Tool registry | `case-review-tools-3.6.0` |
+| Extraction | `document-field-requirements-1.0.0;case-normalization-1.1.0;fixture-scanned-page-adapter-1.0.0` |
+| Rule set | `demo-de-personal-loan-v1@1.0.0` |
+| PDF Inspector | `1.17.0` |
+| PDFium | `@hyzyla/pdfium-2.1.13` |
+| OCR asset | `deterministic-fixture-1.0.0` |
+| Evaluator | `offline-evaluator-1.0.0` |
+
+The primary capture is `offline-agent-led-v0.1.1-20260907T043000Z`, evaluation `896eeb307978b08304e93d2ce0285bee27b3a148fb08f57bca1832a7f3952b04`. An independent repeat, `offline-agent-led-v0.1.1-20260907T044500Z`, produced identical normalized case results and aggregate metrics (evaluation `dcf4537e56870fea559432adfa6cc44770f73db3e4249fb2332fdb6312b4c769`). Generated JSON remains ignored local evidence and is not committed.
+
+### Results
+
+| Dimension | Result |
+|---|---:|
+| Agent issue precision | 3 / 4 (75.0%) |
+| Agent issue recall | 3 / 6 (50.0%) |
+| Correct evidence grounding | 28 / 29 (96.6%) |
+| Unsupported claims | 1 / 29 (3.4%) |
+| Verified-report completion | 5 / 6 (83.3%) |
+
+| Case | Difference from frozen `v0.1.1` |
+|---|---|
+| `golden-001-native-clear` | Matches |
+| `golden-002-employer-conflict` | Matches |
+| `golden-003-multiple-review-issues` | Misses expected completeness and income issues; its generated document shows neither the frozen boundary ambiguity nor an income mismatch |
+| `golden-004-missing-bank-evidence` | Adds `VAL_NAME_CONSISTENCY_001` because the absent bank statement leaves the account-holder name unresolved |
+| `golden-005-instruction-inert` | Matches |
+| `golden-006-scanned-adaptive-unavailable` | Expected system income finding remains available to review, while the evaluator intentionally excludes it from Agent-origin issue scoring; report remains unavailable as expected |
+
+The single unsupported grounding item is the `golden-003` completeness Checked Fact: the current document-derived pages do not intersect the frozen evidence expectation for the obsolete completeness issue. This is a dataset/content mismatch, not an unresolved reference or fabricated claim.
+
+### Dataset disposition
+
+Frozen `v0.1.1` remains unchanged. The recommended next dataset candidate is:
+
+1. Regenerate `golden-003` so its synthetic documents genuinely contain the intended boundary uncertainty and income conflict, preserving the case's multiple-issue purpose.
+2. Carry `golden-004`'s unresolved account-holder name into a new candidate truth record and require explicit human confirmation before freezing a successor release.
+3. Re-run capture twice against the successor release before replacing this baseline.
+
+Latency, model-call, token, and estimated-cost observations are unavailable because `capture-evaluation.mjs` does not yet project durable session operations into the actual-run artifact. They must not be reported as zero.
+
+---
+
 > **Superseded configuration.** The result below was measured while document values were seeded from
 > a fixture table before the Agent ran. Since `2026-09-07` the bounded Pi session leads document
 > extraction through registered tools, so this report no longer describes the delivered pipeline and
 > must not be cited for it. It is retained unchanged as the immutable record of the configuration it
 > names. Two frozen `v0.1.1` case expectations also no longer match the Agent-led outcomes; the
-> divergence and the options for resolving it are tracked in `BACKLOG.md` under BL-005 and BL-009. A
-> replacement baseline requires a new evaluation capture against the Agent-led path.
+> divergence and the options for resolving it are tracked in `BACKLOG.md` under BL-005 and BL-009.
+> The replacement Agent-led baseline is recorded above.
 
 ## Offline deterministic regression baseline — v0.1.1
 

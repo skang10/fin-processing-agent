@@ -104,7 +104,7 @@ Synthetic files must be visibly marked and must not reproduce official security 
 
 ### BL-006 — Measured Quality, Latency, and Cost Baseline
 
-**Status:** Offline deterministic regression result recorded for `v0.1.1`; formal measured baseline remains blocked on live-model acceptance, real OCR evidence, and captured latency, usage, and cost observations
+**Status:** A reproducible Agent-led offline regression result is recorded against frozen `v0.1.1`; two independent captures produced identical 75.0% issue precision, 50.0% issue recall, 96.6% grounding, and 83.3% verified-report completion. The measured divergences confirm that `golden-003` must be regenerated to express its intended issues and that `golden-004` needs reviewed successor truth for the unresolved account-holder name. Formal measured baseline work remains blocked on real OCR evidence, corpus-level live-model evidence, and captured latency, usage, and cost observations.
 
 Replace unsupported numerical targets with measured results tied to dataset, model, prompt, component, and environment versions. Establish regression tolerances only after the initial baseline exists.
 

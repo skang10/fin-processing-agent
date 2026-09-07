@@ -29,6 +29,7 @@ This section is the operational starting point for the next implementation agent
 21. A compatible Worker restart and same-run pg-boss redelivery then reclaimed case `0d937583-6bd3-4853-9c21-a312b13adbe7` / run `3b2442d6-5e89-4134-acac-0f52f12305c0` with `resumed=true`. It returned the existing terminal session with `submitted_candidates=0`; the session remained at one attempt, 22 invocations, 7 VLM invocations, 10,751/2,088 tokens, and USD 0.107772. No paid operation repeated and no usage reset.
 22. Review of the first confirming result found that `case-normalization-1.0.0` rejected the correctly observed raw value `EUR 2980.00` because it supported the `€` symbol but not the ISO `EUR` prefix. The VLM and candidate evidence boundary were correct, but the payslip income did not become a claim, so that immutable run reported `inconclusive` / `income_input_incomparable` instead of the semantically correct conflict. `case-normalization-1.1.0` accepts explicit EUR prefixes and suffixes and rejects unsupported or duplicate currency markers.
 23. The approved final live-VLM confirmation used only `golden-006-scanned-adaptive-unavailable`: case `ef976108-532e-43f9-8a52-a1503e581f7b`, run/result revision `73e282d3-98af-4cc1-b9b7-6dd5dc6d90f2`, session `cb9cf644-a49f-4c99-aec5-775ce8b38a9e`. It persisted application `3050.00` as EUR 3050.00 and the verbatim VLM value `EUR 2980.00` as EUR 2980.00; `VAL_INCOME_CONSISTENCY_001` returned `failed` / `income_conflict`, while the other four registered rules passed. The verified ready report states that the income values conflict and suggests the registered `compare_claims` action without making a lending, creditworthiness, AML, or KYC decision. The session used `openai/gpt-5.6-terra`, `case-review-prompt-3.5.0`, `case-review-tools-3.6.0`, and `case-normalization-1.1.0`; it ended `report_submitted` after 10 iterations, 22 tool calls, 17 model calls, 7 VLM calls, 3 OCR pages, 10,751 input tokens, 1,939 output tokens, and USD 0.104453. Nested VLM usage was 10,721 input tokens, 92 output tokens, and USD 0.027896. Durable outputs contained neither fixture gateway markers nor encoded page/document bytes. A Worker restart and same-run redelivery returned the same session with `resumed=true`, one attempt, zero newly submitted candidates, unchanged invocation counts, and unchanged cost.
+24. Two complete offline Agent-led captures against frozen `v0.1.1` used source `1f72965`, `findoc-fake/case-review-script-v1#standard`, fixture OCR/VLM, `case-review-prompt-3.5.0`, `case-review-tools-3.6.0`, and `case-normalization-1.1.0`. Runs `offline-agent-led-v0.1.1-20260907T043000Z` and `offline-agent-led-v0.1.1-20260907T044500Z` produced identical normalized cases and metrics: issue precision 3/4 (75.0%), recall 3/6 (50.0%), grounding 28/29 (96.6%), unsupported claims 1/29 (3.4%), and verified reports 5/6 (83.3%). Evaluation identifiers are `896eeb307978b08304e93d2ce0285bee27b3a148fb08f57bca1832a7f3952b04` and `dcf4537e56870fea559432adfa6cc44770f73db3e4249fb2332fdb6312b4c769`. `golden-003` misses two obsolete document-content expectations and `golden-004` adds the defensible unresolved-name issue; frozen truth was not modified. Operations remain unavailable, not zero, because capture does not yet project durable session measurements.
 
 ### What is still fixture-backed
 
@@ -70,19 +71,19 @@ Both divergences are the fixture seeding being removed, not a regression:
 
 Do not edit frozen truth. BL-005 and BL-009 record the two ways forward: confirm a new release against the Agent-led outcomes, or regenerate `golden-003` so its documents genuinely carry the ambiguity the case is named for.
 
-`EVALUATION_RESULTS.md` is marked superseded for the same reason and needs a new capture.
+`EVALUATION_RESULTS.md` now records the replacement Agent-led baseline and retains the older fixture-seeded result only as explicitly superseded history.
 
 ### Immediate next task for the new session
 
-**Capture a fresh offline Agent-led evaluation baseline against frozen release `v0.1.1`.**
+**Prepare the successor golden candidate without changing frozen `v0.1.1`.**
 
-Record the known `golden-003` and `golden-004` divergences without editing frozen truth and decide through the dataset review workflow whether to regenerate `golden-003` or confirm a new release. Any additional paid live run still requires explicit approval and the USD 0.25 per-case cap.
+The current Agent-led baseline is recorded in `EVALUATION_RESULTS.md`. Regenerate `golden-003` so the documents genuinely contain its intended boundary uncertainty and income conflict. Carry the defensible unresolved-name result for `golden-004` into a new candidate truth record, then stop for explicit human confirmation before freezing a successor release. Any additional paid live run still requires explicit approval and the USD 0.25 per-case cap.
 
 ### Global next steps
 
 After the immediate task, proceed in this order:
 
-1. **Capture a fresh offline Agent-led evaluation baseline** against frozen `v0.1.1`, record the two known `golden-003`/`golden-004` divergences, and decide whether to regenerate `golden-003` or confirm a new release without editing frozen truth.
+1. **Prepare and confirm a successor golden release** without editing frozen `v0.1.1`: regenerate `golden-003` to express its intended multiple issues and review-confirm `golden-004`'s unresolved-name expectation.
 2. **Add an explicit whole-run live-evaluation budget**, then extend live acceptance to a legitimate attention case and capture latency, model calls, token usage, estimated cost, and unavailable values required by `MLE-REQ-070` and `MLE-REQ-071`.
 3. **Accept the real PDF Inspector PP-OCRv6 runtime** (`BL-003`): pin offline assets, replace fixture OCR only in explicit real-runtime mode, and retire the fixture scanned-page value adapter where real OCR or the accepted VLM route supplies evidence.
 4. **Run the two-configuration VLM selection benchmark** (`BL-004`) and complete ADR-003 from measured evidence rather than adopting `gpt-5.6-terra` by preference.
