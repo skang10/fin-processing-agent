@@ -4,7 +4,7 @@ import type { AdaptiveRecoveryContext, AgentExtractionMethod, NormalizedRegion, 
 import type { RegisteredToolSpec } from "./session.js";
 
 /** Immutable, versioned adaptive-recovery tool catalog (AGT section 6). */
-export const RECOVERY_TOOL_REGISTRY_VERSION = "adaptive-recovery-tools-2.1.0";
+export const RECOVERY_TOOL_REGISTRY_VERSION = "adaptive-recovery-tools-2.2.0";
 
 const MAX_NATIVE_TEXT_CHARACTERS = 4_000;
 const MAX_OCR_LINES = 200;
@@ -270,7 +270,7 @@ export const extractLocalTableTool: Tool<typeof PageOnly> = {
 };
 
 export const extractWithVlmTool: Tool<typeof VlmParameters> = {
-  name: "extract_with_vlm", version: "3.0.0", label: "Extract with VLM", costClass: "vlm",
+  name: "extract_with_vlm", version: "3.1.0", label: "Extract with VLM", costClass: "vlm",
   description: "Invoke the configured schema-constrained VLM extraction operation for one field on one authorized page or region. The invocation has no tools.",
   promptSnippet: "run schema-constrained VLM extraction for one field on one authorized page",
   parameters: VlmParameters,
@@ -301,6 +301,7 @@ export const extractWithVlmTool: Tool<typeof VlmParameters> = {
         value: result.value ? { raw_value: result.value.rawValue, normalized_value: result.value.normalizedValue, region: result.value.region, raw_confidence: result.value.rawConfidence } : null,
         ...(result.usage ? { usage: result.usage } : {}),
       },
+      ...(result.usage ? { modelUsage: result.usage } : {}),
     };
   },
   restore: (output, _scope, state) => {

@@ -37,6 +37,8 @@ export interface ToolExecutionOutput {
   readonly terminate?: boolean;
   /** Transient content delivered to the model after the safe output is durably committed. */
   readonly modelContent?: readonly (TextContent | ImageContent)[];
+  /** Provider-reported usage for a model invoked inside this tool. */
+  readonly modelUsage?: { readonly inputTokens: number; readonly outputTokens: number; readonly costUsd?: number };
 }
 
 /** One registered tool: stable name, version, schemas, authorization policy, cost class, and implementation (AGT-REQ-030). */
@@ -237,6 +239,20 @@ export class SessionControlPlane<TScope, TState> {
       this.checkNoProgress();
       await this.commit(toolCallId, toolName, args, "failed", `${toolName} failed`, spec.version, phase);
       return { content: [textContent({ error: "tool_failed" })], isError: true, terminate: false };
+    }
+    if (result.modelUsage) {
+      this.pending = addConsumedBudget(EMPTY_AGENT_CONSUMED_BUDGET, {
+        ...this.pending,
+        modelCalls: (this.pending.modelCalls ?? 0) + 1,
+        inputTokens: (this.pending.inputTokens ?? 0) + result.modelUsage.inputTokens,
+        outputTokens: (this.pending.outputTokens ?? 0) + result.modelUsage.outputTokens,
+        costUsd: (this.pending.costUsd ?? 0) + (result.modelUsage.costUsd ?? 0),
+        usageAvailable: result.modelUsage.costUsd !== undefined && (this.pending.usageAvailable ?? true),
+      });
+      const used = this.used();
+      if (used.modelCalls >= this.budget.maxModelCalls) this.flags.model = true;
+      if (used.inputTokens > this.budget.maxInputTokens || used.outputTokens > this.budget.maxOutputTokens) this.flags.token = true;
+      if (used.costUsd > this.budget.maxEstimatedCostUsd) this.flags.cost = true;
     }
     this.consecutiveNoProgress = 0;
     const reuse = spec.reuse ?? "safe_output";

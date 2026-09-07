@@ -6,7 +6,7 @@ import { PiSessionRunner, contextManifestVersion, type PiHarnessOptions } from "
 import type { FakeModelScript } from "./fake-model.js";
 
 export const PI_AGENT_LED_HARNESS_ID = "pi-agent-led-case-review-harness";
-export const CASE_REVIEW_CONTEXT_SELECTOR_VERSION = "case-review-context-2.0.0";
+export const CASE_REVIEW_CONTEXT_SELECTOR_VERSION = "case-review-context-2.1.0";
 
 function withDefaultScript(options: PiHarnessOptions, script: FakeModelScript): PiHarnessOptions {
   return options.model.route === "fake" && !options.model.script ? { ...options, model: { ...options.model, script } } : options;
@@ -55,6 +55,7 @@ export function caseReviewContextManifestVersion(context: AgentLedCaseReviewCont
     gaps: context.gaps.map((gap) => `${gap.gapId}:${gap.fieldSchemaId}`).sort(),
     field_schemas: context.fieldSchemas.map((schema) => `${schema.fieldSchemaId}@${schema.fieldSchemaVersion}`).sort(),
     documents: (context.documents ?? []).map((document) => `${document.logicalDocumentRevisionId}:${document.documentType}`).sort(),
+    vlm_configuration: context.vlmConfigurationIdentity ?? "fixture-or-unconfigured",
   });
 }
 

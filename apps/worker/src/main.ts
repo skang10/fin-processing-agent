@@ -4,7 +4,7 @@ import { PgBoss } from "pg-boss";
 import { isCaseProcessingJob, type CaseProcessingJob } from "@findoc/contracts";
 import { DocumentSandboxClient, classifySyntheticDemoPages, groupLogicalDocuments } from "@findoc/document-processing";
 import type { AgentLedCaseReviewHarness } from "@findoc/agent";
-import { PiAgentLedCaseReviewHarness, policyViolationCaseReviewScript, standardCaseReviewScript } from "@findoc/agent-pi";
+import { PiAgentLedCaseReviewHarness, PiPageVlmExtractor, policyViolationCaseReviewScript, standardCaseReviewScript } from "@findoc/agent-pi";
 import { PostgresAgentSessionLifecycle, PostgresOutboxStore, PostgresWorkflowCoordinator, createDatabase } from "@findoc/persistence";
 import { createMinioObjectStore, readObjectBytes, storeNativeTextArtifact, storeOcrArtifact, storePageRenderArtifact } from "@findoc/storage";
 import { findFixtureScannedPageAdapter } from "@findoc/offline";
@@ -22,6 +22,16 @@ const maximumSourceBytes = Number(process.env["MAX_SOURCE_BYTES"] ?? 10_000_000)
 const ocrMode = process.env["OCR_MODE"] === "fake" ? "fake" : "pdf_inspector";
 const ocrModelDirectory = process.env["OCR_MODEL_DIRECTORY"];
 const agentModel = process.env["AGENT_MODEL"] ?? "fake";
+const vlmMode = process.env["VLM_MODE"] ?? "fixture";
+if (vlmMode !== "fixture" && vlmMode !== "live") throw new Error("VLM_MODE must be 'fixture' or 'live'");
+const vlmModel = process.env["VLM_MODEL"] ?? agentModel;
+if (vlmMode === "live" && !/^[a-z0-9-]+\/.+$/.test(vlmModel)) throw new Error("VLM_MODEL must be '<provider>/<model-id>' in live mode");
+const vlmSeparator = vlmModel.indexOf("/");
+const vlmProvider = vlmMode === "live" ? vlmModel.slice(0, vlmSeparator) : undefined;
+const vlmApiKey = vlmProvider === "openai"
+  ? process.env["OPENAI_API_KEY"] ?? process.env["VLM_MODEL_API_KEY"]
+  : process.env["VLM_MODEL_API_KEY"];
+if (vlmMode === "live" && !vlmApiKey) throw new Error(vlmProvider === "openai" ? "OPENAI_API_KEY is required for the OpenAI VLM" : "VLM_MODEL_API_KEY is required for a live VLM");
 const agentProvider = agentModel === "fake" ? undefined : agentModel.slice(0, agentModel.indexOf("/"));
 const agentModelApiKey = agentProvider === "openai"
   ? process.env["OPENAI_API_KEY"] ?? process.env["AGENT_MODEL_API_KEY"]
@@ -30,7 +40,7 @@ if (agentModel !== "fake") {
   if (!/^[a-z0-9-]+\/.+$/.test(agentModel)) throw new Error("AGENT_MODEL must be 'fake' or '<provider>/<model-id>'");
   if (!agentModelApiKey) throw new Error(agentProvider === "openai" ? "OPENAI_API_KEY is required for the OpenAI Agent model" : "AGENT_MODEL_API_KEY is required for a live Agent model");
 } else {
-  process.env["PI_OFFLINE"] ??= "1";
+  if (vlmMode !== "live") process.env["PI_OFFLINE"] ??= "1";
 }
 
 function liveModelRoute(): { route: "live"; provider: string; modelId: string; apiKey: string } | undefined {
@@ -65,6 +75,9 @@ const { client, db } = createDatabase(databaseUrl);
 
 const piHarnesses = new Map<string, PiAgentLedCaseReviewHarness>();
 let agentLifecycle: PostgresAgentSessionLifecycle | undefined;
+const vlmExtractor = vlmMode === "live"
+  ? new PiPageVlmExtractor({ provider: vlmProvider ?? "", modelId: vlmModel.slice(vlmSeparator + 1), apiKey: vlmApiKey ?? "" })
+  : undefined;
 const objectStore = createMinioObjectStore({
   endpoint: minioEndpoint, accessKey: minioAccessKey, secretKey: minioSecretKey,
   bucket: process.env["MINIO_BUCKET"] ?? "findoc-artifacts",
@@ -169,6 +182,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   const stage = await processAgentLedCaseReview({
     coordinator, selectHarness: selectAgentHarness, logger,
     readArtifact: (objectKey, maximumBytes) => readObjectBytes(objectStore, objectKey, maximumBytes),
+    ...(vlmExtractor ? { vlmExtractor } : {}),
   }, job.data);
   if (stage === "processing_exception") return;
   logger.info({ case_id: job.data.case_id, run_id: job.data.run_id }, "offline case processing completed");
@@ -192,4 +206,4 @@ async function shutdown() {
 process.once("SIGINT", () => void shutdown());
 process.once("SIGTERM", () => void shutdown());
 
-logger.info({ mode: "offline", queue: CASE_PROCESSING_QUEUE, agent_harness: "pi", agent_model: agentModel === "fake" ? "fake" : agentModel }, "worker ready");
+logger.info({ mode: "offline", queue: CASE_PROCESSING_QUEUE, agent_harness: "pi", agent_model: agentModel === "fake" ? "fake" : agentModel, vlm_mode: vlmMode, ...(vlmMode === "live" ? { vlm_model: vlmModel } : {}) }, "worker ready");

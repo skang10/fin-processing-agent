@@ -52,6 +52,8 @@ export interface CaseReviewProcessingPorts extends RecoveryToolPorts {
 
 export interface AgentLedCaseReviewContext extends AdaptiveRecoveryContext {
   readonly fixtureLabel?: string;
+  /** Resolved nested extraction route identity; included in durable compatibility, never model context. */
+  readonly vlmConfigurationIdentity?: string;
   /** Required when a durable lifecycle owns the session identity. */
   readonly caseId?: string;
 }
@@ -327,7 +329,7 @@ export interface RecoveryToolPorts {
   classifyPage(page: PageReference): Promise<{ readonly candidates: readonly { readonly type: string; readonly rawConfidence: number }[]; readonly method: string; readonly version: string }>;
   detectDocumentBoundaries(page: PageReference): Promise<{ readonly startsNewDocument: boolean; readonly method: string; readonly version: string; readonly rawConfidence?: number }>;
   extractLocalTable(page: PageReference): Promise<{ readonly available: boolean; readonly rowCount: number; readonly artifactReference?: string }>;
-  extractWithVlm(request: { readonly page: PageReference; readonly fieldSchemaId: string; readonly region?: NormalizedRegion }): Promise<{ readonly modelLabel: string; readonly promptVersion: string; readonly value?: { readonly rawValue: string; readonly normalizedValue: unknown; readonly region: NormalizedRegion; readonly rawConfidence: number }; readonly usage?: { readonly inputTokens: number; readonly outputTokens: number } }>;
+  extractWithVlm(request: { readonly page: PageReference; readonly fieldSchemaId: string; readonly region?: NormalizedRegion }): Promise<{ readonly modelLabel: string; readonly promptVersion: string; readonly value?: { readonly rawValue: string; readonly normalizedValue: unknown; readonly region: NormalizedRegion; readonly rawConfidence: number }; readonly usage?: { readonly inputTokens: number; readonly outputTokens: number; readonly costUsd?: number } }>;
 }
 
 /** How the Agent obtained a submitted value; every option is a registered, scoped tool boundary. */

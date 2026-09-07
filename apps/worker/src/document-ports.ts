@@ -9,9 +9,15 @@ export interface RuntimeDocumentPortOptions {
   readonly inventory: CaseDocumentInventory;
   /** Reads one committed derived artifact by object key. */
   readonly readArtifact: (objectKey: string, maximumBytes: number) => Promise<Buffer>;
+  /** Explicit live, provider-neutral page-image extraction route. */
+  readonly vlmExtractor?: (request: {
+    readonly image: { readonly data: string; readonly mimeType: string };
+    readonly fieldSchemaId: string;
+    readonly region?: NormalizedRegion;
+  }) => ReturnType<RecoveryToolPorts["extractWithVlm"]>;
   /**
-   * Explicit synthetic-fixture stand-in for pages the delivered runtime cannot read: the OCR adapter
-   * is a deterministic fixture and no VLM gateway is wired yet. Absent for any non-fixture case.
+   * Explicit synthetic-fixture stand-in for pages the delivered runtime cannot read. It is used
+   * only when no live VLM route is configured and is absent for any non-fixture case.
    */
   readonly fixtureScannedPages?: FixtureScannedPageAdapter;
 }
@@ -101,13 +107,17 @@ export function createRuntimeDocumentPorts(options: RuntimeDocumentPortOptions):
 
     extractLocalTable: async (reference) => ({ available: find(reference).hasTable, rowCount: 0 }),
 
-    /**
-     * No live VLM gateway is configured. For a registered synthetic case the explicit fixture
-     * adapter answers for a page that carries no native text, so the bounded extraction path stays
-     * demonstrable; the value is fixture data, not recognition, and is labelled as such.
-     */
     extractWithVlm: async (request) => {
       const page = find(request.page);
+      if (options.vlmExtractor) {
+        if (!page.render) throw new Error("Page has no committed render for VLM extraction");
+        const bytes = await options.readArtifact(page.render.objectKey, MAXIMUM_ARTIFACT_BYTES);
+        return options.vlmExtractor({
+          image: { data: bytes.toString("base64"), mimeType: "image/png" },
+          fieldSchemaId: request.fieldSchemaId,
+          ...(request.region ? { region: request.region } : {}),
+        });
+      }
       const fixture = options.fixtureScannedPages;
       const declared = fixture && page.nativeCharacterCount === 0 ? fixture.value(request.page.pageNumber, request.fieldSchemaId) : undefined;
       return {

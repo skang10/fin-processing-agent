@@ -9,8 +9,11 @@ const environmentPath = ".data/demo.env";
 const localEnvironmentPath = ".env";
 const agentEnvironmentKeys = new Set([
   "AGENT_MODEL",
+  "VLM_MODE",
+  "VLM_MODEL",
   "OPENAI_API_KEY",
   "AGENT_MODEL_API_KEY",
+  "VLM_MODEL_API_KEY",
   "PI_OFFLINE",
 ]);
 

@@ -5,6 +5,7 @@ import {
   type RecoveryPageView, type SubmittedExtractionCandidate,
 } from "@findoc/agent";
 import { CASE_REVIEW_TOOL_NAMES } from "@findoc/agent-pi";
+import type { PiVlmExtractor } from "@findoc/agent-pi";
 import { AgentSessionIncompatibleError } from "@findoc/core";
 import {
   CaseAssemblyInputError, assembleCaseResult, buildExtractionPlan, findFixtureScannedPageAdapter, runOfflineReport,
@@ -29,6 +30,7 @@ export interface CaseReviewStageDependencies {
   readonly logger: CaseReviewStageLogger;
   /** Reads one committed derived artifact; the Agent only ever sees it through a registered tool. */
   readonly readArtifact: (objectKey: string, maximumBytes: number) => Promise<Buffer>;
+  readonly vlmExtractor?: PiVlmExtractor;
   /**
    * Test-only durable-boundary hook used by the Worker-termination acceptance suite. The delivered
    * Worker never supplies it, so a fault cannot be activated by configuration or document content.
@@ -76,6 +78,7 @@ export async function processAgentLedCaseReview(
       fieldSchemas: [...new Map(plan.gaps.map((gap) => [gap.fieldSchemaId, { fieldSchemaId: gap.fieldSchemaId, fieldSchemaVersion: gap.fieldSchemaVersion, valueType: gap.valueType }])).values()],
       documents: plan.documents,
       applicationData,
+      vlmConfigurationIdentity: dependencies.vlmExtractor?.configurationIdentity ?? `fixture-or-unconfigured:${fixtureId ?? "none"}`,
     };
     const eligibility = evaluateCaseReviewEligibility({
       gaps: plan.gaps, pages: reviewContext.pages, registeredToolNames: CASE_REVIEW_TOOL_NAMES,
@@ -85,7 +88,8 @@ export async function processAgentLedCaseReview(
     const fixtureScannedPages = findFixtureScannedPageAdapter(fixtureId, applicationData);
     const documentPorts = createRuntimeDocumentPorts({
       inventory, readArtifact: dependencies.readArtifact,
-      ...(fixtureScannedPages ? { fixtureScannedPages } : {}),
+      ...(dependencies.vlmExtractor ? { vlmExtractor: (request) => dependencies.vlmExtractor!.extract(request) } : {}),
+      ...(!dependencies.vlmExtractor && fixtureScannedPages ? { fixtureScannedPages } : {}),
     });
     let outcomeCandidates: readonly SubmittedExtractionCandidate[] = [];
     let outcome: Awaited<ReturnType<AgentLedCaseReviewHarness["review"]>>;
