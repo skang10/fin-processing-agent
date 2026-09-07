@@ -1,33 +1,29 @@
 {
   "application_data": {
-    "applicant_display_name": "Anna Beispiel",
-    "demo_fixture_id": "golden-003-multiple-review-issues",
+    "applicant_display_name": "David Beispiel",
+    "demo_fixture_id": "golden-002-employer-conflict",
     "employment": {
-      "employer": "Beispieltechnik GmbH"
+      "employer": "Nordwerk Demo GmbH"
     },
     "income": {
       "currency": "EUR",
-      "monthly_net": "3480.00"
+      "monthly_net": "2900.00"
     },
     "synthetic_data": true
   },
-  "case_id": "golden-003-multiple-review-issues",
+  "case_id": "golden-002-employer-conflict",
   "coverage": [
     "native_text",
     "de",
-    "multiple_review_issues",
-    "multi_page_document",
-    "implemented_offline_path"
+    "one_review_issue",
+    "conflicting_evidence"
   ],
-  "document_values": {
-    "payslip_monthly_net": "3310.00"
-  },
   "documents": [
     {
       "media_type": "application/pdf",
-      "page_count": 4,
-      "path": "../documents/golden-003-multiple-review-issues.pdf",
-      "sha256": "0bff1a6c66a787c48382850afc5c7dcbc98cc9ddd53a6ca9c4b10d77015cfe50"
+      "page_count": 3,
+      "path": "documents/golden-002-employer-conflict/golden-002-employer-conflict.pdf",
+      "sha256": "9e3d76aa1e7ee0c6688d51614b70f1d55673a4a5a1806be1bad5d4e9b6602757"
     }
   ],
   "generator": {
@@ -35,7 +31,7 @@
     "version": "findoc-golden-generator-2.0.0"
   },
   "schema_version": "1.0.0",
-  "seed": 1003,
+  "seed": 1002,
   "synthetic_data": true,
   "truth_candidate": {
     "expected_checked_facts": [
@@ -43,7 +39,7 @@
         "acceptable_evidence": [
           "page:1",
           "page:2",
-          "page:4"
+          "page:3"
         ],
         "code": "VAL_DOC_COMPLETENESS_001"
       },
@@ -51,22 +47,7 @@
         "acceptable_evidence": [
           "page:1"
         ],
-        "code": "VAL_NAME_CONSISTENCY_001"
-      },
-      {
-        "acceptable_evidence": [
-          "page:1"
-        ],
         "code": "VAL_ID_EXPIRY_001"
-      }
-    ],
-    "expected_issues": [
-      {
-        "acceptable_evidence": [
-          "application:/employment/employer",
-          "page:4"
-        ],
-        "code": "VAL_EMPLOYER_CONSISTENCY_001"
       },
       {
         "acceptable_evidence": [
@@ -74,20 +55,38 @@
           "page:2"
         ],
         "code": "VAL_INCOME_CONSISTENCY_001"
+      },
+      {
+        "acceptable_evidence": [
+          "page:1",
+          "page:2",
+          "page:3"
+        ],
+        "code": "VAL_NAME_CONSISTENCY_001"
+      }
+    ],
+    "expected_issues": [
+      {
+        "acceptable_evidence": [
+          "application:/employment/employer",
+          "page:2",
+          "page:3"
+        ],
+        "code": "VAL_EMPLOYER_CONSISTENCY_001"
       }
     ],
     "prohibited_report_content": [
-      "approve loan",
-      "reject loan"
+      "decline application",
+      "fraud"
     ],
     "report_availability": "ready",
     "required_report_content": [
-      "multiple review issues"
+      "employer conflict"
     ]
   },
   "verification": {
     "status": "confirmed",
-    "verified_at": "2026-09-07T02:53:37.754Z",
+    "verified_at": "2026-09-06T21:05:04.747Z",
     "verified_by": "sulmae"
   }
 }
