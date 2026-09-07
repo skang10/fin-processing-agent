@@ -637,6 +637,9 @@ export interface QueueCaseView {
   readonly caseCode: string;
   readonly applicantDisplayName: string;
   readonly summary: string;
+  readonly reviewMethod: "deterministic" | "agent" | "agent_vlm";
+  readonly agentModelLabel?: string;
+  readonly vlmModelLabel?: string;
   readonly issueCount: number;
   readonly workflowStatus: "processing" | "ready_for_review" | "escalated" | "changes_requested" | "ready_for_handoff";
   readonly lifecycle: CaseStatus["lifecycle"];

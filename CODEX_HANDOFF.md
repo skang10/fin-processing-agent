@@ -59,6 +59,10 @@ This section is the operational starting point for the next implementation agent
 
 46. Machine-produced review issues are labeled `System generated` rather than the misleading `AI created`. VLM and Agent boundaries are unchanged: models may extract candidates and write a non-authoritative review brief, while the finite deterministic registry remains authoritative for findings and issue eligibility.
 
+47. The case workspace review pane is responsive instead of fixed at 540 px: its default width scales from 420 to 620 px with the viewport, the document pane retains a 420 px minimum, and the compact-navigation breakpoint preserves the document/resizer/review three-column structure. Pointer and keyboard resizing now clamp against the actual available workspace and remain safe after a browser resize.
+
+48. The Review Queue replaces its repetitive summary column with authoritative processing provenance. Offline fake-model sessions display `Deterministic workflow` / `Demo only`; live sessions display `Agent` plus the persisted Agent model, or `Agent + VLM` plus the persisted Agent model and the VLM model retained in the committed extraction-tool output. Deterministic reconciliation and validation still run for every path and are not misrepresented as a generative model.
+
 ### What is still fixture-backed
 
 1. Default demo and CI OCR remain deterministic fixture-backed. The explicit `pdf_inspector` mode uses pinned, verified, pre-provisioned assets and now has Linux ARM64 synthetic evidence across all six frozen cases; broader platform and non-template corpus evidence remains pending.

@@ -1,4 +1,4 @@
-import { createIssue, editIssue, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
+import { createIssue, editIssue, loadCaseBundle, loadCaseQueue, loadDemoCase, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
 import { presentIssue } from './issue-presentation.js';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -89,12 +89,12 @@ function renderCases() {
   const query = searchInput.value.trim().toLowerCase();
   const visible = cases.filter(function (item) {
     return (activeFilter === 'all' || item.status === activeFilter) &&
-      (item.name + ' ' + item.id + ' ' + item.summary).toLowerCase().includes(query);
+      (item.name + ' ' + item.id + ' ' + item.methodTitle + ' ' + item.methodDetail).toLowerCase().includes(query);
   });
   caseList.innerHTML = visible.map(function (item) {
     return '<tr class="case-row" data-route-id="' + escapeHtml(item.routeId || item.id) + '" tabindex="0" aria-label="Open ' + item.id + ', ' + item.name + '">' +
       '<td><strong>' + item.id + '</strong></td><td><strong>' + item.name + '</strong></td>' +
-      '<td><strong>' + item.summary + '</strong></td><td><span class="issue-number">' + item.issues + '</span></td>' +
+      '<td class="review-method"><strong>' + escapeHtml(item.methodTitle) + '</strong><small>' + escapeHtml(item.methodDetail) + '</small></td><td><span class="issue-number">' + item.issues + '</span></td>' +
       '<td><span class="state-label ' + item.status + '"><i></i>' + item.statusLabel + '</span></td>' +
       '<td class="tabular">' + item.waiting + '</td>' +
       '<td class="row-arrow">→</td></tr>';
@@ -135,7 +135,11 @@ async function refreshQueue(view = activeQueueView, updateLocation = true) {
     cases = payload.cases.map(function (record) {
       const status = record.workflow_status === 'ready_for_review' ? 'ready' : record.workflow_status === 'processing' ? 'in-progress' : record.workflow_status.replaceAll('_', '-');
       const labels = { processing: 'In progress', ready_for_review: 'Ready for review', escalated: 'Escalated', changes_requested: 'Changes requested', ready_for_handoff: 'Ready for handoff' };
-      return { name: record.applicant_display_name, id: record.case_code, routeId: record.case_id, summary: formatQueueSummary(record.issue_count, record.workflow_status),
+      const methodTitle = record.review_method === 'deterministic' ? 'Deterministic workflow'
+        : record.review_method === 'agent_vlm' ? 'Agent + VLM' : 'Agent';
+      const methodDetail = record.review_method === 'deterministic' ? 'Demo only'
+        : [record.agent_model_label, record.vlm_model_label].filter(function (label) { return label; }).join(' · ') || 'Model unavailable';
+      return { name: record.applicant_display_name, id: record.case_code, routeId: record.case_id, methodTitle, methodDetail,
         status, statusLabel: labels[record.workflow_status], issues: record.issue_count, waiting: waitingLabel(record.waiting_since) };
     });
     document.querySelector('.page-heading h1').textContent = view === 'changes_requested' ? 'Changes requested' : view === 'completed' ? 'Completed' : 'Review queue';
@@ -892,7 +896,9 @@ const panelResizer = document.querySelector('#panel-resizer');
 const reviewLayout = document.querySelector('.review-layout');
 function setReviewWidth(pointerX) {
   const bounds = reviewLayout.getBoundingClientRect();
-  const width = Math.max(400, Math.min(720, bounds.right - pointerX));
+  const minimumWidth = Math.min(400, Math.max(320, bounds.width - 426));
+  const maximumWidth = Math.max(minimumWidth, Math.min(720, bounds.width - 426));
+  const width = Math.max(minimumWidth, Math.min(maximumWidth, bounds.right - pointerX));
   reviewLayout.style.setProperty('--review-width', width + 'px');
   panelResizer.setAttribute('aria-valuenow', String(Math.round(width)));
 }
@@ -909,10 +915,15 @@ panelResizer.addEventListener('pointerup', function (event) {
 });
 panelResizer.addEventListener('keydown', function (event) {
   if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-  const currentWidth = parseFloat(getComputedStyle(reviewLayout).getPropertyValue('--review-width')) || 540;
+  const currentWidth = document.querySelector('.review-panel').getBoundingClientRect().width;
   const nextWidth = currentWidth + (event.key === 'ArrowLeft' ? 24 : -24);
   setReviewWidth(reviewLayout.getBoundingClientRect().right - nextWidth);
   event.preventDefault();
+});
+window.addEventListener('resize', function () {
+  if (!reviewLayout.style.getPropertyValue('--review-width')) return;
+  const currentWidth = document.querySelector('.review-panel').getBoundingClientRect().width;
+  setReviewWidth(reviewLayout.getBoundingClientRect().right - currentWidth);
 });
 function updateZoom(delta) {
   zoom = Math.max(68, Math.min(124, zoom + delta));

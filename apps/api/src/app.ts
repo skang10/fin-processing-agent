@@ -145,7 +145,10 @@ export function buildApp(
     const records = await caseQueries.list(view);
     return { view, cases: records.map((record) => ({
       case_id: record.caseId, case_code: record.caseCode, applicant_display_name: record.applicantDisplayName,
-      summary: record.summary, issue_count: record.issueCount, workflow_status: record.workflowStatus,
+      summary: record.summary, review_method: record.reviewMethod,
+      ...(record.agentModelLabel ? { agent_model_label: record.agentModelLabel } : {}),
+      ...(record.vlmModelLabel ? { vlm_model_label: record.vlmModelLabel } : {}),
+      issue_count: record.issueCount, workflow_status: record.workflowStatus,
       lifecycle: record.lifecycle, waiting_since: record.waitingSince, version: record.version,
     })) };
   });

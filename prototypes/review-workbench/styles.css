@@ -267,6 +267,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .case-row td > strong, .case-row td > small { display: block; }
 .case-row td > strong { font-size: 11px; font-weight: 650; }
 .case-row td > small { margin-top: 3px; color: var(--muted); font-size: 10px; }
+.review-method small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .state-label { display: inline-flex; align-items: center; gap: 6px; color: #4f5d66; font-size: 10px; }
 .state-label i { width: 6px; height: 6px; border-radius: 50%; background: #b97912; }
 .state-label.in-progress i { background: var(--accent); }
@@ -348,7 +349,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .agent-log-meta { grid-template-columns: 1fr; gap: 12px; }
   .agent-log-event { grid-template-columns: 82px minmax(0, 1fr); }
 }
-.review-layout { --review-width: 540px; height: calc(100vh - 122px); min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(480px, 1fr) 6px var(--review-width); grid-template-rows: minmax(0, 1fr); }
+.review-layout { --review-width: clamp(420px, 38vw, 620px); height: calc(100vh - 122px); min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(420px, 1fr) 6px var(--review-width); grid-template-rows: minmax(0, 1fr); }
 .document-panel { min-width: 0; background: #e9edf0; display: flex; flex-direction: column; }
 .panel-resizer { position: relative; z-index: 4; background: #eef1f3; cursor: col-resize; touch-action: none; }
 .panel-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 2px; width: 1px; background: var(--line-strong); }
@@ -863,5 +864,5 @@ body { font-size: 14px; }
   .brand > span:last-child, .nav-label, .nav-item > span:nth-child(2), .nav-item b, .rail-status div { display: none; }
   .nav-item { grid-template-columns: 1fr; justify-items: center; padding: 0; }
   .rail-status { justify-content: center; }
-  .review-layout { grid-template-columns: minmax(500px, 1fr) 400px; }
+  .review-layout { grid-template-columns: minmax(420px, 1fr) 6px var(--review-width); }
 }

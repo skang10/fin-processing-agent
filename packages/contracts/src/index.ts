@@ -101,6 +101,9 @@ export const CaseQueueSchema = Type.Object({
     case_code: Type.String({ pattern: "^FD-[0-9]{4}-[0-9]{4,}$" }),
     applicant_display_name: Type.String(),
     summary: Type.String(),
+    review_method: Type.Union([Type.Literal("deterministic"), Type.Literal("agent"), Type.Literal("agent_vlm")]),
+    agent_model_label: Type.Optional(Type.String()),
+    vlm_model_label: Type.Optional(Type.String()),
     issue_count: Type.Integer({ minimum: 0 }),
     workflow_status: Type.Union([
       Type.Literal("processing"), Type.Literal("ready_for_review"), Type.Literal("escalated"),

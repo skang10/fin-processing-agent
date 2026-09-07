@@ -17,7 +17,8 @@ describe("case intake", () => {
   const caseQueries = {
     list: vi.fn(async () => [{
       caseId: "4c816f67-5f2f-4e21-8c17-7eb1e53838bd", caseCode: "FD-2026-0042", applicantDisplayName: "Anna Beispiel",
-      summary: "Three items require review.", issueCount: 1, workflowStatus: "ready_for_review" as const,
+      summary: "Three items require review.", reviewMethod: "deterministic" as const,
+      issueCount: 1, workflowStatus: "ready_for_review" as const,
       lifecycle: "ready_for_review" as const, waitingSince: "2026-09-01T10:00:00.000Z", version: 2,
     }]),
     get: vi.fn(async () => ({

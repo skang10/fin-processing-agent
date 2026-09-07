@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
@@ -360,12 +360,18 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       lifecycle: cases.lifecycle, version: cases.version, createdAt: cases.createdAt,
     }).from(cases).orderBy(asc(cases.createdAt), asc(cases.id)).limit(100);
     const projected = await Promise.all(records.map(async (record): Promise<QueueCaseView | null> => {
-      const [[report], issueRows, [finalReview]] = await Promise.all([
+      const [[report], issueRows, [finalReview], [session], [vlmInvocation]] = await Promise.all([
         this.db.select({ summary: agentReports.summary }).from(agentReports)
           .where(eq(agentReports.caseId, record.caseId)).orderBy(sql`${agentReports.createdAt} desc`).limit(1),
         this.db.select({ id: reviewIssues.id }).from(reviewIssues).where(eq(reviewIssues.caseId, record.caseId)),
         this.db.select({ action: finalReviews.action, createdAt: finalReviews.createdAt }).from(finalReviews)
           .where(eq(finalReviews.caseId, record.caseId)).limit(1),
+        this.db.select({ modelLabel: agentSessions.modelLabel, modelRoute: agentSessions.modelRoute, vlmCalls: agentSessions.vlmCalls })
+          .from(agentSessions).where(eq(agentSessions.caseId, record.caseId)).orderBy(desc(agentSessions.createdAt)).limit(1),
+        this.db.select({ safeOutput: agentToolInvocations.safeOutput }).from(agentToolInvocations)
+          .innerJoin(agentSessions, eq(agentToolInvocations.sessionId, agentSessions.id))
+          .where(and(eq(agentSessions.caseId, record.caseId), eq(agentToolInvocations.toolName, "extract_with_vlm"), eq(agentToolInvocations.outcome, "succeeded")))
+          .orderBy(desc(agentToolInvocations.completedAt)).limit(1),
       ]);
       const action = finalReview ? asFinalAction(finalReview.action) : undefined;
       const activeLifecycle = record.lifecycle === "processing" || record.lifecycle === "ready_for_review";
@@ -377,9 +383,16 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
         : action === "clear_for_downstream" ? "ready_for_handoff"
           : action === "escalate_review" ? "escalated"
             : record.lifecycle === "processing" ? "processing" : "ready_for_review";
+      const vlmOutput = vlmInvocation?.safeOutput && typeof vlmInvocation.safeOutput === "object"
+        ? vlmInvocation.safeOutput as Record<string, unknown> : undefined;
+      const vlmModelLabel = typeof vlmOutput?.["model_label"] === "string" ? vlmOutput["model_label"] : undefined;
+      const reviewMethod: QueueCaseView["reviewMethod"] = !session || session.modelRoute === "fake" ? "deterministic"
+        : session.vlmCalls > 0 ? "agent_vlm" : "agent";
       return {
         caseId: record.caseId, caseCode: caseCode(record.createdAt, record.displayNumber), applicantDisplayName: record.applicantDisplayName,
         summary: report?.summary ?? (workflowStatus === "processing" ? "Document processing is in progress." : "Review result available."),
+        reviewMethod, ...(session?.modelRoute === "live" ? { agentModelLabel: session.modelLabel } : {}),
+        ...(vlmModelLabel ? { vlmModelLabel } : {}),
         issueCount: issueRows.length, workflowStatus, lifecycle: asCaseLifecycle(record.lifecycle),
         waitingSince: (finalReview?.createdAt ?? record.createdAt).toISOString(), version: record.version,
       };
