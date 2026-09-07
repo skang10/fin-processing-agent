@@ -90,7 +90,7 @@ The resulting choice belongs in `specs/decisions/ADR_003_VLM_SELECTION.md`. Prod
 
 ### BL-005 — Versioned Golden Dataset
 
-**Status:** Initial six-case release complete. All visibly synthetic candidates are manually confirmed and frozen as checksum-verified `v0.1.1`; the completed V1 target remains twenty cases. Frozen `v0.1.1` is unchanged. Successor candidates now make `golden-003-multiple-review-issues` carry a real payslip-income conflict plus its employer conflict, and make `golden-004-missing-bank-evidence` expect the account-holder name to remain unresolved when the bank statement is absent. Both changed candidates are pending explicit human confirmation before a successor release can be frozen.
+**Status:** Initial six-case release complete. All visibly synthetic candidates are manually confirmed and frozen as checksum-verified `v0.1.1`; the completed V1 target remains twenty cases. Frozen `v0.1.1` is unchanged. Successor candidates now make `golden-003-multiple-review-issues` carry a real payslip-income conflict plus its employer conflict, and make `golden-004-missing-bank-evidence` expect the account-holder name to remain unresolved when the bank statement is absent. Two explicit pre-confirmation candidate evaluations reproduced 5/5 issue precision, 5/6 recall, 29/29 grounding, and 5/6 verified reports; changed cases 003 and 004 matched completely. Both remain pending explicit human confirmation before a successor release can be frozen.
 
 Public datasets are tracked separately as opt-in component diagnostics. Their exact revisions, licenses, privacy fitness, deterministic subsets, and checksums must be approved before download or use; they do not replace project-owned end-to-end golden truth.
 

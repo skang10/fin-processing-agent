@@ -1,5 +1,28 @@
 # Evaluation Results
 
+## Successor candidate diagnostic — pending human confirmation
+
+**Recorded:** 2026-09-07
+
+The six current candidates were evaluated before confirmation through the explicit `--candidates` diagnostic mode. This mode preserves `pending_human_review`, does not create a release, and does not weaken the default checksum and confirmation checks for frozen-release evaluation.
+
+Two independent captures at source `1fca67e` produced identical normalized actual-run cases and reports:
+
+- `offline-successor-candidate-20260907T051000Z`, evaluation `75e7ff73e3ef6eda8aa832b17ff82020b96df073719426382b88acbb766ebb76`
+- `offline-successor-candidate-20260907T052000Z`, evaluation `863e35c3f5efdacaacf27dc3a471244110f63962655dfa91554e9cc6ba1b7336`
+
+| Dimension | Result |
+|---|---:|
+| Agent issue precision | 5 / 5 (100%) |
+| Agent issue recall | 5 / 6 (83.3%) |
+| Correct evidence grounding | 29 / 29 (100%) |
+| Unsupported claims | 0 / 29 (0%) |
+| Verified-report completion | 5 / 6 (83.3%) |
+
+The single false negative and unavailable report are both `golden-006`: its deterministic income finding is intentionally excluded from Agent-origin issue scoring, and its fake policy deliberately exercises the report-unavailable path. The changed `golden-003` and `golden-004` candidates have no missed, additional, or incorrectly grounded items. These results are pre-confirmation diagnostic evidence, not a frozen successor baseline.
+
+---
+
 ## Offline Agent-led regression baseline — v0.1.1
 
 **Recorded:** 2026-09-07
