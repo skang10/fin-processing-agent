@@ -45,9 +45,18 @@ if (action === "acceptance") {
 }
 
 function run(arguments_, required = true) {
+  const acceptanceEnvironment = action === "acceptance" ? {
+    AGENT_MODEL: "fake",
+    VLM_MODE: "fixture",
+    VLM_MODEL: "",
+    AGENT_MODEL_API_KEY: "",
+    VLM_MODEL_API_KEY: "",
+    OPENAI_API_KEY: "",
+    PI_OFFLINE: "1",
+  } : {};
   const result = spawnSync("docker", ["compose", "--env-file", environmentPath, ...arguments_], {
     stdio: "inherit",
-    env: { ...process.env, ...readAllowlistedEnvironment(localEnvironmentPath) },
+    env: { ...process.env, ...readAllowlistedEnvironment(localEnvironmentPath), ...acceptanceEnvironment },
   });
   if (required && result.status !== 0) throw new Error(`Docker Compose failed with ${result.status ?? "no exit status"}`);
 }
