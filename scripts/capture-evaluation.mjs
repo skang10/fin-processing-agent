@@ -10,7 +10,11 @@ export async function captureEvaluationRun(releaseDirectory, runConfiguration, o
   const fetcher = options.fetcher ?? fetch; const apiBaseUrl = options.apiBaseUrl ?? process.env.API_BASE_URL ?? "http://127.0.0.1:3000";
   const actualCases = [];
   for (const candidate of cases) {
-    const loaded = await loadGoldenCase(candidate.case_id, { ...options, fetcher, apiBaseUrl, candidatePath: join(releaseDirectory, "cases", `${candidate.case_id}.json`), documentRoot: releaseDirectory });
+    const loaded = await loadGoldenCase(candidate.case_id, {
+      ...options, fetcher, apiBaseUrl,
+      candidatePath: candidateMode(options) ? join(releaseDirectory, `${candidate.case_id}.json`) : join(releaseDirectory, "cases", `${candidate.case_id}.json`),
+      documentRoot: releaseDirectory,
+    });
     const runtime = loaded.runtime;
     if (loaded.lifecycle !== "ready_for_review") {
       actualCases.push({ case_id: candidate.case_id, processable: false, issues: [], checked_facts: [], report: { availability: "unavailable", verified: false, failure_reason: loaded.lifecycle, verifier: invalidVerifier() }, operations: {} });
@@ -30,14 +34,17 @@ export async function captureEvaluationRun(releaseDirectory, runConfiguration, o
       issues: runtime.issues.issues.filter((item) => item.origin === "agent").map((item) => ({
         code: item.code,
         evidence: captureIssueEvidence(item, findingsByRule.get(item.code), findingEvidenceByRule.get(item.code) ?? [], issueEvidence),
-      })),
-      checked_facts: report.checked_facts.map((item) => ({ code: item.rule_id, evidence: references(item.references) })),
+      })).sort(byCode),
+      checked_facts: report.checked_facts.map((item) => ({ code: item.rule_id, evidence: references(item.references) })).sort(byCode),
       report: { availability: report.availability, verified: report.availability === "ready", ...(failure ? { failure_reason: failure } : {}), verifier: verifierState(failure) },
       operations: {},
     });
   }
   return { schema_version: "1.0.0", run_id: runConfiguration.run_id, executed_at: runConfiguration.executed_at, environment: runConfiguration.environment, source_revision: runConfiguration.source_revision, versions: runConfiguration.versions, cases: actualCases };
 }
+
+function candidateMode(options) { return options.candidateMode === true; }
+function byCode(left, right) { return left.code.localeCompare(right.code); }
 
 export function captureIssueEvidence(issue, finding, fallbackEvidence, resolveIssueEvidence) {
   if (!finding) return issue.supporting_references.length ? resolveIssueEvidence(issue.supporting_references) : [];
