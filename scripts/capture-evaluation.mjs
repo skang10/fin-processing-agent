@@ -8,13 +8,14 @@ const DELIVERED_CASE_COST_LIMIT_USD = 0.25;
 
 export async function captureEvaluationRun(releaseDirectory, runConfiguration, options = {}) {
   const { manifest, cases } = options.candidateMode ? await loadCandidateSet(releaseDirectory) : await loadFrozenRelease(releaseDirectory);
-  validateConfiguration(runConfiguration, manifest.version, cases.length);
+  validateConfiguration(runConfiguration, manifest.version, cases);
+  const selectedCases = selectEvaluationCases(cases, runConfiguration.case_ids);
   const fetcher = options.fetcher ?? fetch; const apiBaseUrl = options.apiBaseUrl ?? process.env.API_BASE_URL ?? "http://127.0.0.1:3000";
   const actualCases = [];
   const costBudget = runConfiguration.cost_budget;
   let reconciledCostUsd = 0;
   let blockedReason;
-  for (const candidate of cases) {
+  for (const candidate of selectedCases) {
     if (!blockedReason && costBudget && !canReserveCase(costBudget, reconciledCostUsd)) blockedReason = "whole_run_cost_budget_exhausted";
     if (blockedReason) {
       actualCases.push(skippedCase(candidate.case_id, blockedReason));
@@ -59,7 +60,7 @@ export async function captureEvaluationRun(releaseDirectory, runConfiguration, o
       operations: capturedCostOperations(caseCostUsd),
     });
   }
-  return { schema_version: "1.0.0", run_id: runConfiguration.run_id, executed_at: runConfiguration.executed_at, environment: runConfiguration.environment, source_revision: runConfiguration.source_revision, versions: runConfiguration.versions, ...(costBudget ? { cost_budget: costBudget } : {}), cases: actualCases };
+  return { schema_version: "1.0.0", run_id: runConfiguration.run_id, executed_at: runConfiguration.executed_at, environment: runConfiguration.environment, source_revision: runConfiguration.source_revision, versions: runConfiguration.versions, ...(runConfiguration.case_ids ? { case_ids: runConfiguration.case_ids } : {}), ...(costBudget ? { cost_budget: costBudget } : {}), cases: actualCases };
 }
 
 function candidateMode(options) { return options.candidateMode === true; }
@@ -98,14 +99,29 @@ export function reconcileCaseCost(budget, reconciledCostUsd, caseCostUsd) {
   }
   return { reconciledCostUsd: nextCostUsd, blockedReason: undefined };
 }
-function validateConfiguration(configuration, datasetVersion, caseCount) {
+function validateConfiguration(configuration, datasetVersion, cases) {
   if (!configuration?.run_id || !configuration.executed_at || !configuration.environment || !configuration.source_revision || !configuration.versions) throw new Error("Capture configuration is incomplete");
   if (configuration.versions.dataset !== datasetVersion) throw new Error("Capture dataset version does not match the frozen release");
   if (isLiveModel(configuration.versions.model) && configuration.cost_budget === undefined) throw new Error("Live evaluation capture requires an explicit whole-run cost budget");
-  if (configuration.cost_budget !== undefined) validateCostBudget(configuration.cost_budget, caseCount);
+  if (isLiveModel(configuration.versions.model) && !Array.isArray(configuration.case_ids)) throw new Error("Live evaluation capture requires an explicit case_ids subset");
+  const selectedCases = selectEvaluationCases(cases, configuration.case_ids);
+  if (configuration.cost_budget !== undefined) validateCostBudget(configuration.cost_budget, selectedCases.length);
 }
 
 function isLiveModel(model) { return typeof model === "string" && model !== "fake" && !model.startsWith("findoc-fake/"); }
+
+export function selectEvaluationCases(cases, caseIds) {
+  if (caseIds === undefined) return cases;
+  if (!Array.isArray(caseIds) || caseIds.length === 0 || caseIds.some((caseId) => typeof caseId !== "string" || !caseId)) {
+    throw new Error("Capture case_ids must be a non-empty string array");
+  }
+  if (new Set(caseIds).size !== caseIds.length) throw new Error("Capture case_ids must not contain duplicates");
+  const byId = new Map(cases.map((candidate) => [candidate.case_id, candidate]));
+  const selected = caseIds.map((caseId) => byId.get(caseId));
+  const missing = caseIds.filter((_, index) => !selected[index]);
+  if (missing.length) throw new Error(`Capture case_ids are not in the dataset release: ${missing.join(", ")}`);
+  return selected;
+}
 
 export function validateCostBudget(budget, caseCount) {
   const total = budget?.maximum_total_usd;

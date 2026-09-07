@@ -8,6 +8,11 @@ const requiredVersions = ["case_package", "dataset", "generator", "pdf_inspector
 
 export function evaluateDataset(goldenCases, actualRun) {
   validateRun(actualRun);
+  if (actualRun.case_ids) {
+    const selectedIds = new Set(actualRun.case_ids);
+    goldenCases = goldenCases.filter((golden) => selectedIds.has(golden.case_id));
+    if (goldenCases.length !== selectedIds.size) throw new Error("Evaluation case_ids do not match the frozen dataset release");
+  }
   const actualById = new Map(actualRun.cases.map((item) => [item.case_id, item]));
   let tp = 0; let fp = 0; let fn = 0; let grounded = 0; let groundingTotal = 0; let unsupported = 0; let processable = 0; let verified = 0;
   const cases = goldenCases.map((golden) => {
@@ -35,6 +40,7 @@ export function evaluateDataset(goldenCases, actualRun) {
   return {
     schema_version: "1.0.0", evaluation_id: digest({ dataset: actualRun.versions.dataset, run: actualRun.run_id, cases }), limitation: "Synthetic demonstration and regression data; not representative of production performance.",
     executed_at: actualRun.executed_at, environment: actualRun.environment, source_revision: actualRun.source_revision, versions: actualRun.versions,
+    ...(actualRun.case_ids ? { case_ids: actualRun.case_ids } : {}),
     ...(actualRun.cost_budget ? { cost_budget: actualRun.cost_budget } : {}),
     metrics: {
       issue_detection: { true_positive: tp, false_positive: fp, false_negative: fn, micro_precision: ratio(tp, tp + fp), micro_recall: ratio(tp, tp + fn) },

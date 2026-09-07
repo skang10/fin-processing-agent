@@ -36,4 +36,13 @@ describe("offline evaluator", () => {
     expect(report.metrics.case_completion).toEqual({ total: 1, completed: 0, excluded: 1, excluded_case_reasons: { whole_run_cost_budget_exhausted: 1 } });
     expect(report.cases[0]).toMatchObject({ outcome: "excluded", reason: "whole_run_cost_budget_exhausted" });
   });
+
+  it("scores only the explicitly captured frozen subset", () => {
+    const second = { case_id: "golden-2", truth_candidate: { expected_issues: [{ code: "ISSUE_B", acceptable_evidence: ["page:1"] }], expected_checked_facts: [], report_availability: "ready" } };
+    const actual = { ...base, case_ids: ["golden-1"], cases: [{ case_id: "golden-1", processable: true, issues: [{ code: "ISSUE_A", evidence: ["page:2"] }], checked_facts: [], report: { availability: "ready", verified: true, verifier: { schema_valid: true, reference_valid: true, registered_code_valid: true, prohibited_content_valid: true } }, operations: {} }] };
+    const report = evaluateDataset([...golden, second], actual);
+    expect(report.metrics.issue_detection).toMatchObject({ true_positive: 1, false_negative: 0 });
+    expect(report.metrics.case_completion.total).toBe(1);
+    expect(report.case_ids).toEqual(["golden-1"]);
+  });
 });

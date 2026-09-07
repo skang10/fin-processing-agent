@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { canReserveCase, captureEvaluationRun, captureIssueEvidence, capturedUsdCost, reconcileCaseCost, validateCostBudget } from "./capture-evaluation.mjs";
+import { canReserveCase, captureEvaluationRun, captureIssueEvidence, capturedUsdCost, reconcileCaseCost, selectEvaluationCases, validateCostBudget } from "./capture-evaluation.mjs";
 import * as evaluator from "./evaluate.mjs";
 
 describe("evaluation run capture", () => {
@@ -41,6 +41,20 @@ describe("evaluation run capture", () => {
     await expect(captureEvaluationRun("release", { run_id: "run", executed_at: "2026-09-07T00:00:00Z", environment: "test", source_revision: "abc", versions: { dataset: "v1.0.0", model: "openai/gpt-5.6-terra" } }))
       .rejects.toThrow("whole-run cost budget");
     vi.restoreAllMocks();
+  });
+
+  it("requires an explicit frozen case subset for a live model", async () => {
+    vi.spyOn(evaluator, "loadFrozenRelease").mockResolvedValue({ manifest: { version: "v1.0.0" }, cases: [] });
+    await expect(captureEvaluationRun("release", { run_id: "run", executed_at: "2026-09-07T00:00:00Z", environment: "test", source_revision: "abc", versions: { dataset: "v1.0.0", model: "openai/gpt-5.6-terra" }, cost_budget: { maximum_total_usd: 0.25, maximum_per_case_usd: 0.25 } }))
+      .rejects.toThrow("case_ids subset");
+    vi.restoreAllMocks();
+  });
+
+  it("selects only named release cases and rejects unknown or duplicate ids", () => {
+    const cases = [{ case_id: "golden-1" }, { case_id: "golden-2" }];
+    expect(selectEvaluationCases(cases, ["golden-2"])).toEqual([{ case_id: "golden-2" }]);
+    expect(() => selectEvaluationCases(cases, ["golden-1", "golden-1"])).toThrow("duplicates");
+    expect(() => selectEvaluationCases(cases, ["golden-3"])).toThrow("not in the dataset release");
   });
 
   it("accepts only finite non-negative persisted USD cost", () => {
