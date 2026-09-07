@@ -78,6 +78,7 @@ describe("PostgresCaseCommandService", () => {
         income: { monthly_net: "3480.00", currency: "EUR", basis: "net" },
       },
       idempotencyKey: "key_1",
+      agentModel: "fake",
       documents: [{
         submittedFilename: "statement.pdf",
         artifact: {
@@ -441,6 +442,7 @@ describe("PostgresCaseCommandService", () => {
       applicantDisplayName: "Synthetic Applicant",
       applicationData: { applicant_display_name: "Synthetic Applicant" },
       idempotencyKey: "missing_documents",
+      agentModel: "fake",
       documents: [],
     });
     const coordinator = new PostgresWorkflowCoordinator(connection.db);

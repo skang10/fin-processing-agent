@@ -1,4 +1,4 @@
-import { createIssue, editIssue, loadCaseBundle, loadCaseQueue, prepareDemoCase, resolveIssue, saveRequestedChange, submitDemoCase, submitFinalReview } from './api.js';
+import { createIssue, editIssue, loadCaseBundle, loadCaseQueue, loadDemoAgentModels, prepareDemoCase, resolveIssue, saveRequestedChange, startDemoCase, submitFinalReview } from './api.js';
 import { presentIssue } from './issue-presentation.js';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -69,6 +69,7 @@ let activeApplicationPointer = null;
 let activeEvidenceRegion = null;
 let caseReadOnly = false;
 let preparedDemoCase = null;
+let demoAgentModels = null;
 const pdfDocuments = new Map();
 const expandedCheckedFacts = new Set();
 let documentRenderSequence = 0;
@@ -217,14 +218,65 @@ function setDemoPreview(prepared) {
   sourceView = 'document'; sourceOverride = null; activeApplicationPointer = null; activeEvidenceRegion = null;
   pdfDocuments.clear(); expandedCheckedFacts.clear();
   pdfDocuments.set(previewDocumentId, getDocument({ data: new Uint8Array(prepared.documentBytes.slice(0)) }).promise);
-  document.querySelectorAll('.case-id').forEach(function (element) { element.textContent = 'DEMO PREVIEW'; });
+  document.querySelectorAll('.case-id').forEach(function (element) { element.textContent = 'DEMO CASE'; });
   document.querySelectorAll('.case-identity strong').forEach(function (element) { element.textContent = prepared.applicantDisplayName; });
   document.querySelector('.status-badge').textContent = 'Not reviewed';
   document.querySelector('.case-progress').hidden = true;
   document.querySelector('#case-agent-trigger').hidden = true;
   document.querySelector('.review-panel').classList.add('previewing');
   document.querySelector('#demo-preview').hidden = false;
+  document.querySelector('#pending-agent-log').hidden = true;
+  document.querySelector('#run-agent-review').hidden = false;
+  document.querySelector('#agent-model').disabled = false;
+  document.querySelector('#agent-run-note').textContent = 'Running the Agent creates a durable case and starts the bounded review workflow.';
   show('workspace');
+}
+
+function renderDemoAgentModels(configuration) {
+  demoAgentModels = configuration;
+  const select = document.querySelector('#agent-model');
+  select.innerHTML = configuration.models.map(function (model) {
+    return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(model.label) + '</option>';
+  }).join('');
+  select.value = configuration.default_model;
+  document.querySelector('#runtime-model-label').textContent = configuration.default_model === 'fake'
+    ? 'Default · Demo Agent' : 'Default · ' + configuration.default_model.split('/').at(-1);
+  updateDemoModelCost();
+}
+
+function selectedDemoAgentModel() {
+  return demoAgentModels?.models.find(function (model) { return model.id === document.querySelector('#agent-model').value; });
+}
+
+function updateDemoModelCost() {
+  const model = selectedDemoAgentModel();
+  document.querySelector('#agent-model-cost').textContent = model?.paid
+    ? 'Live model · maximum USD ' + model.maximum_case_cost_usd + ' for this case'
+    : 'Local deterministic demo model · no external-model cost';
+}
+
+function renderPendingAgentLog(log, modelLabel) {
+  const panel = document.querySelector('#pending-agent-log');
+  panel.hidden = false;
+  const events = (log?.events || []).slice(-6);
+  panel.innerHTML = '<strong>Agent Log · ' + escapeHtml(modelLabel) + '</strong>' +
+    (events.length ? events.map(function (event) { return '<span>' + escapeHtml(event.summary || event.label || event.event_type || 'Agent activity') + '</span>'; }).join('')
+      : '<span>Case accepted. Waiting for the Agent session to start…</span>');
+}
+
+async function followAgentRun(created, modelLabel) {
+  for (let attempt = 0; attempt < 240; attempt += 1) {
+    const [caseResponse, logResponse] = await Promise.all([fetch(created.status_url), fetch(created.status_url + '/agent-log')]);
+    if (!caseResponse.ok) throw new Error('Agent run status could not be loaded');
+    const status = await caseResponse.json();
+    if (logResponse.ok) renderPendingAgentLog(await logResponse.json(), modelLabel);
+    if (status.lifecycle !== 'processing') {
+      window.location.search = '?case_id=' + encodeURIComponent(created.case_id) + '&queue_view=review';
+      return;
+    }
+    await new Promise(function (resolve) { setTimeout(resolve, 500); });
+  }
+  throw new Error('Agent review timed out');
 }
 
 function leaveDemoPreview() {
@@ -1005,31 +1057,43 @@ document.querySelector('#load-demo-case').addEventListener('click', async functi
   button.disabled = true;
   button.textContent = 'Preparing preview…';
   try {
-    setDemoPreview(await prepareDemoCase());
+    const [prepared, models] = await Promise.all([prepareDemoCase(), loadDemoAgentModels()]);
+    renderDemoAgentModels(models);
+    setDemoPreview(prepared);
     button.disabled = false;
-    button.textContent = 'Preview random demo case';
+    button.textContent = 'Generate demo case';
   } catch (error) {
     toast(error instanceof Error ? error.message : 'Demo preview could not be loaded');
     button.disabled = false;
-    button.textContent = 'Preview random demo case';
+    button.textContent = 'Generate demo case';
   }
 });
 
 document.querySelector('#run-agent-review').addEventListener('click', async function (event) {
   if (!preparedDemoCase) return;
+  const model = selectedDemoAgentModel();
+  if (!model) return;
+  if (model.paid && !window.confirm('Run ' + model.label + ' on this synthetic case? The persisted per-case cost limit is USD ' + model.maximum_case_cost_usd + '.')) return;
   const button = event.currentTarget;
   button.disabled = true;
   button.textContent = 'Agent review in progress…';
+  document.querySelector('#agent-model').disabled = true;
   try {
-    const createdCase = await submitDemoCase(preparedDemoCase);
-    await updateAllQueueCounts();
-    window.location.search = '?case_id=' + encodeURIComponent(createdCase.case_id) + '&queue_view=review';
+    const createdCase = await startDemoCase(preparedDemoCase, model.id);
+    button.hidden = true;
+    document.querySelector('#agent-run-note').textContent = 'The case is now durable. Activity below is refreshed from the persisted Agent Log.';
+    renderPendingAgentLog(null, model.label);
+    await followAgentRun(createdCase, model.label);
   } catch (error) {
     toast(error instanceof Error ? error.message : 'Agent review could not be started');
     button.disabled = false;
+    button.hidden = false;
     button.textContent = 'Run agent review';
+    document.querySelector('#agent-model').disabled = false;
   }
 });
+
+document.querySelector('#agent-model').addEventListener('change', updateDemoModelCost);
 
 const reportContent = document.querySelector('[data-view="report"]');
 const submitContent = document.querySelector('#summary .summary-wrap');
@@ -1368,4 +1432,7 @@ renderCases();
 render();
 void refreshQueue(activeQueueView, false);
 void updateAllQueueCounts();
+void loadDemoAgentModels().then(renderDemoAgentModels).catch(function () {
+  document.querySelector('#runtime-model-label').textContent = 'Agent model unavailable';
+});
 void loadCaseFromApi();

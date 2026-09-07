@@ -97,9 +97,10 @@ describe('loadDemoCase', () => {
       applicationData: { demo_fixture_id: 'golden-001-native-clear', synthetic_data: true },
     };
 
-    await expect(submitDemoCase(prepared, fetcher, async function () {})).resolves.toMatchObject({ case_id: 'case-1' });
+    await expect(submitDemoCase(prepared, 'fake', fetcher, async function () {})).resolves.toMatchObject({ case_id: 'case-1' });
     expect(fetcher.mock.calls[0][0]).toBe('/api/v1/cases');
     expect(fetcher.mock.calls[0][1]).toMatchObject({ method: 'POST' });
+    expect(fetcher.mock.calls[0][1].body.get('agent_model')).toBe('fake');
   });
 
   it('submits the bundled synthetic document and waits for review readiness', async () => {

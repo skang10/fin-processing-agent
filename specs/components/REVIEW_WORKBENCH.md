@@ -2,11 +2,11 @@
 
 Document ID: `UI`
 
-Version: 3.4.0
+Version: 3.5.0
 
 Status: Approved
 
-Last updated: 2026-09-05
+Last updated: 2026-09-08
 
 ## 1. Purpose
 
@@ -310,6 +310,10 @@ The workbench presents `clear_for_downstream` as **Complete document review** so
 
 `UI-REQ-170` Agent Report availability must communicate `Ready`, `Pending`, or `Unavailable`; technical verification status belongs to report metadata rather than the default case header.
 
+`UI-REQ-172` The synthetic demonstration may generate a not-yet-submitted demo case view containing only its application data and original source document. That view must not claim that an Agent report, finding, issue, Checked Fact, or durable Agent activity exists before the user starts the processing run.
+
+`UI-REQ-173` Before starting a generated synthetic demo case, the workbench may offer only configuration-allowlisted Agent models, must select the configured evaluated default, and must identify whether the selection can incur external-model cost. Starting a paid model must require an explicit confirmation that names the model and per-case cost ceiling. After acceptance, the workbench must poll and show the bounded persisted Agent log while processing, then expose the verified Agent Report or its explicit unavailable state. The selected model is immutable for the started run; this control is not runtime configuration editing.
+
 `UI-REQ-080` The reviewer workbench must not expose a separate Pipeline view; case-level processing state is represented by the compact shared progression in `UI-REQ-150`.
 
 `UI-REQ-081` Superseded for V1 by the bounded case Agent log in `UI-REQ-155`.
@@ -458,6 +462,7 @@ No unresolved Review Workbench boundary decision blocks review of this document.
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.5.0 | 2026-09-08 | Approved | Added the generated synthetic demo-case start flow, allowlisted pre-run Agent-model selection with paid confirmation, processing Agent Log, and post-run Agent Report transition. |
 | 3.4.0 | 2026-09-07 | Approved | Replaced visible case UUIDs with immutable `FD-YYYY-NNNN` reviewer references while retaining UUID routing. |
 | 3.3.0 | 2026-09-07 | Approved | Standardized visible Agent-log timestamps as German local `DD.MM.YYYY, HH:mm:ss` values without milliseconds while retaining full authoritative timestamps for event ordering. |
 | 3.2.0 | 2026-09-06 | Approved | Selected confirmed requested-change drafts for the message by default while retaining reviewer opt-out. |

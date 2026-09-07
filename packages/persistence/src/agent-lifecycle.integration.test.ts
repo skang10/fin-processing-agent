@@ -34,7 +34,7 @@ describe("PostgresAgentSessionLifecycle", () => {
   async function newRun(key: string) {
     const service = new PostgresCaseCommandService(connection.db, "actor_lifecycle");
     return service.accept({
-      applicantDisplayName: "Greta Demofall", idempotencyKey: key,
+      applicantDisplayName: "Greta Demofall", idempotencyKey: key, agentModel: "fake",
       applicationData: { applicant_display_name: "Greta Demofall", demo_fixture_id: "golden-001-native-clear" },
     });
   }

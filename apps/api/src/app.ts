@@ -17,6 +17,7 @@ import {
   DocumentPageProjectionSchema,
   DownstreamHandoffSchema,
   DocumentsProjectionSchema,
+  DemoAgentModelsSchema,
   EditIssueCommandSchema,
   EditIssueResultSchema,
   FinalReviewCommandSchema,
@@ -39,6 +40,9 @@ export function buildApp(
   sourceIntake?: SourceArtifactIntake,
   reviewCommands?: ReviewCommandService,
   artifactStore?: ObjectStore,
+  demoAgentModels: { readonly defaultModel: string; readonly models: readonly { readonly id: string; readonly label: string; readonly paid: boolean; readonly maximumCaseCostUsd?: string }[] } = {
+    defaultModel: "fake", models: [{ id: "fake", label: "Deterministic demo Agent", paid: false }],
+  },
 ) {
   const app = Fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
   void app.register(multipart, { limits: { files: 10, fields: 10 } });
@@ -47,6 +51,14 @@ export function buildApp(
     const requestId = request.id;
     void reply.header("X-Request-Id", requestId);
   });
+
+  app.get("/api/v1/demo/agent-models", { schema: { response: { 200: DemoAgentModelsSchema } } }, async () => ({
+    default_model: demoAgentModels.defaultModel,
+    models: demoAgentModels.models.map((model) => ({
+      id: model.id, label: model.label, paid: model.paid,
+      ...(model.maximumCaseCostUsd ? { maximum_case_cost_usd: model.maximumCaseCostUsd } : {}),
+    })),
+  }));
 
   app.setErrorHandler(async (error, request, reply) => {
     if (error instanceof IdempotencyConflictError) {
@@ -506,6 +518,7 @@ export function buildApp(
       const key = request.headers["idempotency-key"] as string;
       let applicantDisplayName: string;
       let applicationData: Readonly<Record<string, unknown>>;
+      let requestedAgentModel: string | undefined;
       const documents: IntakeDocument[] = [];
       try {
         if (request.isMultipart()) {
@@ -523,6 +536,8 @@ export function buildApp(
               } catch {
                 throw new IntakeRequestError("application_data must be valid JSON");
               }
+            } else if (part.fieldname === "agent_model") {
+              requestedAgentModel = String(part.value);
             }
           }
           if (documents.length === 0) throw new IntakeRequestError("Multipart intake requires at least one document");
@@ -532,7 +547,9 @@ export function buildApp(
           applicationData = readApplicationData(request.body);
           applicantDisplayName = readApplicantDisplayName(applicationData);
         }
-        const accepted = await caseCommands.accept({ applicantDisplayName, applicationData, idempotencyKey: key, documents });
+        const agentModel = requestedAgentModel ?? demoAgentModels.defaultModel;
+        if (!demoAgentModels.models.some((model) => model.id === agentModel)) throw new IntakeRequestError("agent_model is not allowed");
+        const accepted = await caseCommands.accept({ applicantDisplayName, applicationData, agentModel, idempotencyKey: key, documents });
         if (accepted.replayed) await discardUploads(sourceIntake, documents, request.log);
         const requestId = request.id || randomUUID();
         return reply.code(202).send({

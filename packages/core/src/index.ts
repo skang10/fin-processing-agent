@@ -555,6 +555,7 @@ export interface CaseIntakeCommand {
   readonly applicantDisplayName: string;
   readonly idempotencyKey: string;
   readonly applicationData: Readonly<Record<string, unknown>>;
+  readonly agentModel: string;
   readonly documents?: readonly IntakeDocument[];
 }
 

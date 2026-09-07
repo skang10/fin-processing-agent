@@ -16,6 +16,12 @@ const objectStore = createMinioObjectStore({
 });
 await objectStore.ensureBucket();
 const commandService = new PostgresCaseCommandService(db, "local_demo_reviewer");
+const configuredDefaultAgentModel = process.env["AGENT_MODEL"] ?? "fake";
+const configuredAgentModels = [...new Set([
+  configuredDefaultAgentModel,
+  ...(process.env["OPENAI_API_KEY"] ? ["openai/gpt-5.6-terra", "openai/gpt-5.6-sol"] : []),
+  "fake",
+])];
 const app = buildApp(
   commandService,
   new PostgresCaseQueryService(db),
@@ -24,6 +30,12 @@ const app = buildApp(
   }), discard: (artifact) => objectStore.remove(artifact.objectKey) },
   commandService,
   objectStore,
+  {
+    defaultModel: configuredDefaultAgentModel,
+    models: configuredAgentModels.map((id) => id === "fake"
+      ? { id, label: "Deterministic demo Agent", paid: false }
+      : { id, label: id, paid: true, maximumCaseCostUsd: "0.25" }),
+  },
 );
 app.addHook("onClose", async () => client.end());
 

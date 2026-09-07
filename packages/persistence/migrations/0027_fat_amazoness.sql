@@ -1,0 +1,1 @@
+ALTER TABLE "processing_runs" ADD COLUMN "agent_model" text DEFAULT 'fake' NOT NULL;

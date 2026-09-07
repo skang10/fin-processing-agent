@@ -122,6 +122,16 @@ export const CaseProcessingJobSchema = Type.Object({
 
 export type CaseProcessingJob = Static<typeof CaseProcessingJobSchema>;
 
+export const DemoAgentModelsSchema = Type.Object({
+  default_model: Type.String(),
+  models: Type.Array(Type.Object({
+    id: Type.String(),
+    label: Type.String(),
+    paid: Type.Boolean(),
+    maximum_case_cost_usd: Type.Optional(Type.String()),
+  }, { additionalProperties: false })),
+}, { additionalProperties: false });
+
 const CaseProcessingJobValueSchema = Type.Object({
   case_id: Type.String(),
   run_id: Type.String(),

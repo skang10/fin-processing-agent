@@ -112,7 +112,7 @@ describe("Worker termination during Agent-led case review", () => {
    */
   async function prepareCase(key: string, ocrLines: readonly string[] = OPAQUE_OCR_LINES) {
     const accepted = await new PostgresCaseCommandService(connection.db, `actor_${key}`).accept({
-      applicantDisplayName: "Greta Demofall", idempotencyKey: key,
+      applicantDisplayName: "Greta Demofall", idempotencyKey: key, agentModel: "fake",
       applicationData: {
         applicant_display_name: "Greta Demofall", demo_fixture_id: FIXTURE_ID,
         employment: { employer: "Demowerk GmbH" }, income: { monthly_net: "3050.00", currency: "EUR", basis: "net" },

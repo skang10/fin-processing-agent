@@ -146,6 +146,7 @@ export const processingRuns = pgTable("processing_runs", {
   caseId: uuid("case_id").notNull().references(() => cases.id),
   inputRevisionId: uuid("input_revision_id").notNull().references(() => inputRevisions.id),
   workflowVersion: text("workflow_version").notNull(),
+  agentModel: text("agent_model").notNull().default("fake"),
   status: text("status").notNull(),
   startedAt: timestamp("started_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),

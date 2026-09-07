@@ -38,15 +38,26 @@ export async function prepareDemoCase(fetcher = fetch, random = Math.random) {
   return { ...selected, documentBytes: await documentResponse.arrayBuffer() };
 }
 
-export async function submitDemoCase(prepared, fetcher = fetch, wait = function () { return new Promise(function (resolve) { setTimeout(resolve, 500); }); }) {
+export async function loadDemoAgentModels(fetcher = fetch) {
+  const response = await fetcher('/api/v1/demo/agent-models');
+  if (!response.ok) throw new Error('Agent models could not be loaded');
+  return response.json();
+}
+
+export async function startDemoCase(prepared, agentModel, fetcher = fetch) {
   const form = new FormData();
   form.set('application_data', JSON.stringify(prepared.applicationData));
+  form.set('agent_model', agentModel);
   form.set('documents', new Blob([prepared.documentBytes], { type: 'application/pdf' }), prepared.caseId + '.pdf');
   const createdResponse = await fetcher('/api/v1/cases', {
     method: 'POST', headers: { 'Idempotency-Key': 'demo-' + crypto.randomUUID() }, body: form,
   });
   if (!createdResponse.ok) throw new Error('Demo case could not be submitted');
-  const created = await createdResponse.json();
+  return createdResponse.json();
+}
+
+export async function submitDemoCase(prepared, agentModel = 'fake', fetcher = fetch, wait = function () { return new Promise(function (resolve) { setTimeout(resolve, 500); }); }) {
+  const created = await startDemoCase(prepared, agentModel, fetcher);
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const statusResponse = await fetcher(created.status_url);
     if (!statusResponse.ok) throw new Error('Demo case status could not be loaded');
@@ -59,7 +70,7 @@ export async function submitDemoCase(prepared, fetcher = fetch, wait = function 
 }
 
 export async function loadDemoCase(fetcher = fetch, wait = function () { return new Promise(function (resolve) { setTimeout(resolve, 500); }); }, random = Math.random) {
-  return submitDemoCase(await prepareDemoCase(fetcher, random), fetcher, wait);
+  return submitDemoCase(await prepareDemoCase(fetcher, random), 'fake', fetcher, wait);
 }
 
 async function sendJson(path, method, body, fetcher = fetch) {

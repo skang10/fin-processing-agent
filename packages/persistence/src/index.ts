@@ -104,6 +104,7 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
         caseId: accepted.caseId,
         inputRevisionId,
         workflowVersion: WORKFLOW_VERSION,
+        agentModel: command.agentModel,
         status: "created",
       });
       await tx.insert(processingRunTransitions).values({
@@ -871,6 +872,7 @@ export function hashIntake(command: CaseIntakeCommand): string {
   return hashCanonical({
       applicant_display_name: command.applicantDisplayName,
       application_data: command.applicationData,
+      agent_model: command.agentModel,
       documents: (command.documents ?? []).map((document) => ({
         filename: document.submittedFilename,
         sha256: document.artifact.sha256,
@@ -953,6 +955,13 @@ function confidenceValue(value: unknown): number {
 
 export class PostgresWorkflowCoordinator {
   constructor(private readonly db: ReturnType<typeof drizzle>) {}
+
+  async loadAgentModel(caseId: string, runId: string): Promise<string> {
+    const [run] = await this.db.select({ agentModel: processingRuns.agentModel }).from(processingRuns)
+      .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
+    if (!run) throw new Error("Processing run does not exist");
+    return run.agentModel;
+  }
 
   async loadApplicant(caseId: string, runId: string): Promise<string> {
     const [record] = await this.db.select({ applicantDisplayName: cases.applicantDisplayName })

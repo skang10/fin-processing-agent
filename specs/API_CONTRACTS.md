@@ -2,11 +2,11 @@
 
 Document ID: `API`
 
-Version: 1.8.0
+Version: 1.9.0
 
 Status: Approved
 
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
 ## 1. Purpose
 
@@ -123,6 +123,7 @@ The public error media type is `application/problem+json` with this minimum shap
 V1 exposes these intake and processing routes:
 
 ```text
+GET  /api/v1/demo/agent-models
 POST /api/v1/cases
 GET  /api/v1/cases
 GET  /api/v1/cases/{case_id}
@@ -145,6 +146,10 @@ GET  /api/v1/cases/{case_id}/events
 `API-REQ-037` `POST /cases/{case_id}/runs` must create a new immutable processing run only when its declared input and version preconditions are valid, and must return `202 Accepted` without executing long-running work in the request handler.
 
 `API-REQ-038` The public V1 API must not provide a general case deletion route until retention, authorization, object deletion, audit preservation, and legal-hold semantics are approved by the security and deployment specifications.
+
+`API-REQ-101` The synthetic demo configuration route must return only configuration-allowlisted Agent model identifiers, reviewer-readable labels, paid-operation status, the configured default, and the fixed per-case cost ceiling when applicable; it must not expose credentials or provider configuration internals.
+
+`API-REQ-102` Synthetic multipart intake may bind one allowlisted Agent model to the created processing run. The selected model must participate in the idempotency request hash and immutable run configuration, and an unknown model must be rejected before durable acceptance. Model selection must not grant arbitrary provider or model routing authority.
 
 ## 9. Case Review Query Routes
 
@@ -341,6 +346,7 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.9.0 | 2026-09-08 | Approved | Added bounded synthetic-demo Agent-model discovery and immutable allowlisted model selection at case intake. |
 | 1.8.0 | 2026-09-07 | Approved | Added the immutable reviewer-facing `case_code` to queue and case projections while retaining UUID-based routes. |
 | 1.7.0 | 2026-09-07 | Approved | Added bounded session duration, model-call count, and available token totals to the case Agent-log projection so evaluation capture can satisfy operational reporting without exposing model or document payloads. |
 | 1.6.0 | 2026-09-06 | Approved | Added case-scoped delivery of immutable PDFium page-render artifacts. |

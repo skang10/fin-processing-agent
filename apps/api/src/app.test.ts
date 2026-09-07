@@ -3,10 +3,11 @@ import { HandoffUnavailableError, IdempotencyConflictError } from "@findoc/core"
 import { buildApp } from "./app.js";
 
 const boundary = "findoc-test-boundary";
-function multipartPayload() {
+function multipartPayload(agentModel?: string) {
   return Buffer.from([
     `--${boundary}\r\nContent-Disposition: form-data; name="application_data"\r\n\r\n`,
     JSON.stringify({ applicant_display_name: "Anna Beispiel", demo_fixture_id: "anna-example-v1" }),
+    ...(agentModel ? [`\r\n--${boundary}\r\nContent-Disposition: form-data; name="agent_model"\r\n\r\n${agentModel}`] : []),
     `\r\n--${boundary}\r\nContent-Disposition: form-data; name="documents"; filename="statement.pdf"\r\nContent-Type: application/pdf\r\n\r\n`,
     "%PDF-1.7\nDEMO",
     `\r\n--${boundary}--\r\n`,
@@ -139,6 +140,29 @@ describe("case intake", () => {
     expect(accept).toHaveBeenCalledWith(expect.objectContaining({
       applicationData: { applicant_display_name: "Anna Beispiel" },
     }));
+    await app.close();
+  });
+
+  it("exposes only allowlisted demo Agent models and binds the selected model", async () => {
+    const accept = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", replayed: false }));
+    const models = { defaultModel: "openai/gpt-5.6-terra", models: [
+      { id: "openai/gpt-5.6-terra", label: "openai/gpt-5.6-terra", paid: true, maximumCaseCostUsd: "0.25" },
+      { id: "fake", label: "Deterministic demo Agent", paid: false },
+    ] };
+    const app = buildApp({ accept }, caseQueries, { store: vi.fn(async (source) => {
+      for await (const _ of source) void _;
+      return { objectKey: "source/object_1", sha256: "a".repeat(64), byteSize: 13, detectedMediaType: "application/pdf" as const };
+    }), discard: vi.fn() }, undefined, undefined, models);
+    const configuration = await app.inject({ method: "GET", url: "/api/v1/demo/agent-models" });
+    expect(configuration.json()).toMatchObject({ default_model: "openai/gpt-5.6-terra" });
+    expect(configuration.json().models).toEqual(expect.arrayContaining([expect.objectContaining({ paid: true, maximum_case_cost_usd: "0.25" })]));
+    const response = await app.inject({
+      method: "POST", url: "/api/v1/cases",
+      headers: { "idempotency-key": "selected_model", "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload: multipartPayload("openai/gpt-5.6-terra"),
+    });
+    expect(response.statusCode).toBe(202);
+    expect(accept).toHaveBeenCalledWith(expect.objectContaining({ agentModel: "openai/gpt-5.6-terra" }));
     await app.close();
   });
 
