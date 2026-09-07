@@ -32,6 +32,7 @@ This section is the operational starting point for the next implementation agent
 24. Two complete offline Agent-led captures against frozen `v0.1.1` used source `1f72965`, `findoc-fake/case-review-script-v1#standard`, fixture OCR/VLM, `case-review-prompt-3.5.0`, `case-review-tools-3.6.0`, and `case-normalization-1.1.0`. Runs `offline-agent-led-v0.1.1-20260907T043000Z` and `offline-agent-led-v0.1.1-20260907T044500Z` produced identical normalized cases and metrics: issue precision 3/4 (75.0%), recall 3/6 (50.0%), grounding 28/29 (96.6%), unsupported claims 1/29 (3.4%), and verified reports 5/6 (83.3%). Evaluation identifiers are `896eeb307978b08304e93d2ce0285bee27b3a148fb08f57bca1832a7f3952b04` and `dcf4537e56870fea559432adfa6cc44770f73db3e4249fb2332fdb6312b4c769`. `golden-003` misses two obsolete document-content expectations and `golden-004` adds the defensible unresolved-name issue; frozen truth was not modified. Operations remain unavailable, not zero, because capture does not yet project durable session measurements.
 25. Successor candidates are prepared without changing frozen `v0.1.1`. `golden-003` now renders EUR 3310.00 payslip net pay against declared EUR 3480.00 and keeps the conflicting bank salary counterparty, producing exactly `VAL_EMPLOYER_CONSISTENCY_001` and `VAL_INCOME_CONSISTENCY_001`; its coverage now says `multi_page_document`, not the unimplemented boundary uncertainty. `golden-004` candidate truth now expects both `VAL_DOC_COMPLETENESS_001` and the defensible `VAL_NAME_CONSISTENCY_001`. Offline runtime cases `29b1c288-a813-49b5-af35-32ece37eacda` and `8b5897ee-7c35-45b4-8957-e303e58af752` matched those candidates. All four pages of the regenerated `golden-003` PDF were rendered and visually checked for legibility, layout, synthetic markings, the 3310.00 payslip value, and the conflicting counterparty. Both changed candidates remain `pending_human_review`.
 26. Explicit `--candidates` modes for `evaluate:capture` and `evaluate:offline` allow pre-confirmation diagnosis without treating pending candidates as a release; default frozen-release confirmation and checksum enforcement is unchanged. The first use exposed nondeterministic Checked Fact ordering from database reads, so capture now sorts issues and Checked Facts by stable code. Final candidate runs `offline-successor-candidate-20260907T051000Z` and `offline-successor-candidate-20260907T052000Z` at source `1fca67e` produced identical normalized artifacts. Evaluation IDs `75e7ff73e3ef6eda8aa832b17ff82020b96df073719426382b88acbb766ebb76` and `863e35c3f5efdacaacf27dc3a471244110f63962655dfa91554e9cc6ba1b7336` both report issue precision 5/5, recall 5/6, grounding 29/29, zero unsupported claims, and verified reports 5/6. The sole missed issue/unavailable report remains the intentional `golden-006` system-origin/report-rejection path; changed candidates 003 and 004 match completely.
+27. Reviewer `sulmae` explicitly confirmed candidates 003 and 004. Commit `c181864` freezes all six cases as checksum-verified release `v0.1.2`; manifest SHA-256 is `382ef0f609a82f7c173731fe66e50a341418c03da664460a8d921ca4e5fd1eb8`. Full Agent-led runs `offline-agent-led-v0.1.2-20260907T053000Z` and `offline-agent-led-v0.1.2-20260907T054000Z` produced identical normalized cases and reports. Evaluation IDs `e9440172d4a8670422825c13af7ef7d13c8c74af056f278ee6d942f60a93aac7` and `72c0a49ff88bf1f1256498edf28e38d3c0a35693a95b15aaf2e103dcfd43ffa4` report issue precision 5/5, recall 5/6, grounding 29/29, zero unsupported claims, and verified reports 5/6. Generated actual-run and report JSON remains ignored local evidence.
 
 ### What is still fixture-backed
 
@@ -51,9 +52,9 @@ The implemented baseline is summarized in `AGENTS.md`. In practical terms, the r
 4. Selective OCR orchestration and persisted OCR provenance using a deterministic fixture adapter. This is not real OCR and must not be evaluated or described as OCR recognition quality.
 5. Deterministic page classification, contiguous logical-document grouping, declared field requirements, explicit extraction gaps, Agent-produced evidence-linked candidates, deterministic normalization, reconciliation lineage, entity matching, five registered validation rules, recommended dispositions, deterministic report verification, and one bounded Agent-led Pi harness whose session, attempts, steps, tool results, and budgets are persisted as it runs and resumed after Worker loss.
 6. The Review Workbench flows for active review, changes requested, completed cases, evidence navigation, Agent and human issues, requested-change drafts, final review, downstream handoff projection, and bounded case Agent logs that name the actor of every step.
-7. Six manually confirmed structured synthetic golden cases frozen as immutable release `v0.1.1`, runtime loading, candidate lifecycle commands, evaluation-run capture, and immutable offline evaluation reports.
+7. Six manually confirmed structured synthetic golden cases frozen as immutable release `v0.1.2`, runtime loading, candidate lifecycle commands, evaluation-run capture, and immutable offline evaluation reports. Frozen `v0.1.1` remains unchanged as historical evidence.
 
-### Golden case status under the Agent-led path
+### Historical `v0.1.1` golden case status under the Agent-led path
 
 All six cases were loaded through the Docker demo with `AGENT_MODEL=fake` after the change:
 
@@ -71,27 +72,26 @@ Both divergences are the fixture seeding being removed, not a regression:
 1. `golden-003` was expected to show an uncertain bank-statement boundary and an incomparable payslip income. The generated document shows neither: page 3 is a payslip continuation of the same type, so the boundary is certain, and the payslip net pay equals the declared income. The old expectation came from a hard-coded `boundaryUncertain` and `incomeEvidenceSufficient: false` in the fixture table.
 2. `golden-004` has no bank statement, so the account-holder name genuinely cannot be confirmed and `VAL_NAME_CONSISTENCY_001` is `person_name_unresolved`. The fixture previously fabricated an account-holder claim from the application data.
 
-Do not edit frozen truth. BL-005 and BL-009 record the two ways forward: confirm a new release against the Agent-led outcomes, or regenerate `golden-003` so its documents genuinely carry the ambiguity the case is named for.
+Do not edit frozen truth. The divergences above motivated the reviewed candidate changes now frozen in `v0.1.2`; both `v0.1.1` and `v0.1.2` remain immutable.
 
 `EVALUATION_RESULTS.md` now records the replacement Agent-led baseline and retains the older fixture-seeded result only as explicitly superseded history.
 
 ### Immediate next task for the new session
 
-**Obtain explicit human confirmation for the two successor candidates, then freeze a new release.**
+**Add an explicit whole-run live-evaluation budget before any corpus-level paid evaluation.**
 
-Review `golden-003-multiple-review-issues` and `golden-004-missing-bank-evidence`. If the user explicitly confirms both, run `pnpm dataset:confirm` for each with the supplied reviewer identity, build the next unused release version, and capture it twice through the offline Agent-led path. Do not infer confirmation from general permission to continue. Any additional paid live run still requires explicit approval and the USD 0.25 per-case cap.
+Release `v0.1.2` is frozen and reproduced twice through the offline Agent-led path. Any additional paid live run still requires explicit approval and the USD 0.25 per-case cap; do not run multiple live cases until a whole-run cap is implemented.
 
 ### Global next steps
 
 After the immediate task, proceed in this order:
 
-1. **Prepare and confirm a successor golden release** without editing frozen `v0.1.1`: regenerate `golden-003` to express its intended multiple issues and review-confirm `golden-004`'s unresolved-name expectation.
-2. **Add an explicit whole-run live-evaluation budget**, then extend live acceptance to a legitimate attention case and capture latency, model calls, token usage, estimated cost, and unavailable values required by `MLE-REQ-070` and `MLE-REQ-071`.
-3. **Accept the real PDF Inspector PP-OCRv6 runtime** (`BL-003`): pin offline assets, replace fixture OCR only in explicit real-runtime mode, and retire the fixture scanned-page value adapter where real OCR or the accepted VLM route supplies evidence.
-4. **Run the two-configuration VLM selection benchmark** (`BL-004`) and complete ADR-003 from measured evidence rather than adopting `gpt-5.6-terra` by preference.
-5. **Establish the formal measured baseline** (`BL-006`) from compatible live-model and real-runtime evidence without claiming real-world OCR or banking performance.
-6. **Expand from six to twenty golden cases**, prioritizing meaningful document variation over nearly identical templates.
-7. **Finish V1 hardening and demonstration evidence**: crop rendering, native-text coordinates, JPEG/PNG execution, OS resource and network isolation, observability evidence, browser acceptance coverage, README/demo limitations, and a reproducible acceptance run.
+1. **Add an explicit whole-run live-evaluation budget**, then extend live acceptance to a legitimate attention case and capture latency, model calls, token usage, estimated cost, and unavailable values required by `MLE-REQ-070` and `MLE-REQ-071`.
+2. **Accept the real PDF Inspector PP-OCRv6 runtime** (`BL-003`): pin offline assets, replace fixture OCR only in explicit real-runtime mode, and retire the fixture scanned-page value adapter where real OCR or the accepted VLM route supplies evidence.
+3. **Run the two-configuration VLM selection benchmark** (`BL-004`) and complete ADR-003 from measured evidence rather than adopting `gpt-5.6-terra` by preference.
+4. **Establish the formal measured baseline** (`BL-006`) from compatible live-model and real-runtime evidence without claiming real-world OCR or banking performance.
+5. **Expand from six to twenty golden cases**, prioritizing meaningful document variation over nearly identical templates.
+6. **Finish V1 hardening and demonstration evidence**: crop rendering, native-text coordinates, JPEG/PNG execution, OS resource and network isolation, observability evidence, browser acceptance coverage, README/demo limitations, and a reproducible acceptance run.
 
 Real OCR recognition, corpus-level live-VLM measurement, crop rendering, and hardened operating-system and network isolation all remain pending. The one accepted live-VLM synthetic case does not establish real-world extraction quality or production fitness.
 

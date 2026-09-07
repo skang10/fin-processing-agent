@@ -1,10 +1,33 @@
 # Evaluation Results
 
-## Successor candidate diagnostic — pending human confirmation
+## Offline Agent-led regression baseline — v0.1.2
 
 **Recorded:** 2026-09-07
 
-The six current candidates were evaluated before confirmation through the explicit `--candidates` diagnostic mode. This mode preserves `pending_human_review`, does not create a release, and does not weaken the default checksum and confirmation checks for frozen-release evaluation.
+The six synthetic candidates were explicitly confirmed by reviewer `sulmae` and frozen in checksum-verified release `v0.1.2` at source revision `c18186448c4e68df540b5c858d1497efedf8a59a`. The manifest SHA-256 is `382ef0f609a82f7c173731fe66e50a341418c03da664460a8d921ca4e5fd1eb8`.
+
+Two independent full API/Worker captures using the deterministic fake Case Review Agent and fixture OCR/VLM produced identical normalized cases, operations, and metrics:
+
+- `offline-agent-led-v0.1.2-20260907T053000Z`, evaluation `e9440172d4a8670422825c13af7ef7d13c8c74af056f278ee6d942f60a93aac7`
+- `offline-agent-led-v0.1.2-20260907T054000Z`, evaluation `72c0a49ff88bf1f1256498edf28e38d3c0a35693a95b15aaf2e103dcfd43ffa4`
+
+| Dimension | Result |
+|---|---:|
+| Agent issue precision | 5 / 5 (100%) |
+| Agent issue recall | 5 / 6 (83.3%) |
+| Correct evidence grounding | 29 / 29 (100%) |
+| Unsupported claims | 0 / 29 (0%) |
+| Verified-report completion | 5 / 6 (83.3%) |
+
+The sole false negative and unavailable report are the intentional `golden-006` fake-policy path: its deterministic income finding is excluded from Agent-origin issue scoring and its report is deliberately rejected. Cases 003 and 004 match the reviewed truth completely. This offline fixture-backed baseline incurs no external-model cost and does not establish real OCR, live-model corpus quality, lending, or production performance. Latency and durable usage are not projected by capture and remain unavailable, not zero.
+
+---
+
+## Successor candidate diagnostic — pre-confirmation history
+
+**Recorded:** 2026-09-07
+
+The six candidates were evaluated before confirmation through the explicit `--candidates` diagnostic mode. This mode preserved `pending_human_review`, did not create a release, and did not weaken the default checksum and confirmation checks for frozen-release evaluation.
 
 Two independent captures at source `1fca67e` produced identical normalized actual-run cases and reports:
 
@@ -19,7 +42,7 @@ Two independent captures at source `1fca67e` produced identical normalized actua
 | Unsupported claims | 0 / 29 (0%) |
 | Verified-report completion | 5 / 6 (83.3%) |
 
-The single false negative and unavailable report are both `golden-006`: its deterministic income finding is intentionally excluded from Agent-origin issue scoring, and its fake policy deliberately exercises the report-unavailable path. The changed `golden-003` and `golden-004` candidates have no missed, additional, or incorrectly grounded items. These results are pre-confirmation diagnostic evidence, not a frozen successor baseline.
+The single false negative and unavailable report are both `golden-006`: its deterministic income finding is intentionally excluded from Agent-origin issue scoring, and its fake policy deliberately exercises the report-unavailable path. The changed `golden-003` and `golden-004` candidates have no missed, additional, or incorrectly grounded items. These results remain pre-confirmation history; the frozen successor baseline is recorded above.
 
 ---
 
