@@ -354,7 +354,7 @@ function renderIssueList() {
     const marker = decision === 'pending' ? String(index + 1).padStart(2, '0') : decision === 'dismissed' ? '×' : decision === 'edited' ? '✎' : '✓';
     return '<div class="issue-list-item ' + (index === current ? 'active' : '') + '"><button class="issue-open" data-index="' + index + '">' +
       '<span class="issue-state ' + decision + '">' + marker + '</span><span class="issue-list-title"><strong>' + escapeHtml(issue.title) + '</strong><small>' +
-      (issue.origin === 'human' ? 'Human created' : issue.origin === 'system' ? 'System detected' : 'AI created') + '</small></span><em>' + state + '</em></button>' +
+      (issue.origin === 'human' ? 'Human created' : 'System generated') + '</small></span><em>' + state + '</em></button>' +
       (caseReadOnly || decision === 'dismissed' ? '' : '<button class="issue-edit" data-edit-index="' + index + '" aria-label="' + (decision === 'confirmed' ? 'Edit requested change for ' : 'Edit ') + escapeHtml(issue.title) + '">' + (decision === 'confirmed' ? 'Edit request' : 'Edit') + '</button>') + '</div>';
   }).join('');
   document.querySelectorAll('.issue-open').forEach(function (button) {
@@ -1177,7 +1177,9 @@ function renderAgentLog() {
     '<div><span>Current step</span><strong>' + escapeHtml(stepLabels[apiAgentLog.current_step] || apiAgentLog.current_step) + '</strong></div>';
 
   const formatEvents = function (events) {
-    return events.map(function (event) {
+    return events.filter(function (event) {
+      return event.activity !== 'Session ended: report submitted';
+    }).map(function (event) {
       const date = new Date(event.timestamp);
       const time = new Intl.DateTimeFormat('de-DE', {
         day: '2-digit', month: '2-digit', year: 'numeric',
@@ -1195,13 +1197,13 @@ function renderAgentLog() {
   const sessionHeader = function (title, session) {
     if (!session) return '';
     const detail = session.status === 'running' ? 'In progress'
-      : session.terminal_reason === 'report_submitted' ? 'Report submitted'
+      : session.terminal_reason === 'report_submitted' ? ''
         : session.terminal_reason === 'gaps_resolved' ? 'Recovery completed'
           : (session.terminal_reason || 'Ended').replaceAll('_', ' ');
     const resumed = session.attempts > 1
       ? ', resumed ' + (session.attempts - 1) + (session.attempts === 2 ? ' time' : ' times')
       : '';
-    return '<header><div><h3>' + title + '</h3><span>' + escapeHtml(detail) + '</span></div>' +
+    return '<header><div><h3>' + title + '</h3>' + (detail ? '<span>' + escapeHtml(detail) + '</span>' : '') + '</div>' +
       '<small>' + session.iterations + ' iterations, ' + session.tool_calls + ' tool calls' + escapeHtml(resumed) + '</small></header>';
   };
   const reportOutcome = apiReport && apiReport.availability === 'unavailable'

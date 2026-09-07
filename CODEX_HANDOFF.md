@@ -55,6 +55,10 @@ This section is the operational starting point for the next implementation agent
 
 44. Review Queue summaries no longer repeat the persisted generic Agent sentence. The presentation derives concise grammatical text from authoritative workflow status and issue count (`No issues require review.`, `1 issue requires review.`, or the plural form), while case detail retains the complete persisted report. New deterministic fake reports use the same wording. Evidence regions remain click-activated but render as a translucent blue fill without a border, radius, or surrounding ring.
 
+45. The Agent Log no longer renders the redundant `Report submitted` session-status badge or the duplicate `Session ended: report submitted` presentation event for a successfully completed session. The durable terminal reason, auditable `Submit report` tool call, and final `Report ready` outcome remain unchanged.
+
+46. Machine-produced review issues are labeled `System generated` rather than the misleading `AI created`. VLM and Agent boundaries are unchanged: models may extract candidates and write a non-authoritative review brief, while the finite deterministic registry remains authoritative for findings and issue eligibility.
+
 ### What is still fixture-backed
 
 1. Default demo and CI OCR remain deterministic fixture-backed. The explicit `pdf_inspector` mode uses pinned, verified, pre-provisioned assets and now has Linux ARM64 synthetic evidence across all six frozen cases; broader platform and non-template corpus evidence remains pending.
