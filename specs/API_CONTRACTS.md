@@ -2,11 +2,11 @@
 
 Document ID: `API`
 
-Version: 1.6.0
+Version: 1.7.0
 
 Status: Approved
 
-Last updated: 2026-09-06
+Last updated: 2026-09-07
 
 ## 1. Purpose
 
@@ -198,7 +198,7 @@ GET /api/v1/cases/{case_id}/downstream-handoff
 
 `API-REQ-048` `GET /final-review` must project each issue outcome, requested-change inclusion state, generated message preview, optional internal note, command availability, and blocking reasons without duplicating requested-change text in the issue summary.
 
-`API-REQ-049` `GET /agent-log` must return only model label, estimated cost or explicit unavailability, timestamps, and short allowlisted reviewer-readable activity events including bounded tool-call labels when relevant.
+`API-REQ-049` `GET /agent-log` must return only the bounded session identity and status, model label, iterations, tool and model call counts, duration when complete, token usage when provider usage is available, estimated cost or explicit unavailability, timestamps, and short allowlisted reviewer-readable activity events including bounded tool-call labels when relevant. It must not expose prompts, model input or output, document content, page images, credentials, or unrestricted traces.
 
 `API-REQ-097` `GET /downstream-handoff` must return a read-only, versioned projection only after `clear_for_downstream`, containing the reviewed result revision, final review identity, reviewer and completion time, recommended document-processing disposition and policy version, normalized claims with authorized evidence references, and deterministic findings. It must return `409 handoff_unavailable` for every other reviewer workflow outcome and must not create a delivery event or claim downstream consumption.
 
@@ -341,6 +341,7 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.7.0 | 2026-09-07 | Approved | Added bounded session duration, model-call count, and available token totals to the case Agent-log projection so evaluation capture can satisfy operational reporting without exposing model or document payloads. |
 | 1.6.0 | 2026-09-06 | Approved | Added case-scoped delivery of immutable PDFium page-render artifacts. |
 | 1.5.0 | 2026-09-06 | Approved | Added case-scoped source-document streaming for the PDF.js and image review viewers. |
 | 1.4.0 | 2026-09-06 | Approved | Added case-scoped API-mediated delivery of immutable page native text. |

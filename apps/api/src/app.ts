@@ -561,6 +561,10 @@ function projectAgentSession(session: AgentLogSessionView) {
     harness_label: session.harnessLabel, mode: session.mode, status: session.status,
     ...(session.terminalReason ? { terminal_reason: session.terminalReason } : {}),
     attempts: session.attempts, iterations: session.iterations, tool_calls: session.toolCalls,
+    model_calls: session.modelCalls,
     usage_available: session.usageAvailable,
+    ...(session.inputTokens !== undefined ? { input_tokens: session.inputTokens } : {}),
+    ...(session.outputTokens !== undefined ? { output_tokens: session.outputTokens } : {}),
+    ...(session.durationMs !== undefined ? { duration_ms: session.durationMs } : {}),
   };
 }

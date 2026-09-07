@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { canReserveCase, captureEvaluationRun, captureIssueEvidence, capturedUsdCost, reconcileCaseCost, selectEvaluationCases, validateCostBudget } from "./capture-evaluation.mjs";
+import { canReserveCase, captureEvaluationRun, captureIssueEvidence, capturedAgentOperations, capturedUsdCost, reconcileCaseCost, selectEvaluationCases, validateCostBudget } from "./capture-evaluation.mjs";
 import * as evaluator from "./evaluate.mjs";
 
 describe("evaluation run capture", () => {
@@ -61,6 +61,12 @@ describe("evaluation run capture", () => {
     expect(capturedUsdCost({ estimated_cost: { amount: "0.104453", currency: "USD" } })).toBe(0.104453);
     expect(capturedUsdCost({ estimated_cost: { amount: "unknown", currency: "USD" } })).toBeUndefined();
     expect(capturedUsdCost({ estimated_cost: { amount: "0.10", currency: "EUR" } })).toBeUndefined();
+  });
+
+  it("captures bounded persisted session operations without payloads", () => {
+    const log = { estimated_cost: { amount: "0.044510", currency: "USD" }, session: { duration_ms: 40331, model_calls: 9, usage_available: true, input_tokens: 4500, output_tokens: 750 } };
+    expect(capturedAgentOperations(log)).toEqual({ latency_ms: 40331, model_calls: 9, tokens: 5250, estimated_cost: 0.04451 });
+    expect(capturedAgentOperations({ session: { model_calls: 2, usage_available: false } })).toEqual({ model_calls: 2 });
   });
 
   it("reserves the per-case ceiling before another paid case starts", () => {

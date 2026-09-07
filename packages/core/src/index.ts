@@ -653,7 +653,11 @@ export interface AgentLogSessionView {
   readonly attempts: number;
   readonly iterations: number;
   readonly toolCalls: number;
+  readonly modelCalls: number;
   readonly usageAvailable: boolean;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly durationMs?: number;
 }
 
 export interface AgentLogView {

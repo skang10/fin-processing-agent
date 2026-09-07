@@ -43,7 +43,7 @@ describe("case intake", () => {
     getAgentLog: vi.fn(async () => ({
       availability: "ready" as const, modelLabel: "fake-pi-harness-v1",
       estimatedCost: { amount: "0.0000", currency: "EUR" as const }, currentStep: "awaiting_human_review" as const,
-      session: { harnessLabel: "pi-agent-led-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review" as const, status: "terminal" as const, terminalReason: "report_submitted" as const, attempts: 2, iterations: 3, toolCalls: 3, usageAvailable: true },
+      session: { harnessLabel: "pi-agent-led-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review" as const, status: "terminal" as const, terminalReason: "report_submitted" as const, attempts: 2, iterations: 3, toolCalls: 3, modelCalls: 4, usageAvailable: true, inputTokens: 1200, outputTokens: 300, durationMs: 5000 },
       events: [
         { timestamp: "2026-09-01T10:03:00.000Z", activity: "Processing resumed from saved progress" },
         { timestamp: "2026-09-01T10:04:00.000Z", activity: "Reused the previously extracted page result after processing resumed", toolLabel: "run_ocr" },
@@ -164,7 +164,7 @@ describe("case intake", () => {
     expect(response.json()).toEqual({
       availability: "ready", model_label: "fake-pi-harness-v1",
       estimated_cost: { amount: "0.0000", currency: "EUR" }, current_step: "awaiting_human_review",
-      session: { harness_label: "pi-agent-led-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review", status: "terminal", terminal_reason: "report_submitted", attempts: 2, iterations: 3, tool_calls: 3, usage_available: true },
+      session: { harness_label: "pi-agent-led-case-review-harness (pi-coding-agent@0.85.1)", mode: "case_review", status: "terminal", terminal_reason: "report_submitted", attempts: 2, iterations: 3, tool_calls: 3, model_calls: 4, usage_available: true, input_tokens: 1200, output_tokens: 300, duration_ms: 5000 },
       events: [
         { timestamp: "2026-09-01T10:03:00.000Z", activity: "Processing resumed from saved progress" },
         { timestamp: "2026-09-01T10:04:00.000Z", activity: "Reused the previously extracted page result after processing resumed", tool_label: "run_ocr" },

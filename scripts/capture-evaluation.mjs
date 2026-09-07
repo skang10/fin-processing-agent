@@ -31,13 +31,14 @@ export async function captureEvaluationRun(releaseDirectory, runConfiguration, o
       ? await responseJson(await fetcher(`${apiBaseUrl}/api/v1/cases/${loaded.case_id}/agent-log`), "Agent cost capture")
       : undefined;
     const caseCostUsd = agentLog ? capturedUsdCost(agentLog) : undefined;
+    const operations = agentLog ? capturedAgentOperations(agentLog) : {};
     if (costBudget) {
       const reconciliation = reconcileCaseCost(costBudget, reconciledCostUsd, caseCostUsd);
       reconciledCostUsd = reconciliation.reconciledCostUsd;
       blockedReason = reconciliation.blockedReason;
     }
     if (loaded.lifecycle !== "ready_for_review") {
-      actualCases.push({ case_id: candidate.case_id, processable: false, issues: [], checked_facts: [], report: { availability: "unavailable", verified: false, failure_reason: loaded.lifecycle, verifier: invalidVerifier() }, operations: capturedCostOperations(caseCostUsd) });
+      actualCases.push({ case_id: candidate.case_id, processable: false, issues: [], checked_facts: [], report: { availability: "unavailable", verified: false, failure_reason: loaded.lifecycle, verifier: invalidVerifier() }, operations });
       continue;
     }
     const evidence = await responseJson(await fetcher(`${apiBaseUrl}/api/v1/cases/${loaded.case_id}/evidence`), "Evidence capture");
@@ -57,7 +58,7 @@ export async function captureEvaluationRun(releaseDirectory, runConfiguration, o
       })).sort(byCode),
       checked_facts: report.checked_facts.map((item) => ({ code: item.rule_id, evidence: references(item.references) })).sort(byCode),
       report: { availability: report.availability, verified: report.availability === "ready", ...(failure ? { failure_reason: failure } : {}), verifier: verifierState(failure) },
-      operations: capturedCostOperations(caseCostUsd),
+      operations,
     });
   }
   return { schema_version: "1.0.0", run_id: runConfiguration.run_id, executed_at: runConfiguration.executed_at, environment: runConfiguration.environment, source_revision: runConfiguration.source_revision, versions: runConfiguration.versions, ...(runConfiguration.case_ids ? { case_ids: runConfiguration.case_ids } : {}), ...(costBudget ? { cost_budget: costBudget } : {}), cases: actualCases };
@@ -82,11 +83,22 @@ function invalidVerifier() { return { schema_valid: false, reference_valid: fals
 function skippedCase(caseId, reason) {
   return { case_id: caseId, processable: false, issues: [], checked_facts: [], report: { availability: "unavailable", verified: false, failure_reason: reason, verifier: invalidVerifier() }, operations: {} };
 }
-function capturedCostOperations(costUsd) { return costUsd === undefined ? {} : { estimated_cost: costUsd }; }
 export function capturedUsdCost(agentLog) {
   if (!agentLog?.estimated_cost || agentLog.estimated_cost.currency !== "USD") return undefined;
   const amount = Number(agentLog.estimated_cost.amount);
   return Number.isFinite(amount) && amount >= 0 ? amount : undefined;
+}
+export function capturedAgentOperations(agentLog) {
+  const operations = {};
+  const session = agentLog?.session;
+  if (Number.isInteger(session?.duration_ms) && session.duration_ms >= 0) operations.latency_ms = session.duration_ms;
+  if (Number.isInteger(session?.model_calls) && session.model_calls >= 0) operations.model_calls = session.model_calls;
+  if (session?.usage_available && Number.isInteger(session.input_tokens) && session.input_tokens >= 0 && Number.isInteger(session.output_tokens) && session.output_tokens >= 0) {
+    operations.tokens = session.input_tokens + session.output_tokens;
+  }
+  const costUsd = capturedUsdCost(agentLog);
+  if (costUsd !== undefined) operations.estimated_cost = costUsd;
+  return operations;
 }
 export function canReserveCase(budget, reconciledCostUsd) {
   return reconciledCostUsd + budget.maximum_per_case_usd <= budget.maximum_total_usd + Number.EPSILON;

@@ -104,7 +104,7 @@ Synthetic files must be visibly marked and must not reproduce official security 
 
 ### BL-006 — Measured Quality, Latency, and Cost Baseline
 
-**Status:** A reproducible Agent-led offline regression result is recorded against frozen `v0.1.2`; two independent captures produced identical 100% issue precision, 83.3% issue recall, 100% grounding, zero unsupported claims, and 83.3% verified-report completion. The sole missed issue and unavailable report are the intentional `golden-006` fake-policy path. Formal measured baseline work remains blocked on real OCR evidence, corpus-level live-model evidence, and captured latency, usage, and cost observations.
+**Status:** A reproducible Agent-led offline regression result is recorded against frozen `v0.1.2`; two independent captures produced identical 100% issue precision, 83.3% issue recall, 100% grounding, zero unsupported claims, and 83.3% verified-report completion. The sole missed issue and unavailable report are the intentional `golden-006` fake-policy path. One budgeted live-Agent run of synthetic native-text attention case `golden-003` produced 2/2 issue precision and recall, 5/5 grounding, a verified report, 39,409 ms duration, 8 model calls, provider-reported 24 input and 1,210 output tokens, and USD 0.044510 persisted cost. Formal measured baseline work remains blocked on real OCR evidence and compatible corpus-level live-model evidence.
 
 Replace unsupported numerical targets with measured results tied to dataset, model, prompt, component, and environment versions. Establish regression tolerances only after the initial baseline exists.
 

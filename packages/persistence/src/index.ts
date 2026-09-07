@@ -532,8 +532,10 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       status: session.terminalReason ? "terminal" : "running",
       ...(session.terminalReason ? { terminalReason: session.terminalReason as AgentTerminalReason } : {}),
       attempts: attemptCount.get(session.id) ?? 1,
-      iterations: session.iterations, toolCalls: session.toolCalls,
+      iterations: session.iterations, toolCalls: session.toolCalls, modelCalls: session.modelCalls,
       usageAvailable: session.usageAvailable,
+      ...(session.usageAvailable ? { inputTokens: session.inputTokens, outputTokens: session.outputTokens } : {}),
+      ...(session.completedAt ? { durationMs: Math.max(0, session.completedAt.getTime() - session.startedAt.getTime()) } : {}),
     });
     const currentSession = sessions.find((session) => session.id === report?.sessionId) ?? sessions.at(-1);
     const reportEvents = report

@@ -1,5 +1,30 @@
 # Evaluation Results
 
+## Budgeted live Agent subset — v0.1.2 `golden-003`
+
+**Recorded:** 2026-09-07
+
+One explicitly approved synthetic attention case ran at source `aa218af` with `openai/gpt-5.6-terra`, an explicit frozen subset, and equal USD 0.25 per-case and whole-run caps. No other case ran. Runtime case `bfb1a51c-5a6c-4889-b893-e52feff5fa33`, processing run `f74ee21c-579f-42b9-9762-86748e9cf3f2`, and Agent session `c33911de-643a-42bd-a270-e81d3154dcc4` produced a verified report.
+
+The corrected capture identifier is `live-agent-led-v0.1.2-golden-003-20260907T030832Z`; evaluation `6bf9574de0ea46628a24c797dbce4717d2db03c5b439d996d826d1b6a568a79f` uses the authoritative persisted session start time after the initial configuration incorrectly labelled Berlin local time as UTC. Correcting metadata and projecting the already persisted operations did not repeat a model call; the earlier generated report remains unmodified local history.
+
+| Dimension | Result |
+|---|---:|
+| Agent issue precision | 2 / 2 (100%) |
+| Agent issue recall | 2 / 2 (100%) |
+| Correct evidence grounding | 5 / 5 (100%) |
+| Unsupported claims | 0 / 5 (0%) |
+| Verified-report completion | 1 / 1 (100%) |
+| Duration | 39,409 ms |
+| Model calls | 8 |
+| Provider-reported tokens | 24 input / 1,210 output / 1,234 total |
+| VLM calls / OCR pages | 0 / 0 |
+| Persisted estimated cost | USD 0.044510 |
+
+The deterministic five-rule registry produced the expected `VAL_EMPLOYER_CONSISTENCY_001` and `VAL_INCOME_CONSISTENCY_001` findings; the other three rules passed. The result contains no lending, creditworthiness, AML, or KYC decision. This is one synthetic, native-text, live-Agent case, not live-VLM, OCR-quality, corpus-level, real-data, or production-performance evidence.
+
+---
+
 ## Offline Agent-led regression baseline — v0.1.2
 
 **Recorded:** 2026-09-07

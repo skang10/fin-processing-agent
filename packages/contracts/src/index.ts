@@ -162,7 +162,11 @@ const AgentLogSessionFields = {
   attempts: Type.Integer({ minimum: 1 }),
   iterations: Type.Integer({ minimum: 0 }),
   tool_calls: Type.Integer({ minimum: 0 }),
+  model_calls: Type.Integer({ minimum: 0 }),
   usage_available: Type.Boolean(),
+  input_tokens: Type.Optional(Type.Integer({ minimum: 0 })),
+  output_tokens: Type.Optional(Type.Integer({ minimum: 0 })),
+  duration_ms: Type.Optional(Type.Integer({ minimum: 0 })),
 };
 
 export const AgentLogSessionSchema = Type.Object(AgentLogSessionFields, { additionalProperties: false });
