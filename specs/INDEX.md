@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 3.7.0
+Version: 3.8.0
 
 Status: Approved
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.0, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.0.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.5.0, and `components/REVIEW_WORKBENCH.md` version 3.3.0. `ADR_001_PI_AGENT_HARNESS.md` is accepted as amended for the single-session lifecycle; `ADR_002_PDF_INSPECTOR.md` and `ADR_004_RULE_ARCHITECTURE.md` are accepted. `ADR_003_VLM_SELECTION.md` remains proposed pending benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
+All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.0, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.0.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.5.0, and `components/REVIEW_WORKBENCH.md` version 3.3.0. All four ADRs are accepted; ADR-003 selects the opt-in live default and fallback from bounded synthetic benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
 
 ## 3. Product Baseline
 
@@ -79,7 +79,7 @@ Normative product scope belongs to `PRODUCT_AND_SCOPE.md`. This section is an in
 | 13 | `operations/DEPLOYMENT.md` | `DEP` | Docker Compose delivery, configuration, containers, storage dependencies, and cloud reference mapping | Approved |
 | 14 | `decisions/ADR_001_PI_AGENT_HARNESS.md` | `ADR-001` | Selection and hardening of the Pi Agent harness | Accepted |
 | 15 | `decisions/ADR_002_PDF_INSPECTOR.md` | `ADR-002` | Selection and integration boundary of PDF Inspector | Accepted |
-| 16 | `decisions/ADR_003_VLM_SELECTION.md` | `ADR-003` | Evidence-based selection of default and fallback VLMs | Proposed; pending evidence |
+| 16 | `decisions/ADR_003_VLM_SELECTION.md` | `ADR-003` | Evidence-based selection of default and fallback VLMs | Accepted |
 | 17 | `decisions/ADR_004_RULE_ARCHITECTURE.md` | `ADR-004` | TypeScript rule plugins, registry, manifests, and deterministic mapping | Accepted |
 
 ## 5. Ownership Boundaries
@@ -302,7 +302,7 @@ human_review_required
 | One | `INDEX.md`, `PRODUCT_AND_SCOPE.md`, `SYSTEM_ARCHITECTURE.md`, `DATA_MODEL.md` | Establish scope, ownership, boundaries, and domain meaning before detailed behavior. |
 | Two | `DOCUMENT_PROCESSING.md`, `ADAPTIVE_EXTRACTION_AGENT.md`, `VALIDATION_AND_DISPOSITION.md`, `REVIEW_WORKBENCH.md`, `API_CONTRACTS.md` | Define the end-to-end vertical slice and executable contracts. Stage Two approval permits vertical-slice implementation. |
 | Three | `ML_PIPELINE_AND_EVALUATION.md`, `SECURITY_AND_LIMITATIONS.md`, `OBSERVABILITY_AND_FAILURES.md`, `DEPLOYMENT.md` | Define evaluation, controls, operational behavior, and delivery around the approved core. |
-| Four | ADRs | Create an ADR when its decision is ready; it may precede a dependent component specification. VLM selection remains pending benchmark evidence. |
+| Four | ADRs | Create an ADR when its decision is ready; it may precede a dependent component specification. All current ADRs are accepted. |
 
 `IDX-REQ-015` A later-stage specification must not silently override an earlier approved owner.
 
@@ -367,6 +367,7 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.8.0 | 2026-09-07 | Approved | Accepted ADR-003 after the bounded two-configuration live-VLM benchmark selected `openai/gpt-5.6-terra` as default and `openai/gpt-5.6-sol` as fallback. |
 | 3.7.0 | 2026-09-07 | Approved | Approved Agent component 3.5.0, using PDF Inspector `needsOcr` as the interim routing signal and requiring visual inspection before OCR or VLM on routed pages. |
 | 3.6.0 | 2026-09-07 | Approved | Approved Review Workbench 3.3.0 with German local second-precision Agent-log timestamps. |
 | 3.5.0 | 2026-09-07 | Approved | Approved Agent component 3.4.0, moving attention-reference validation to the report tool boundary and limiting attention items to non-passing deterministic findings. |

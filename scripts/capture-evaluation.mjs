@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { loadCandidateSet, loadFrozenRelease } from "./evaluate.mjs";
+import { loadCandidateSet, loadFrozenRelease, REQUIRED_EVALUATION_VERSIONS } from "./evaluate.mjs";
 import { loadGoldenCase } from "./load-golden.mjs";
 
 const DELIVERED_CASE_COST_LIMIT_USD = 0.25;
@@ -114,6 +114,9 @@ export function reconcileCaseCost(budget, reconciledCostUsd, caseCostUsd) {
 function validateConfiguration(configuration, datasetVersion, cases) {
   if (!configuration?.run_id || !configuration.executed_at || !configuration.environment || !configuration.source_revision || !configuration.versions) throw new Error("Capture configuration is incomplete");
   if (configuration.versions.dataset !== datasetVersion) throw new Error("Capture dataset version does not match the frozen release");
+  for (const key of REQUIRED_EVALUATION_VERSIONS) {
+    if (!configuration.versions[key]) throw new Error(`Capture configuration is missing evaluation version: ${key}`);
+  }
   if (isLiveModel(configuration.versions.model) && configuration.cost_budget === undefined) throw new Error("Live evaluation capture requires an explicit whole-run cost budget");
   if (isLiveModel(configuration.versions.model) && !Array.isArray(configuration.case_ids)) throw new Error("Live evaluation capture requires an explicit case_ids subset");
   const selectedCases = selectEvaluationCases(cases, configuration.case_ids);

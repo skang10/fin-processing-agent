@@ -2,16 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 import { canReserveCase, captureEvaluationRun, captureIssueEvidence, capturedAgentOperations, capturedUsdCost, reconcileCaseCost, selectEvaluationCases, validateCostBudget } from "./capture-evaluation.mjs";
 import * as evaluator from "./evaluate.mjs";
 
+const versions = (dataset = "v1.0.0", model = "fake") => Object.fromEntries(
+  evaluator.REQUIRED_EVALUATION_VERSIONS.map((key) => [key, key === "dataset" ? dataset : key === "model" ? model : "v1"]),
+);
+
 describe("evaluation run capture", () => {
   it("refuses configuration for a different frozen dataset", async () => {
     vi.spyOn(evaluator, "loadFrozenRelease").mockResolvedValue({ manifest: { version: "v1.0.0" }, cases: [] });
-    await expect(captureEvaluationRun("release", { run_id: "run", executed_at: "2026-09-06T00:00:00Z", environment: "test", source_revision: "abc", versions: { dataset: "v2.0.0" } })).rejects.toThrow("does not match");
+    await expect(captureEvaluationRun("release", { run_id: "run", executed_at: "2026-09-06T00:00:00Z", environment: "test", source_revision: "abc", versions: versions("v2.0.0") })).rejects.toThrow("does not match");
     vi.restoreAllMocks();
   });
 
   it("loads pending candidates only through explicit candidate mode", async () => {
     vi.spyOn(evaluator, "loadCandidateSet").mockResolvedValue({ manifest: { version: "candidate-pending" }, cases: [] });
-    await expect(captureEvaluationRun("candidates", { run_id: "run", executed_at: "2026-09-07T00:00:00Z", environment: "test", source_revision: "abc", versions: { dataset: "candidate-pending" } }, { candidateMode: true }))
+    await expect(captureEvaluationRun("candidates", { run_id: "run", executed_at: "2026-09-07T00:00:00Z", environment: "test", source_revision: "abc", versions: versions("candidate-pending") }, { candidateMode: true }))
       .resolves.toMatchObject({ cases: [] });
     expect(evaluator.loadCandidateSet).toHaveBeenCalledWith("candidates");
     vi.restoreAllMocks();
@@ -38,15 +42,22 @@ describe("evaluation run capture", () => {
 
   it("requires an explicit whole-run budget for a live model", async () => {
     vi.spyOn(evaluator, "loadFrozenRelease").mockResolvedValue({ manifest: { version: "v1.0.0" }, cases: [] });
-    await expect(captureEvaluationRun("release", { run_id: "run", executed_at: "2026-09-07T00:00:00Z", environment: "test", source_revision: "abc", versions: { dataset: "v1.0.0", model: "openai/gpt-5.6-terra" } }))
+    await expect(captureEvaluationRun("release", { run_id: "run", executed_at: "2026-09-07T00:00:00Z", environment: "test", source_revision: "abc", versions: versions("v1.0.0", "openai/gpt-5.6-terra") }))
       .rejects.toThrow("whole-run cost budget");
     vi.restoreAllMocks();
   });
 
   it("requires an explicit frozen case subset for a live model", async () => {
     vi.spyOn(evaluator, "loadFrozenRelease").mockResolvedValue({ manifest: { version: "v1.0.0" }, cases: [] });
-    await expect(captureEvaluationRun("release", { run_id: "run", executed_at: "2026-09-07T00:00:00Z", environment: "test", source_revision: "abc", versions: { dataset: "v1.0.0", model: "openai/gpt-5.6-terra" }, cost_budget: { maximum_total_usd: 0.25, maximum_per_case_usd: 0.25 } }))
+    await expect(captureEvaluationRun("release", { run_id: "run", executed_at: "2026-09-07T00:00:00Z", environment: "test", source_revision: "abc", versions: versions("v1.0.0", "openai/gpt-5.6-terra"), cost_budget: { maximum_total_usd: 0.25, maximum_per_case_usd: 0.25 } }))
       .rejects.toThrow("case_ids subset");
+    vi.restoreAllMocks();
+  });
+
+  it("rejects incomplete evaluation metadata before loading a paid case", async () => {
+    vi.spyOn(evaluator, "loadFrozenRelease").mockResolvedValue({ manifest: { version: "v1.0.0" }, cases: [] });
+    await expect(captureEvaluationRun("release", { run_id: "run", executed_at: "2026-09-07T00:00:00Z", environment: "test", source_revision: "abc", versions: { dataset: "v1.0.0", model: "openai/gpt-5.6-terra" }, case_ids: ["golden-1"], cost_budget: { maximum_total_usd: 0.25, maximum_per_case_usd: 0.25 } }))
+      .rejects.toThrow("missing evaluation version: case_package");
     vi.restoreAllMocks();
   });
 

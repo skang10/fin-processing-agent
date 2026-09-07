@@ -4,7 +4,7 @@ import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { validateCandidates } from "./dataset.mjs";
 
-const requiredVersions = ["case_package", "dataset", "generator", "pdf_inspector", "pdfium", "ocr_asset", "extraction", "model", "prompt", "schema", "agent", "tool_registry", "rule_set", "disposition_policy", "evaluator"];
+export const REQUIRED_EVALUATION_VERSIONS = ["case_package", "dataset", "generator", "pdf_inspector", "pdfium", "ocr_asset", "extraction", "model", "prompt", "schema", "agent", "tool_registry", "rule_set", "disposition_policy", "evaluator"];
 
 export function evaluateDataset(goldenCases, actualRun) {
   validateRun(actualRun);
@@ -73,7 +73,7 @@ export async function loadCandidateSet(candidateDirectory) {
 
 function validateRun(run) {
   if (!run || run.schema_version !== "1.0.0" || !run.run_id || !run.executed_at || !run.environment || !run.source_revision || !Array.isArray(run.cases)) throw new Error("Invalid evaluation run");
-  for (const key of requiredVersions) if (!run.versions?.[key]) throw new Error(`Evaluation run is missing version: ${key}`);
+  for (const key of REQUIRED_EVALUATION_VERSIONS) if (!run.versions?.[key]) throw new Error(`Evaluation run is missing version: ${key}`);
   for (const item of run.cases) {
     if (!item.case_id || typeof item.processable !== "boolean" || !Array.isArray(item.issues) || !Array.isArray(item.checked_facts) || !item.report?.availability || typeof item.report.verified !== "boolean") throw new Error(`Invalid actual case: ${item.case_id ?? "unknown"}`);
     for (const fact of [...item.issues, ...item.checked_facts]) if (!fact.code || !Array.isArray(fact.evidence)) throw new Error(`Invalid grounded item in ${item.case_id}`);

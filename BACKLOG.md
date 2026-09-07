@@ -82,9 +82,9 @@ The evaluation must report results for German and English synthetic identity doc
 
 ### BL-004 — VLM Selection Benchmark
 
-**Status:** Proposed ADR; pending benchmark evidence
+**Status:** Completed for the initial bounded subset; ADR-003 accepted
 
-Evaluate at least two compatible external VLM configurations on the same versioned golden subset. Compare issue precision and recall, evidence grounding, verified-report completion, bounded-extraction schema compliance, latency, usage, and estimated cost. Select a default and fallback only after results exist.
+`openai/gpt-5.6-terra` and `openai/gpt-5.6-sol` were evaluated on the same frozen `v0.1.2` scanned adaptive case under independent USD 0.25 ceilings. Both achieved identical perfect bounded quality results; Terra was faster and materially cheaper, so ADR-003 selects it as default and Sol as fallback. Broader corpus and provider-diversity evidence remains part of BL-006 rather than reopening this initial selection gate.
 
 The resulting choice belongs in `specs/decisions/ADR_003_VLM_SELECTION.md`. Product specifications must remain provider-neutral.
 

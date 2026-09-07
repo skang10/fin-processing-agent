@@ -21,7 +21,7 @@ export async function loadGoldenCase(caseId, options = {}) {
   const created = await fetcher(`${apiBaseUrl}/api/v1/cases`, { method: "POST", headers: { "Idempotency-Key": `golden-${caseId}-${Date.now()}` }, body: form });
   const accepted = await jsonResponse(created, "Golden intake");
   let status;
-  for (let attempt = 0; attempt < (options.pollAttempts ?? 120); attempt += 1) {
+  for (let attempt = 0; attempt < (options.pollAttempts ?? 240); attempt += 1) {
     status = await jsonResponse(await fetcher(`${apiBaseUrl}${accepted.status_url}`), "Golden polling");
     if (status.lifecycle !== "processing") break;
     await (options.wait ?? ((milliseconds) => new Promise((resolveWait) => setTimeout(resolveWait, milliseconds))))(options.pollIntervalMs ?? 500);

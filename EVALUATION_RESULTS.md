@@ -1,5 +1,24 @@
 # Evaluation Results
 
+## Initial VLM selection benchmark — 2026-09-07
+
+With explicit paid-run approval, `openai/gpt-5.6-terra` and `openai/gpt-5.6-sol` each processed only `golden-006-scanned-adaptive-unavailable` from frozen synthetic release `v0.1.2` at source `6a1c27c`. Each isolated configuration had equal USD 0.25 per-case and whole-run caps. Both inspected and rendered all three routed pages before fixture OCR and seven live VLM extractions, returned the expected seven scalar values with schema-valid outputs, ran deterministic reconciliation and all five rules, and produced a verified report containing only the expected `VAL_INCOME_CONSISTENCY_001` income conflict.
+
+| Result | Terra | Sol |
+|---|---:|---:|
+| Issue precision / recall | 1/1 / 1/1 | 1/1 / 1/1 |
+| Grounding / unsupported | 5/5 / 0 | 5/5 / 0 |
+| Verified report | 1/1 | 1/1 |
+| VLM schema compliance | 7/7 | 7/7 |
+| Latency | 49,163 ms | 59,346 ms |
+| Total tokens | 12,719 | 12,671 |
+| Nested VLM cost | USD 0.027896 | USD 0.055424 |
+| Cumulative cost | USD 0.105081 | USD 0.200450 |
+
+Terra identifiers are case `04943e2f-bf9c-41d5-a1ed-f8bcb6845681`, run/result `aecabe9b-7a81-496e-86d7-43f1768dd1f4`, session `bcfe90d3-4102-46f6-a846-4b07395bf9f7`, and evaluation `2c646b36dc7eddf2de21561adf973e40f1a9002cd7bfb1e47e256d4058ceca33`. Sol identifiers are case `279f7d48-2327-440f-814f-773df49a65ec`, run/result `864afd3f-eaf8-4767-a12e-fc8c0cf6ffdd`, session `ba41e872-73e7-4165-ad63-504cf266f24d`, and evaluation `50b613c175e956722b0e47da7629f62e04b1c5e27b3d90321e57ae172e1f09fe`.
+
+ADR-003 therefore selects Terra as the opt-in live default and Sol as fallback. This one-case, same-provider synthetic comparison is not corpus-level, provider-resilience, real-OCR/live-VLM, real-data, lending, AML, KYC, or production-fitness evidence.
+
 ## Real offline OCR acceptance — 2026-09-07
 
 One explicit Linux ARM64 run used only `golden-006-scanned-adaptive-unavailable` with PDF Inspector 1.17.0, PDFium 153.0.7988.0, ONNX Runtime 1.27.0, and `pp-ocrv6-small@oar-ocr-v0.7.0`. All assets were downloaded from their pinned release URLs, SHA-256 verified against `config/ocr-runtime-assets.json`, mounted read-only, and executed with container networking disabled for the component smoke check. The end-to-end Compose run used the same mounted assets and the deterministic fake Agent in `standard` mode; it made no VLM call.
