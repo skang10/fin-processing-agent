@@ -28,7 +28,7 @@ export interface RecoveryToolState {
   readonly nativeTextByPage: Map<string, string>;
   /** Bounded OCR lines returned for a page, with the region each line came from. */
   readonly ocrLinesByPage: Map<string, { text: string; region: NormalizedRegion }[]>;
-  /** VLM values keyed by `${documentVersionId}:${pageNumber}:${fieldSchemaId}`. */
+  /** VLM values keyed by `${documentVersionId}:${pageNumber}:${gapId}`. */
   readonly vlmResults: Map<string, { rawValue: string; region: NormalizedRegion; processorVersion: string }>;
 }
 
@@ -55,11 +55,11 @@ export interface ResolvedEvidenceSource {
  * else has no tool evidence.
  */
 export function resolveEvidenceSource(
-  state: RecoveryToolState, page: PageReference, fieldSchemaId: string, rawValue: string,
+  state: RecoveryToolState, page: PageReference, gapId: string, rawValue: string,
 ): ResolvedEvidenceSource | undefined {
   if (rawValue.length === 0) return undefined;
   const key = pageKey(page);
-  const vlm = state.vlmResults.get(`${key}:${fieldSchemaId}`);
+  const vlm = state.vlmResults.get(`${key}:${gapId}`);
   if (vlm && vlm.rawValue === rawValue) return { extractionMethod: "agent_vlm_extraction", processorVersion: vlm.processorVersion, region: vlm.region };
   const lines = state.ocrLinesByPage.get(key) ?? [];
   const line = lines.find((item) => item.text === rawValue) ?? lines.find((item) => item.text.includes(rawValue));
@@ -87,7 +87,7 @@ const RegionSchema = Type.Object({
 const NoParameters = Type.Object({}, { additionalProperties: false });
 const PageOnly = Type.Object(PageParameters, { additionalProperties: false });
 const PageWithRegion = Type.Object({ ...PageParameters, region: RegionSchema }, { additionalProperties: false });
-const VlmParameters = Type.Object({ ...PageParameters, field_schema_id: Type.String({ minLength: 1, maxLength: 128 }), region: Type.Optional(RegionSchema) }, { additionalProperties: false });
+const VlmParameters = Type.Object({ ...PageParameters, gap_id: Type.String({ minLength: 1, maxLength: 64 }), region: Type.Optional(RegionSchema) }, { additionalProperties: false });
 const SubmitParameters = Type.Object({
   candidates: Type.Array(Type.Object({
     gap_id: Type.String({ minLength: 1, maxLength: 64 }),
@@ -270,15 +270,16 @@ export const extractLocalTableTool: Tool<typeof PageOnly> = {
 };
 
 export const extractWithVlmTool: Tool<typeof VlmParameters> = {
-  name: "extract_with_vlm", version: "3.1.0", label: "Extract with VLM", costClass: "vlm",
+  name: "extract_with_vlm", version: "3.2.0", label: "Extract with VLM", costClass: "vlm",
   description: "Invoke the configured schema-constrained VLM extraction operation for one field on one authorized page or region. The invocation has no tools.",
   promptSnippet: "run schema-constrained VLM extraction for one field on one authorized page",
   parameters: VlmParameters,
   authorize: (args, scope, state) => {
     const pageRejection = authorizePage(args, scope);
     if (pageRejection) return pageRejection;
-    if (!scope.context.fieldSchemas.some((schema) => schema.fieldSchemaId === args.field_schema_id)) return "field_schema_outside_session_scope";
-    if (!scope.context.gaps.some((gap) => gap.fieldSchemaId === args.field_schema_id && pageWithinGapScope(gap, scope, toPage(args)))) return "page_outside_gap_scope";
+    const gap = scope.context.gaps.find((item) => item.gapId === args.gap_id);
+    if (!gap) return "gap_outside_session_scope";
+    if (!pageWithinGapScope(gap, scope, toPage(args))) return "page_outside_gap_scope";
     if (!state.inspectedPages.has(pageKey(toPage(args)))) return "page_inspection_required";
     const page = scope.context.pages.find((item) => item.documentVersionId === args.document_version_id && item.pageNumber === args.page_number);
     if (page?.needsOcr && !state.renderedPages.has(pageKey(toPage(args)))) return "page_visual_inspection_required";
@@ -287,16 +288,22 @@ export const extractWithVlmTool: Tool<typeof VlmParameters> = {
     return undefined;
   },
   execute: async (args, scope, state) => {
-    const result = await scope.ports.extractWithVlm({ page: toPage(args), fieldSchemaId: args.field_schema_id, ...(args.region ? { region: args.region } : {}) });
+    const gap = scope.context.gaps.find((item) => item.gapId === args.gap_id);
+    if (!gap?.role || !gap.extractionGuidance) throw new Error("VLM extraction requirement lacks trusted role or guidance");
+    const result = await scope.ports.extractWithVlm({
+      page: toPage(args), fieldSchemaId: gap.fieldSchemaId, targetRole: gap.role,
+      extractionGuidance: gap.extractionGuidance, ...(args.region ? { region: args.region } : {}),
+    });
     if (result.value) {
-      state.vlmResults.set(`${pageKey(toPage(args))}:${args.field_schema_id}`, { rawValue: result.value.rawValue, region: result.value.region, processorVersion: `${result.modelLabel}/${result.promptVersion}` });
+      state.vlmResults.set(`${pageKey(toPage(args))}:${gap.gapId}`, { rawValue: result.value.rawValue, region: result.value.region, processorVersion: `${result.modelLabel}/${result.promptVersion}` });
     }
     return {
       // The model label is part of the reviewer-visible summary so a fixture gateway is never
       // mistaken for a real Vision Language Model result.
-      summary: `Checked page ${args.page_number} for ${fieldLabel(args.field_schema_id)} with ${result.modelLabel}`,
+      summary: `Checked page ${args.page_number} for ${fieldLabel(gap.fieldSchemaId)} (${gap.role}) with ${result.modelLabel}`,
       output: {
-        document_version_id: args.document_version_id, page_number: args.page_number, field_schema_id: args.field_schema_id,
+        document_version_id: args.document_version_id, page_number: args.page_number, gap_id: gap.gapId,
+        field_schema_id: gap.fieldSchemaId, target_role: gap.role,
         model_label: result.modelLabel, prompt_version: result.promptVersion,
         value: result.value ? { raw_value: result.value.rawValue, normalized_value: result.value.normalizedValue, region: result.value.region, raw_confidence: result.value.rawConfidence } : null,
         ...(result.usage ? { usage: result.usage } : {}),
@@ -306,12 +313,12 @@ export const extractWithVlmTool: Tool<typeof VlmParameters> = {
   },
   restore: (output, _scope, state) => {
     const committed = output as {
-      document_version_id: string; page_number: number; field_schema_id: string; model_label: string; prompt_version: string;
+      document_version_id: string; page_number: number; gap_id: string; field_schema_id: string; model_label: string; prompt_version: string;
       value: { raw_value: string; normalized_value: unknown; region: NormalizedRegion } | null;
     };
     if (!committed.value) return;
     const page = { documentVersionId: committed.document_version_id, pageNumber: committed.page_number };
-    state.vlmResults.set(`${pageKey(page)}:${committed.field_schema_id}`, {
+    state.vlmResults.set(`${pageKey(page)}:${committed.gap_id}`, {
       rawValue: committed.value.raw_value,
       region: committed.value.region, processorVersion: `${committed.model_label}/${committed.prompt_version}`,
     });
@@ -330,7 +337,7 @@ export const submitExtractionCandidatesTool: Tool<typeof SubmitParameters> = {
       if (!gap) return "gap_outside_session_scope";
       if (!pageWithinGapScope(gap, scope, toPage(candidate))) return "page_outside_gap_scope";
       if (candidate.region && !validRegion(candidate.region)) return "region_invalid";
-      const source = resolveEvidenceSource(state, toPage(candidate), gap.fieldSchemaId, candidate.raw_value);
+      const source = resolveEvidenceSource(state, toPage(candidate), gap.gapId, candidate.raw_value);
       if (!source) return "value_without_tool_evidence";
       if (candidate.region !== undefined && !sameRegion(candidate.region, source.region)) return "region_without_tool_evidence";
       if (state.candidates.some((item) => item.gapId === candidate.gap_id) || proposed.has(candidate.gap_id)) return "gap_already_has_candidate";
@@ -342,7 +349,7 @@ export const submitExtractionCandidatesTool: Tool<typeof SubmitParameters> = {
     for (const candidate of args.candidates) {
       const gap = scope.context.gaps.find((item) => item.gapId === candidate.gap_id);
       if (!gap) throw new Error("Authorized gap is missing");
-      const source = resolveEvidenceSource(state, toPage(candidate), gap.fieldSchemaId, candidate.raw_value);
+      const source = resolveEvidenceSource(state, toPage(candidate), gap.gapId, candidate.raw_value);
       if (!source) throw new Error("Authorized candidate has no tool evidence");
       const region = source.region;
       state.candidates.push({

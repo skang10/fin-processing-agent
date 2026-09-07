@@ -257,7 +257,7 @@ const twoPagePayslip = (): AgentLedCaseReviewContext => ({
   ],
   gaps: [
     { gapId: "gap-employer", fieldSchemaId: "organization.name", fieldSchemaVersion: "1.0.0", valueType: "string", required: true, originatingStage: "extract", reasonCode: "no_deterministic_field_extractor", attemptedPaths: [], scope: { documentVersionId: "document-1", logicalDocumentRevisionId: "logical-payslip", pageNumber: 1 } },
-    { gapId: "gap-income", fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money", required: true, originatingStage: "extract", reasonCode: "no_deterministic_field_extractor", attemptedPaths: [], scope: { documentVersionId: "document-1", logicalDocumentRevisionId: "logical-payslip", pageNumber: 1 } },
+    { gapId: "gap-income", requirementId: "payslip_monthly_net_income", role: "payslip_income", extractionGuidance: "Extract the payslip's monthly net-pay amount, without currency conversion.", fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money", required: true, originatingStage: "extract", reasonCode: "no_deterministic_field_extractor", attemptedPaths: [], scope: { documentVersionId: "document-1", logicalDocumentRevisionId: "logical-payslip", pageNumber: 1 } },
   ],
   documents: [{ logicalDocumentRevisionId: "logical-payslip", documentVersionId: "document-1", documentType: "payslip", startPage: 1, endPage: 2, uncertain: false }],
 });
@@ -307,8 +307,13 @@ describe("local-first extraction routing", () => {
 
     const vlmSteps = outcome.trace.steps.filter((step) => step.toolName === "extract_with_vlm");
     expect(vlmSteps).toHaveLength(1);
-    expect(vlmSteps[0]?.summary).toBe("Checked page 2 for monthly net income with fake-vlm");
+    expect(vlmSteps[0]?.summary).toBe("Checked page 2 for monthly net income (payslip_income) with fake-vlm");
     expect(service.extractWithVlm).toHaveBeenCalledTimes(1);
+    expect(service.extractWithVlm).toHaveBeenCalledWith(expect.objectContaining({
+      fieldSchemaId: "income.monthly_net",
+      targetRole: "payslip_income",
+      extractionGuidance: "Extract the payslip's monthly net-pay amount, without currency conversion.",
+    }));
     expect(outcome.candidates.map((candidate) => [candidate.gapId, candidate.extractionMethod])).toEqual([
       ["gap-employer", "agent_ocr_reading"],
       ["gap-income", "agent_vlm_extraction"],

@@ -18,7 +18,9 @@ export function reviewContext(withGap: boolean): AgentLedCaseReviewContext {
     fieldSchemas: [{ fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money" }],
     gaps: withGap
       ? [{
-        gapId: "gap-1", fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money",
+        gapId: "gap-1", requirementId: "payslip_monthly_net_income", role: "payslip_income",
+        extractionGuidance: "Extract the payslip's monthly net-pay amount, without currency conversion.",
+        fieldSchemaId: "income.monthly_net", fieldSchemaVersion: "1.0.0", valueType: "money",
         required: true, originatingStage: "extract", reasonCode: "missing", attemptedPaths: ["native_text"],
         scope: { documentVersionId: "document-1", logicalDocumentRevisionId: "logical-1", pageNumber: 1 },
       }]

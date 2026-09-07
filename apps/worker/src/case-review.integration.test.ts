@@ -163,6 +163,7 @@ describe("Worker termination during Agent-led case review", () => {
     });
     artifactStore.set(`derived/${key}/native/page-1`, Buffer.from(identityMarkdown(key.slice(0, 6))));
     artifactStore.set(`derived/${key}/native/page-3`, Buffer.from(bankMarkdown));
+    artifactStore.set(`derived/${key}/render/page-2`, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     artifactStore.set(`derived/${key}/ocr/page-2`, Buffer.from(ocrArtifact(ocrLines)));
     return accepted;
   }
@@ -201,6 +202,7 @@ describe("Worker termination during Agent-led case review", () => {
     expect(steps.map((step) => step.toolName)).toEqual([
       "get_case_manifest",
       "inspect_page", "inspect_page", "inspect_page",
+      "render_page_region",
       "get_native_text", "get_native_text",
       "run_ocr",
       "extract_with_vlm", "extract_with_vlm", "extract_with_vlm",
@@ -223,7 +225,7 @@ describe("Worker termination during Agent-led case review", () => {
 
     const log = await new PostgresCaseQueryService(connection.db).getAgentLog(accepted.caseId);
     expect(log.events[0]).toMatchObject({ actor: "system", activity: "System preprocessing inspected 3 pages and rendered their images, with text recognition routed for 1 of them" });
-    expect(log.events.filter((event) => event.actor === "agent_document_tool")).toHaveLength(9);
+    expect(log.events.filter((event) => event.actor === "agent_document_tool")).toHaveLength(10);
     expect(log.events.map((event) => event.activity)).toContain("Started the bounded case review session");
   });
 

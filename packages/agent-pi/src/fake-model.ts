@@ -144,9 +144,9 @@ interface CaseManifest {
 }
 
 interface NativeTextResult { document_version_id: string; page_number: number; available: boolean; untrusted_document_text: string }
-interface OcrResultView { document_version_id: string; page_number: number; untrusted_lines: { text: string }[] }
+interface OcrResultView { document_version_id: string; page_number: number; untrusted_lines?: { text: string }[] }
 interface RenderResultView { artifactReference: string; width: number; height: number }
-interface VlmResultView { document_version_id: string; page_number: number; field_schema_id: string; value: { raw_value: string; region: { x: number; y: number; width: number; height: number } } | null }
+interface VlmResultView { document_version_id: string; page_number: number; gap_id: string; field_schema_id: string; value: { raw_value: string; region: { x: number; y: number; width: number; height: number } } | null }
 
 interface CurrentResult {
   result_revision_id: string;
@@ -251,7 +251,7 @@ export const standardCaseReviewScript: FakeModelScript = (_turn, context) => {
 
   const ocrCalls = readAllToolResults<OcrResultView>(context, "run_ocr");
   const ocrRead = new Set(ocrCalls.map(pageKey));
-  const ocrByPage = new Map(ocrCalls.map((result) => [pageKey(result), result.untrusted_lines.map((line) => line.text).join("\n")]));
+  const ocrByPage = new Map(ocrCalls.map((result) => [pageKey(result), (result.untrusted_lines ?? []).map((line) => line.text).join("\n")]));
   const ocrPending = manifest.pages.filter((page) => page.needs_ocr && !ocrRead.has(pageKey(page)));
   if (ocrPending.length > 0) {
     return { kind: "tool_calls", calls: ocrPending.map((page) => ({ name: "run_ocr", args: { document_version_id: page.document_version_id, page_number: page.page_number } })) };
@@ -294,10 +294,10 @@ export const standardCaseReviewScript: FakeModelScript = (_turn, context) => {
   // Only a requirement local processing could not resolve is worth a bounded VLM call, and only on a
   // page of its own document that carries no committed native text.
   const vlmResults = readAllToolResults<VlmResultView>(context, "extract_with_vlm");
-  const vlmSeen = new Set(vlmResults.map((result) => `${pageKey(result)}:${result.field_schema_id}`));
+  const vlmSeen = new Set(vlmResults.map((result) => `${pageKey(result)}:${result.gap_id}`));
   const vlmTargets = unresolved.flatMap((requirement) => {
     const page = pagesOf(requirement).find((item) => !nativeByPage.has(pageKey(item)));
-    return page && !vlmSeen.has(`${pageKey(page)}:${requirement.field_schema_id}`)
+    return page && !vlmSeen.has(`${pageKey(page)}:${requirement.gap_id}`)
       ? [{ requirement, page }]
       : [];
   });
@@ -306,14 +306,14 @@ export const standardCaseReviewScript: FakeModelScript = (_turn, context) => {
       kind: "tool_calls",
       calls: vlmTargets.map(({ requirement, page }) => ({
         name: "extract_with_vlm",
-        args: { document_version_id: page.document_version_id, page_number: page.page_number, field_schema_id: requirement.field_schema_id },
+        args: { document_version_id: page.document_version_id, page_number: page.page_number, gap_id: requirement.gap_id },
       })),
     };
   }
-  const vlmByKey = new Map(vlmResults.filter((result) => result.value).map((result) => [`${pageKey(result)}:${result.field_schema_id}`, result]));
+  const vlmByKey = new Map(vlmResults.filter((result) => result.value).map((result) => [`${pageKey(result)}:${result.gap_id}`, result]));
   const recovered = unresolved.flatMap((requirement): PlannedCandidate[] => {
     for (const page of pagesOf(requirement)) {
-      const result = vlmByKey.get(`${pageKey(page)}:${requirement.field_schema_id}`);
+      const result = vlmByKey.get(`${pageKey(page)}:${requirement.gap_id}`);
       if (result?.value) return [{ gap_id: requirement.gap_id, raw_value: result.value.raw_value, document_version_id: page.document_version_id, page_number: page.page_number }];
     }
     return [];

@@ -13,6 +13,8 @@ export interface RuntimeDocumentPortOptions {
   readonly vlmExtractor?: (request: {
     readonly image: { readonly data: string; readonly mimeType: string };
     readonly fieldSchemaId: string;
+    readonly targetRole: string;
+    readonly extractionGuidance: string;
     readonly region?: NormalizedRegion;
   }) => ReturnType<RecoveryToolPorts["extractWithVlm"]>;
   /**
@@ -115,6 +117,8 @@ export function createRuntimeDocumentPorts(options: RuntimeDocumentPortOptions):
         return options.vlmExtractor({
           image: { data: bytes.toString("base64"), mimeType: "image/png" },
           fieldSchemaId: request.fieldSchemaId,
+          targetRole: request.targetRole,
+          extractionGuidance: request.extractionGuidance,
           ...(request.region ? { region: request.region } : {}),
         });
       }

@@ -2,7 +2,7 @@ import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { NormalizedRegion, RecoveryToolPorts } from "@findoc/agent";
 
-export const VLM_PROMPT_VERSION = "page-field-extraction-1.1.0";
+export const VLM_PROMPT_VERSION = "page-field-extraction-1.2.0";
 
 export interface PiVlmRoute {
   readonly provider: string;
@@ -15,6 +15,8 @@ export interface PiVlmExtractor {
   extract(request: {
     readonly image: { readonly data: string; readonly mimeType: string };
     readonly fieldSchemaId: string;
+    readonly targetRole: string;
+    readonly extractionGuidance: string;
     readonly region?: NormalizedRegion;
   }): ReturnType<RecoveryToolPorts["extractWithVlm"]>;
 }
@@ -42,7 +44,7 @@ export class PiPageVlmExtractor implements PiVlmExtractor {
         role: "user",
         timestamp: Date.now(),
         content: [
-          { type: "text", text: buildRequestText(request.fieldSchemaId, request.region) },
+          { type: "text", text: buildRequestText(request.fieldSchemaId, request.targetRole, request.extractionGuidance, request.region) },
           { type: "image", ...request.image },
         ],
       }],
@@ -71,10 +73,12 @@ export class PiPageVlmExtractor implements PiVlmExtractor {
   }
 }
 
-function buildRequestText(fieldSchemaId: string, region?: NormalizedRegion): string {
+function buildRequestText(fieldSchemaId: string, targetRole: string, extractionGuidance: string, region?: NormalizedRegion): string {
   return JSON.stringify({
     task: "extract_field",
     field_schema_id: fieldSchemaId,
+    target_role: targetRole,
+    extraction_guidance: extractionGuidance,
     ...(region ? { requested_region: region } : {}),
     output_schema: { value: "exact text visible in the image, or null when absent/uncertain" },
   });
