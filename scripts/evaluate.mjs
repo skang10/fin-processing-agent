@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { validateCandidates } from "./dataset.mjs";
 
 const requiredVersions = ["case_package", "dataset", "generator", "pdf_inspector", "pdfium", "ocr_asset", "extraction", "model", "prompt", "schema", "agent", "tool_registry", "rule_set", "disposition_policy", "evaluator"];
 
@@ -57,6 +58,11 @@ export async function loadFrozenRelease(releaseDirectory) {
   return { manifest, cases };
 }
 
+export async function loadCandidateSet(candidateDirectory) {
+  const entries = await validateCandidates(resolve(candidateDirectory));
+  return { manifest: { version: "candidate-pending", candidate: true }, cases: entries.map(({ candidate }) => candidate) };
+}
+
 function validateRun(run) {
   if (!run || run.schema_version !== "1.0.0" || !run.run_id || !run.executed_at || !run.environment || !run.source_revision || !Array.isArray(run.cases)) throw new Error("Invalid evaluation run");
   for (const key of requiredVersions) if (!run.versions?.[key]) throw new Error(`Evaluation run is missing version: ${key}`);
@@ -79,9 +85,11 @@ function digest(value) { return digestBytes(Buffer.from(JSON.stringify(value)));
 function digestBytes(value) { return createHash("sha256").update(value).digest("hex"); }
 
 async function main() {
-  const [releaseArg, actualArg, outputRootArg] = process.argv.slice(2).filter((value) => value !== "--");
-  if (!releaseArg || !actualArg) throw new Error("Usage: pnpm evaluate:offline -- RELEASE_DIRECTORY ACTUAL_RUN_JSON [OUTPUT_ROOT]");
-  const releaseDirectory = resolve(releaseArg); const { cases } = await loadFrozenRelease(releaseDirectory); const actual = JSON.parse(await readFile(resolve(actualArg), "utf8"));
+  const args = process.argv.slice(2).filter((value) => value !== "--");
+  const candidateMode = args[0] === "--candidates";
+  const [releaseArg, actualArg, outputRootArg] = candidateMode ? args.slice(1) : args;
+  if (!releaseArg || !actualArg) throw new Error("Usage: pnpm evaluate:offline -- [--candidates] DATASET_DIRECTORY ACTUAL_RUN_JSON [OUTPUT_ROOT]");
+  const datasetDirectory = resolve(releaseArg); const { cases } = candidateMode ? await loadCandidateSet(datasetDirectory) : await loadFrozenRelease(datasetDirectory); const actual = JSON.parse(await readFile(resolve(actualArg), "utf8"));
   const report = evaluateDataset(cases, actual); const outputRoot = resolve(outputRootArg ?? "output/evaluations"); const target = join(outputRoot, report.evaluation_id);
   await mkdir(outputRoot, { recursive: true });
   try { await mkdir(target, { recursive: false }); } catch (error) { if (error?.code === "EEXIST") throw new Error(`Evaluation output already exists: ${basename(target)}`); throw error; }

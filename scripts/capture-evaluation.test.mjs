@@ -9,6 +9,14 @@ describe("evaluation run capture", () => {
     vi.restoreAllMocks();
   });
 
+  it("loads pending candidates only through explicit candidate mode", async () => {
+    vi.spyOn(evaluator, "loadCandidateSet").mockResolvedValue({ manifest: { version: "candidate-pending" }, cases: [] });
+    await expect(captureEvaluationRun("candidates", { run_id: "run", executed_at: "2026-09-07T00:00:00Z", environment: "test", source_revision: "abc", versions: { dataset: "candidate-pending" } }, { candidateMode: true }))
+      .resolves.toMatchObject({ cases: [] });
+    expect(evaluator.loadCandidateSet).toHaveBeenCalledWith("candidates");
+    vi.restoreAllMocks();
+  });
+
   it("represents a missing document with its deterministic finding, not present pages", () => {
     const issue = { code: "VAL_DOC_COMPLETENESS_001", supporting_references: ["finding-reference"] };
     const finding = { reason_code: "required_document_missing" };

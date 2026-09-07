@@ -1,11 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { loadFrozenRelease } from "./evaluate.mjs";
+import { loadCandidateSet, loadFrozenRelease } from "./evaluate.mjs";
 import { loadGoldenCase } from "./load-golden.mjs";
 
 export async function captureEvaluationRun(releaseDirectory, runConfiguration, options = {}) {
-  const { manifest, cases } = await loadFrozenRelease(releaseDirectory);
+  const { manifest, cases } = options.candidateMode ? await loadCandidateSet(releaseDirectory) : await loadFrozenRelease(releaseDirectory);
   validateConfiguration(runConfiguration, manifest.version, cases.length);
   const fetcher = options.fetcher ?? fetch; const apiBaseUrl = options.apiBaseUrl ?? process.env.API_BASE_URL ?? "http://127.0.0.1:3000";
   const actualCases = [];
@@ -71,10 +71,12 @@ export function validateCostBudget(budget, caseCount) {
 async function responseJson(response, label) { if (!response.ok) throw new Error(`${label} failed with ${response.status}`); return response.json(); }
 
 async function main() {
-  const [releaseArg, configurationArg, outputArg] = process.argv.slice(2).filter((value) => value !== "--");
-  if (!releaseArg || !configurationArg || !outputArg) throw new Error("Usage: pnpm evaluate:capture -- RELEASE CONFIGURATION_JSON OUTPUT_JSON");
+  const args = process.argv.slice(2).filter((value) => value !== "--");
+  const candidateMode = args[0] === "--candidates";
+  const [releaseArg, configurationArg, outputArg] = candidateMode ? args.slice(1) : args;
+  if (!releaseArg || !configurationArg || !outputArg) throw new Error("Usage: pnpm evaluate:capture -- [--candidates] DATASET CONFIGURATION_JSON OUTPUT_JSON");
   const release = resolve(releaseArg); const configuration = JSON.parse(await readFile(resolve(configurationArg), "utf8")); const output = resolve(outputArg);
-  const run = await captureEvaluationRun(release, configuration); await mkdir(resolve(output, ".."), { recursive: true }); await writeFile(output, `${JSON.stringify(run, null, 2)}\n`, { flag: "wx" });
+  const run = await captureEvaluationRun(release, configuration, { candidateMode }); await mkdir(resolve(output, ".."), { recursive: true }); await writeFile(output, `${JSON.stringify(run, null, 2)}\n`, { flag: "wx" });
   console.log(JSON.stringify({ run_id: run.run_id, cases: run.cases.length, output }, null, 2));
 }
 

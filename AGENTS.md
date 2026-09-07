@@ -173,8 +173,8 @@ The currently authoritative commands are:
 22. `pnpm dataset:confirm -- CASE_ID REVIEWER` — record explicit human confirmation without changing candidate truth.
 23. `pnpm dataset:build -- VERSION` — build an immutable manifest only after every candidate records human confirmation.
 24. `pnpm dataset:load -- CASE_ID` — submit one synthetic golden candidate to a running demo and print its runtime result and Review Workbench URL.
-25. `pnpm evaluate:offline -- RELEASE ACTUAL_RUN_JSON` — score an explicit actual-run manifest against a frozen, checksum-verified release and write an immutable report.
-26. `pnpm evaluate:capture -- RELEASE CONFIGURATION_JSON OUTPUT_JSON` — run every frozen case through the local API and Worker and write a new evidence-normalized actual-run manifest.
+25. `pnpm evaluate:offline -- RELEASE ACTUAL_RUN_JSON` — score an explicit actual-run manifest against a frozen, checksum-verified release and write an immutable report; add explicit `--candidates` before the dataset directory only for a pre-confirmation diagnostic against pending candidates.
+26. `pnpm evaluate:capture -- RELEASE CONFIGURATION_JSON OUTPUT_JSON` — run every frozen case through the local API and Worker and write a new evidence-normalized actual-run manifest; add explicit `--candidates` before the dataset directory only for a pre-confirmation diagnostic against pending candidates.
 
 Worker Agent configuration: Pi is always the harness and leads document extraction. PostgreSQL owns Agent session identity, attempts, steps, tool invocation results, and consumed budgets, so a redelivered case-processing job resumes the same session instead of starting a new one. `AGENT_MODEL` is `fake` (default, deterministic offline script) or `<provider>/<model-id>` for a live route that also requires `AGENT_MODEL_API_KEY`; `PI_OFFLINE=1` keeps the Pi model runtime from touching the network and is set automatically for the fake route. Default demo, CI, and dataset paths never call a live model.
 
