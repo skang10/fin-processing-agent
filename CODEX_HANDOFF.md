@@ -63,6 +63,8 @@ This section is the operational starting point for the next implementation agent
 
 48. The Review Queue replaces its repetitive summary column with authoritative processing provenance. Offline fake-model sessions display `Deterministic workflow` / `Demo only`; live sessions display `Agent` plus the persisted Agent model, or `Agent + VLM` plus the persisted Agent model and the VLM model retained in the committed extraction-tool output. Deterministic reconciliation and validation still run for every path and are not misrepresented as a generative model.
 
+49. The random-demo action is now a pre-intake browser preview rather than an immediate case submission. It selects one frozen `v0.1.2` synthetic candidate and shows only its submitted application values and original PDF, explicitly withholding report, Checked Facts, issues, and Agent activity because none exists yet. `Run agent review` then submits that prepared input through the existing intake API and waits for the normal durable asynchronous workflow before opening the persisted case. Backend automatic processing after intake is unchanged; this is a demo presentation boundary, not a paused workflow state.
+
 ### What is still fixture-backed
 
 1. Default demo and CI OCR remain deterministic fixture-backed. The explicit `pdf_inspector` mode uses pinned, verified, pre-provisioned assets and now has Linux ARM64 synthetic evidence across all six frozen cases; broader platform and non-template corpus evidence remains pending.

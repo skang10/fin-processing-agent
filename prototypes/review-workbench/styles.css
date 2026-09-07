@@ -457,6 +457,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @keyframes evidencePulse { 50% { background: rgba(36,87,214,.21); } }
 
 .review-panel { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--surface); display: grid; grid-template-rows: 54px minmax(0, 1fr); }
+.review-panel.previewing { grid-template-rows: minmax(0, 1fr); }
+.review-panel.previewing .case-tabs, .review-panel.previewing .case-view { display: none; }
+.demo-preview-workspace { min-height: 0; padding: clamp(28px, 5vw, 54px); overflow-y: auto; align-content: center; background: linear-gradient(180deg, #fbfcff, #fff); }
+.demo-preview-workspace:not([hidden]) { display: grid; }
+.demo-preview-workspace h2 { max-width: 360px; margin: 10px 0 12px; font-size: 24px; line-height: 1.16; }
+.demo-preview-workspace p { max-width: 430px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.demo-preview-workspace .button { width: fit-content; margin-top: 24px; }
+.demo-preview-workspace > small { max-width: 390px; margin-top: 12px; color: var(--quiet); font-size: 9px; line-height: 1.5; }
+.preview-kicker { color: var(--accent); font-size: 9px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
 .case-tabs { height: 54px; min-height: 54px; flex: 0 0 54px; padding: 0 12px; border-bottom: 1px solid var(--line); display: flex; align-items: stretch; gap: 4px; overflow: visible; }
 .case-tabs button { min-height: 54px; padding: 2px 8px 0; border: 0; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 650; line-height: 1.25; white-space: nowrap; cursor: pointer; }
 .case-tabs button.active { color: var(--accent); box-shadow: inset 0 -2px var(--accent); }

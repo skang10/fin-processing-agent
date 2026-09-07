@@ -31,13 +31,17 @@ export function formatQueueSummary(issueCount, workflowStatus) {
   return issueCount + ' issues require review.';
 }
 
-export async function loadDemoCase(fetcher = fetch, wait = function () { return new Promise(function (resolve) { setTimeout(resolve, 500); }); }, random = Math.random) {
+export async function prepareDemoCase(fetcher = fetch, random = Math.random) {
   const selected = demoCases[Math.min(demoCases.length - 1, Math.floor(Math.max(0, random()) * demoCases.length))];
   const documentResponse = await fetcher(selected.documentUrl);
   if (!documentResponse.ok) throw new Error('Demo document could not be loaded');
+  return { ...selected, documentBytes: await documentResponse.arrayBuffer() };
+}
+
+export async function submitDemoCase(prepared, fetcher = fetch, wait = function () { return new Promise(function (resolve) { setTimeout(resolve, 500); }); }) {
   const form = new FormData();
-  form.set('application_data', JSON.stringify(selected.applicationData));
-  form.set('documents', new Blob([await documentResponse.arrayBuffer()], { type: 'application/pdf' }), selected.caseId + '.pdf');
+  form.set('application_data', JSON.stringify(prepared.applicationData));
+  form.set('documents', new Blob([prepared.documentBytes], { type: 'application/pdf' }), prepared.caseId + '.pdf');
   const createdResponse = await fetcher('/api/v1/cases', {
     method: 'POST', headers: { 'Idempotency-Key': 'demo-' + crypto.randomUUID() }, body: form,
   });
@@ -52,6 +56,10 @@ export async function loadDemoCase(fetcher = fetch, wait = function () { return 
     await wait();
   }
   throw new Error('Demo case processing timed out');
+}
+
+export async function loadDemoCase(fetcher = fetch, wait = function () { return new Promise(function (resolve) { setTimeout(resolve, 500); }); }, random = Math.random) {
+  return submitDemoCase(await prepareDemoCase(fetcher, random), fetcher, wait);
 }
 
 async function sendJson(path, method, body, fetcher = fetch) {
@@ -90,27 +98,27 @@ export function submitFinalReview(caseId, body, fetcher = fetch) {
 }
 const demoCases = [
   {
-    caseId: 'golden-001-native-clear', applicantDisplayName: 'Clara Muster', employer: 'Mustertechnik GmbH', monthlyNet: '3200.00',
+    caseId: 'golden-001-native-clear', applicantDisplayName: 'Clara Muster', employer: 'Mustertechnik GmbH', monthlyNet: '3200.00', pageCount: 3,
     documentUrl: new URL('../../datasets/golden/releases/v0.1.2/documents/golden-001-native-clear/golden-001-native-clear.pdf', import.meta.url).href,
   },
   {
-    caseId: 'golden-002-employer-conflict', applicantDisplayName: 'David Beispiel', employer: 'Nordwerk Demo GmbH', monthlyNet: '2900.00',
+    caseId: 'golden-002-employer-conflict', applicantDisplayName: 'David Beispiel', employer: 'Nordwerk Demo GmbH', monthlyNet: '2900.00', pageCount: 3,
     documentUrl: new URL('../../datasets/golden/releases/v0.1.2/documents/golden-002-employer-conflict/golden-002-employer-conflict.pdf', import.meta.url).href,
   },
   {
-    caseId: 'golden-003-multiple-review-issues', applicantDisplayName: 'Anna Beispiel', employer: 'Beispieltechnik GmbH', monthlyNet: '3480.00',
+    caseId: 'golden-003-multiple-review-issues', applicantDisplayName: 'Anna Beispiel', employer: 'Beispieltechnik GmbH', monthlyNet: '3480.00', pageCount: 4,
     documentUrl: new URL('../../datasets/golden/releases/v0.1.2/documents/golden-003-multiple-review-issues/golden-003-multiple-review-issues.pdf', import.meta.url).href,
   },
   {
-    caseId: 'golden-004-missing-bank-evidence', applicantDisplayName: 'Eva Sample', employer: 'Sample Works Ltd', monthlyNet: '3100.00',
+    caseId: 'golden-004-missing-bank-evidence', applicantDisplayName: 'Eva Sample', employer: 'Sample Works Ltd', monthlyNet: '3100.00', pageCount: 2,
     documentUrl: new URL('../../datasets/golden/releases/v0.1.2/documents/golden-004-missing-bank-evidence/golden-004-missing-bank-evidence.pdf', import.meta.url).href,
   },
   {
-    caseId: 'golden-005-instruction-inert', applicantDisplayName: 'Felix Test', employer: 'Testbetrieb GmbH', monthlyNet: '2750.00',
+    caseId: 'golden-005-instruction-inert', applicantDisplayName: 'Felix Test', employer: 'Testbetrieb GmbH', monthlyNet: '2750.00', pageCount: 3,
     documentUrl: new URL('../../datasets/golden/releases/v0.1.2/documents/golden-005-instruction-inert/golden-005-instruction-inert.pdf', import.meta.url).href,
   },
   {
-    caseId: 'golden-006-scanned-adaptive-unavailable', applicantDisplayName: 'Greta Demofall', employer: 'Demowerk GmbH', monthlyNet: '3050.00',
+    caseId: 'golden-006-scanned-adaptive-unavailable', applicantDisplayName: 'Greta Demofall', employer: 'Demowerk GmbH', monthlyNet: '3050.00', pageCount: 3,
     documentUrl: new URL('../../datasets/golden/releases/v0.1.2/documents/golden-006-scanned-adaptive-unavailable/golden-006-scanned-adaptive-unavailable.pdf', import.meta.url).href,
   },
 ].map(function (candidate) {
@@ -123,6 +131,8 @@ const demoCases = [
       income: { currency: 'EUR', monthly_net: candidate.monthlyNet },
       synthetic_data: true,
     },
+    applicantDisplayName: candidate.applicantDisplayName,
+    pageCount: candidate.pageCount,
     documentUrl: candidate.documentUrl,
   };
 });

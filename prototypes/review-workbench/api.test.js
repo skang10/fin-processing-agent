@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createIssue, editIssue, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
+import { createIssue, editIssue, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, prepareDemoCase, resolveIssue, saveRequestedChange, submitDemoCase, submitFinalReview } from './api.js';
 
 describe('formatQueueSummary', () => {
   it('uses concise, grammatical issue counts', () => {
@@ -76,6 +76,32 @@ describe('loadCaseBundle', () => {
 });
 
 describe('loadDemoCase', () => {
+  it('prepares a frozen synthetic case without submitting it', async () => {
+    const fetcher = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }));
+
+    await expect(prepareDemoCase(fetcher, function () { return 0; })).resolves.toMatchObject({
+      caseId: 'golden-001-native-clear', applicantDisplayName: 'Clara Muster', pageCount: 3,
+      applicationData: { demo_fixture_id: 'golden-001-native-clear', synthetic_data: true },
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0][0]).toContain('golden-001-native-clear.pdf');
+    expect(fetcher).not.toHaveBeenCalledWith('/api/v1/cases', expect.anything());
+  });
+
+  it('submits only after an explicitly prepared preview is triggered', async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ status_url: '/api/v1/cases/case-1' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ case_id: 'case-1', lifecycle: 'ready_for_review' }) });
+    const prepared = {
+      caseId: 'golden-001-native-clear', documentBytes: new ArrayBuffer(8),
+      applicationData: { demo_fixture_id: 'golden-001-native-clear', synthetic_data: true },
+    };
+
+    await expect(submitDemoCase(prepared, fetcher, async function () {})).resolves.toMatchObject({ case_id: 'case-1' });
+    expect(fetcher.mock.calls[0][0]).toBe('/api/v1/cases');
+    expect(fetcher.mock.calls[0][1]).toMatchObject({ method: 'POST' });
+  });
+
   it('submits the bundled synthetic document and waits for review readiness', async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })

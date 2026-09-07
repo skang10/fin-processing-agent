@@ -54,7 +54,7 @@
               <h1>Review queue</h1>
             </div>
             <div class="queue-heading-actions">
-              <button class="button primary" id="load-demo-case">Load random demo case</button>
+              <button class="button primary" id="load-demo-case">Preview random demo case</button>
               <button class="button quiet" id="refresh-queue"><span aria-hidden="true">↻</span> Refresh</button>
             </div>
           </header>
@@ -123,7 +123,14 @@
           </section>
 
           <div class="panel-resizer" id="panel-resizer" role="separator" aria-label="Resize case workspace" aria-orientation="vertical" tabindex="0"></div>
-          <aside class="review-panel" aria-label="Issue review">
+          <aside class="review-panel" aria-label="Case review">
+            <section class="demo-preview-workspace" id="demo-preview" hidden>
+              <span class="preview-kicker">Synthetic demo preview</span>
+              <h2>Ready to start Agent review</h2>
+              <p>Only the submitted application data and original document are available at this stage. No report, checked facts, issues, or Agent activity exists until this case is submitted.</p>
+              <button class="button primary" id="run-agent-review">Run agent review</button>
+              <small>Submitting creates a durable case and starts the existing bounded review workflow.</small>
+            </section>
             <nav class="case-tabs" aria-label="Case review sections"><button class="active" data-case-tab="report">Agent report</button><button data-case-tab="issues">Issues <span>3</span></button><button data-case-tab="submit">Review & submit</button></nav>
             <section class="case-view report-workspace active" data-case-view="report"></section>
             <section class="case-view issues-workspace" data-case-view="issues">

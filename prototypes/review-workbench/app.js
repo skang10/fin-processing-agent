@@ -1,4 +1,4 @@
-import { createIssue, editIssue, loadCaseBundle, loadCaseQueue, loadDemoCase, resolveIssue, saveRequestedChange, submitFinalReview } from './api.js';
+import { createIssue, editIssue, loadCaseBundle, loadCaseQueue, prepareDemoCase, resolveIssue, saveRequestedChange, submitDemoCase, submitFinalReview } from './api.js';
 import { presentIssue } from './issue-presentation.js';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -68,6 +68,7 @@ let apiReport = null;
 let activeApplicationPointer = null;
 let activeEvidenceRegion = null;
 let caseReadOnly = false;
+let preparedDemoCase = null;
 const pdfDocuments = new Map();
 const expandedCheckedFacts = new Set();
 let documentRenderSequence = 0;
@@ -183,6 +184,55 @@ function show(id) {
   document.querySelector('.topbar > div:first-child strong').textContent = 'Document review';
   if (id === 'workspace') render();
   if (id === 'summary') renderSummary();
+}
+
+function previewApplicationData(applicationData) {
+  return {
+    groups: [
+      { group: 'Applicant', fields: [
+        { json_pointer: '/applicant_display_name', key: 'applicant_display_name', display_value: applicationData.applicant_display_name },
+      ] },
+      { group: 'Employment', fields: [
+        { json_pointer: '/employment/employer', key: 'employer', display_value: applicationData.employment.employer },
+      ] },
+      { group: 'Income', fields: [
+        { json_pointer: '/income/monthly_net', key: 'monthly_net', display_value: 'EUR ' + applicationData.income.monthly_net },
+        { json_pointer: '/income/currency', key: 'currency', display_value: applicationData.income.currency },
+      ] },
+    ],
+  };
+}
+
+function setDemoPreview(prepared) {
+  const previewDocumentId = 'preview-' + prepared.caseId;
+  preparedDemoCase = prepared;
+  apiCaseRecord = null; apiReport = null; apiAgentLog = null;
+  apiApplicationData = previewApplicationData(prepared.applicationData);
+  apiDocuments = [{
+    document_id: previewDocumentId,
+    submitted_filename: prepared.caseId + '.pdf',
+    media_type: 'application/pdf', page_count: prepared.pageCount, content_url: prepared.documentUrl,
+  }];
+  apiEvidenceByReference = {}; issues = []; decisions = []; current = 0;
+  sourceView = 'document'; sourceOverride = null; activeApplicationPointer = null; activeEvidenceRegion = null;
+  pdfDocuments.clear(); expandedCheckedFacts.clear();
+  pdfDocuments.set(previewDocumentId, getDocument({ data: new Uint8Array(prepared.documentBytes.slice(0)) }).promise);
+  document.querySelectorAll('.case-id').forEach(function (element) { element.textContent = 'DEMO PREVIEW'; });
+  document.querySelectorAll('.case-identity strong').forEach(function (element) { element.textContent = prepared.applicantDisplayName; });
+  document.querySelector('.status-badge').textContent = 'Not reviewed';
+  document.querySelector('.case-progress').hidden = true;
+  document.querySelector('#case-agent-trigger').hidden = true;
+  document.querySelector('.review-panel').classList.add('previewing');
+  document.querySelector('#demo-preview').hidden = false;
+  show('workspace');
+}
+
+function leaveDemoPreview() {
+  preparedDemoCase = null;
+  document.querySelector('.case-progress').hidden = false;
+  document.querySelector('#case-agent-trigger').hidden = false;
+  document.querySelector('.review-panel').classList.remove('previewing');
+  document.querySelector('#demo-preview').hidden = true;
 }
 
 /**
@@ -953,15 +1003,31 @@ document.querySelector('#refresh-queue').addEventListener('click', async functio
 document.querySelector('#load-demo-case').addEventListener('click', async function (event) {
   const button = event.currentTarget;
   button.disabled = true;
-  button.textContent = 'Loading demo case…';
+  button.textContent = 'Preparing preview…';
   try {
-    const createdCase = await loadDemoCase();
+    setDemoPreview(await prepareDemoCase());
+    button.disabled = false;
+    button.textContent = 'Preview random demo case';
+  } catch (error) {
+    toast(error instanceof Error ? error.message : 'Demo preview could not be loaded');
+    button.disabled = false;
+    button.textContent = 'Preview random demo case';
+  }
+});
+
+document.querySelector('#run-agent-review').addEventListener('click', async function (event) {
+  if (!preparedDemoCase) return;
+  const button = event.currentTarget;
+  button.disabled = true;
+  button.textContent = 'Agent review in progress…';
+  try {
+    const createdCase = await submitDemoCase(preparedDemoCase);
     await updateAllQueueCounts();
     window.location.search = '?case_id=' + encodeURIComponent(createdCase.case_id) + '&queue_view=review';
   } catch (error) {
-    toast(error instanceof Error ? error.message : 'Demo case could not be loaded');
+    toast(error instanceof Error ? error.message : 'Agent review could not be started');
     button.disabled = false;
-    button.textContent = 'Load random demo case';
+    button.textContent = 'Run agent review';
   }
 });
 
@@ -1253,6 +1319,7 @@ async function loadCaseFromApi() {
   const caseId = new URLSearchParams(window.location.search).get('case_id');
   if (!caseId) return;
   try {
+    leaveDemoPreview();
     const bundle = await loadCaseBundle(caseId);
     const caseRecord = bundle.caseRecord;
     const report = bundle.report;
