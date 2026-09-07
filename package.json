@@ -31,6 +31,7 @@
     "evaluate:offline": "node scripts/evaluate.mjs",
     "evaluate:capture": "node scripts/capture-evaluation.mjs",
     "ocr:setup": "node scripts/ocr-runtime.mjs setup",
+    "ocr:build-geometry": "node scripts/build-pdf-inspector-geometry.mjs",
     "ocr:verify": "node scripts/ocr-runtime.mjs verify",
     "ocr:smoke": "node scripts/ocr-smoke.mjs",
     "ocr:image-smoke": "node scripts/ocr-image-smoke.mjs",

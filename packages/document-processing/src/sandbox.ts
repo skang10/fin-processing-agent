@@ -20,6 +20,7 @@ export interface DocumentSandboxLimits {
   readonly ocrModelDirectory?: string;
   readonly pdfiumLibraryPath?: string;
   readonly onnxRuntimeLibraryPath?: string;
+  readonly pdfInspectorNativeLibraryPath?: string;
 }
 
 export class DocumentSandboxError extends Error {
@@ -58,6 +59,7 @@ export class DocumentSandboxClient {
           ...(limits.ocrModelDirectory ? { ocr_model_directory: limits.ocrModelDirectory } : {}),
           ...(limits.pdfiumLibraryPath ? { pdfium_library_path: limits.pdfiumLibraryPath } : {}),
           ...(limits.onnxRuntimeLibraryPath ? { onnx_runtime_library_path: limits.onnxRuntimeLibraryPath } : {}),
+          ...(limits.pdfInspectorNativeLibraryPath ? { pdf_inspector_native_library_path: limits.pdfInspectorNativeLibraryPath } : {}),
         },
       }, limits.timeoutMs);
       const parsed = parseResponse(response, limits.maximumPages);
@@ -126,6 +128,7 @@ async function runTask(entrypoint: string, taskDirectory: string, request: unkno
         NODE_ENV: "production",
         ...(typeof limits.pdfium_library_path === "string" ? { PDFIUM_LIB_PATH: limits.pdfium_library_path } : {}),
         ...(typeof limits.onnx_runtime_library_path === "string" ? { ORT_DYLIB_PATH: limits.onnx_runtime_library_path } : {}),
+        ...(typeof limits.pdf_inspector_native_library_path === "string" ? { NAPI_RS_NATIVE_LIBRARY_PATH: limits.pdf_inspector_native_library_path } : {}),
       }, shell: false, stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "";

@@ -5,6 +5,14 @@
   "pdfium": "153.0.7988.0",
   "onnx_runtime": "1.27.0",
   "ocr_model": "PP-OCRv6-small@oar-ocr-v0.7.0",
+  "pdf_inspector_geometry_source": {
+    "commit": "32555d23356f7892762a38edb3a5b0cad7ec326b",
+    "url": "https://github.com/firecrawl/pdf-inspector/archive/32555d23356f7892762a38edb3a5b0cad7ec326b.tar.gz",
+    "sha256": "978fd36c9379d6b05b0066295f1d5441799a2fcd9f927eee4c703312d610fd22",
+    "patch": "patches/pdf-inspector-1.17.0-ocr-spans.patch",
+    "rust_image": "rust:1.98.0-bookworm@sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922",
+    "library_name": "pdf-inspector-geometry.node"
+  },
   "platforms": {
     "linux-arm64": {
       "pdfium": {

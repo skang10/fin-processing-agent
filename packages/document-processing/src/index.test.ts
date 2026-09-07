@@ -93,6 +93,7 @@ describe("DocumentSandboxClient", () => {
       const entrypoint = fileURLToPath(new URL("../test-fixtures/sandbox-success.mjs", import.meta.url));
       const result = await new DocumentSandboxClient(entrypoint).inspectAndRender(Buffer.from("fixture"), "a".repeat(64), {
         timeoutMs: 5_000, maximumPages: 2, maximumPixelsPerPage: 1_000, targetDpi: 110, ocrMode: "fake",
+        pdfInspectorNativeLibraryPath: "/native/pdf-inspector-geometry.node",
       });
       expect(result.inspection.pageCount).toBe(1);
       expect(result.renders[0]).toMatchObject({ pageNumber: 1, width: 10, height: 20 });
@@ -147,7 +148,9 @@ describe("PdfInspectorOcrAdapter", () => {
         markdown: "Recognized text", pageCount: 1, pagesRecommendedForOcr: [1], pagesRoutedToOcr: [1],
         pagesRecommendingHosted: [], ocrReasonsByPage: [], pagesWithTables: [], pagesWithColumns: [], isComplex: false,
         processingTimeMs: 12, renderTimeMs: 3, ocrTimeMs: 8,
-        pages: [{ pageNumber: 1, markdown: "Recognized text", provenance: {
+        pages: [{ pageNumber: 1, markdown: "Recognized text", spans: [{
+          text: "Recognized", polygon: [20, 40, 120, 40, 120, 64, 20, 64], confidence: 0.94,
+        }], provenance: {
           pageNumber: 1, source: PageContentSource.Ocr, ocrModel: { name: "PP-OCRv6-small", revision: "fixture-revision" },
           renderDpi: 144, ocrConfidence: 0.91, timings: { renderMs: 3, ocrMs: 8, assemblyMs: 1 },
           warnings: [], hostedRecommended: false,
@@ -162,6 +165,10 @@ describe("PdfInspectorOcrAdapter", () => {
       modelAssetVersion: "PP-OCRv6-small@fixture-revision",
       pageConfidence: { value: 0.91, scale: "zero_to_one", producer: "firecrawl/pdf-inspector-oar" },
       sourceTransform: { scaleX: 0.5, scaleY: 0.5 },
+      spans: [{
+        text: "Recognized", bbox: [20, 40, 120, 64],
+        confidence: { value: 0.94, scale: "zero_to_one", producer: "firecrawl/pdf-inspector-oar" },
+      }],
     });
   });
 });

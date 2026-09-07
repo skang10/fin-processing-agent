@@ -119,6 +119,37 @@ export interface PdfInspectorOcrOptions {
   readonly languages?: readonly ("de" | "en")[];
 }
 
+interface PdfInspectorPositionedSpan {
+  readonly text: string;
+  readonly polygon: readonly number[];
+  readonly confidence: number;
+}
+
+function positionedOcrSpans(page: OcrPdfResult["pages"][number]): readonly OcrSpan[] {
+  const spans = (page as typeof page & { readonly spans?: readonly PdfInspectorPositionedSpan[] }).spans;
+  if (!spans) return [];
+  return spans.map((span) => {
+    if (!span.text || span.polygon.length !== 8 || !span.polygon.every(Number.isFinite) ||
+        !Number.isFinite(span.confidence) || span.confidence < 0 || span.confidence > 1) {
+      throw new Error("PDF Inspector returned an invalid positioned OCR span");
+    }
+    const xs = [span.polygon[0]!, span.polygon[2]!, span.polygon[4]!, span.polygon[6]!];
+    const ys = [span.polygon[1]!, span.polygon[3]!, span.polygon[5]!, span.polygon[7]!];
+    const left = Math.min(...xs);
+    const top = Math.min(...ys);
+    const right = Math.max(...xs);
+    const bottom = Math.max(...ys);
+    if (left < 0 || top < 0 || right <= left || bottom <= top) {
+      throw new Error("PDF Inspector returned an invalid positioned OCR span");
+    }
+    return {
+      text: span.text,
+      bbox: [left, top, right, bottom] as const,
+      confidence: { value: span.confidence, scale: "zero_to_one" as const, producer: "firecrawl/pdf-inspector-oar" },
+    };
+  });
+}
+
 export class PdfInspectorOcrAdapter {
   constructor(private readonly processor: (source: Buffer, options: Parameters<typeof processPdfWithOcr>[1]) => Promise<OcrPdfResult> = processPdfWithOcr) {}
 
@@ -144,8 +175,9 @@ export class PdfInspectorOcrAdapter {
           (page.provenance.ocrConfidence !== undefined && (!Number.isFinite(page.provenance.ocrConfidence) || page.provenance.ocrConfidence < 0 || page.provenance.ocrConfidence > 1))) {
         throw new Error("PDF Inspector omitted or returned invalid OCR provenance");
       }
+      const spans = positionedOcrSpans(page);
       return { pageNumber: page.pageNumber, result: {
-        rawText: page.markdown, spans: [], languages: [...(options.languages ?? ["de", "en"])],
+        rawText: page.markdown, spans, languages: [...(options.languages ?? ["de", "en"])],
         engine: "firecrawl/pdf-inspector-oar", engineVersion: PDF_INSPECTOR_VERSION,
         modelAssetVersion: `${model.name}@${model.revision}`, coordinateSpace: "render_pixels_top_left",
         ...(page.provenance.ocrConfidence === undefined ? {} : { pageConfidence: {

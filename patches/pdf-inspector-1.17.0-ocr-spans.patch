@@ -1,0 +1,84 @@
+diff --git a/src/vision/fusion.rs b/src/vision/fusion.rs
+index 3872f96..b1c71a9 100644
+--- a/src/vision/fusion.rs
++++ b/src/vision/fusion.rs
+@@ -14,7 +14,8 @@ use crate::types::{ItemType, PdfRect, TextItem};
+ use crate::PageMarkdown;
+ 
+ use super::{
+-    OcrRun, PageContentSource, PageProvenance, RoutedOcrPage, VisionTimings, DEFAULT_RENDER_DPI,
++    OcrRun, OcrSpan, PageContentSource, PageProvenance, RoutedOcrPage, VisionTimings,
++    DEFAULT_RENDER_DPI,
+ };
+ 
+ /// OCR assembly and hosted-fallback policy.
+@@ -80,6 +81,9 @@ pub struct FusedPageMarkdown {
+     pub page_number: u32,
+     /// Final page Markdown.
+     pub markdown: String,
++    /// Positioned spans returned by the same local OCR pass, in rendered-page pixels.
++    /// Empty for pages that were not recognized locally.
++    pub ocr_spans: Vec<OcrSpan>,
+     /// Native/OCR source, model, timing, and fallback metadata.
+     pub provenance: PageProvenance,
+ }
+@@ -401,6 +405,10 @@ fn fuse_ocr_pages_impl(
+         pages.push(FusedPageMarkdown {
+             page_number,
+             markdown,
++            ocr_spans: ocr_by_page
++                .get(&page_number)
++                .map(|page| page.ocr.spans.clone())
++                .unwrap_or_default(),
+             provenance: PageProvenance {
+                 page_number,
+                 source,
+diff --git a/napi/src/lib.rs b/napi/src/lib.rs
+index 7801df3..45300ba 100644
+--- a/napi/src/lib.rs
++++ b/napi/src/lib.rs
+@@ -206,9 +206,22 @@ pub struct OcrPageResult {
+     /// 1-indexed page number.
+     pub page_number: u32,
+     pub markdown: String,
++    /// Positioned spans from the same OCR pass. Polygon coordinates use
++    /// rendered-page pixels with a top-left origin.
++    pub spans: Vec<OcrTextSpan>,
+     pub provenance: OcrPageProvenance,
+ }
+ 
++/// One positioned OCR result in rendered-page pixel coordinates.
++#[napi(object)]
++pub struct OcrTextSpan {
++    pub text: String,
++    /// Eight values ordered x1,y1,...,x4,y4.
++    pub polygon: Vec<f64>,
++    pub confidence: f64,
++    pub orientation_degrees: Option<f64>,
++}
++
+ /// Complete native/OCR Markdown output.
+ #[napi(object)]
+ pub struct OcrPdfResult {
+@@ -330,6 +343,21 @@ fn to_napi_ocr_result(result: pdf_inspector::vision::OcrPdfResult) -> OcrPdfResu
+                 OcrPageResult {
+                     page_number: page.page_number,
+                     markdown: page.markdown,
++                    spans: page
++                        .ocr_spans
++                        .into_iter()
++                        .map(|span| OcrTextSpan {
++                            text: span.text,
++                            polygon: span
++                                .polygon
++                                .points
++                                .into_iter()
++                                .flat_map(|point| [f64::from(point.x), f64::from(point.y)])
++                                .collect(),
++                            confidence: f64::from(span.confidence),
++                            orientation_degrees: span.orientation_degrees.map(f64::from),
++                        })
++                        .collect(),
+                     provenance: OcrPageProvenance {
+                         page_number: provenance.page_number,
+                         source: convert_page_content_source(provenance.source),

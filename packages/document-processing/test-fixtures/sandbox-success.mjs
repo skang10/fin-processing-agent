@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 
 if (process.env.FINDOC_SANDBOX_SECRET_TEST) process.exit(2);
+if (process.env.NAPI_RS_NATIVE_LIBRARY_PATH !== "/native/pdf-inspector-geometry.node") process.exit(3);
 for await (const _ of process.stdin) void _;
 await writeFile("page-1.png", Buffer.from([0x89, 0x50, 0x4e, 0x47]));
 process.stdout.write(JSON.stringify({

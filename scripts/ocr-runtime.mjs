@@ -16,7 +16,10 @@ if (!selected) throw new Error(`Unsupported OCR runtime platform: ${platform}; u
 
 const runtimeRoot = resolve("native-libs/ocr-runtime", platform);
 const modelRoot = resolve("models/pp-ocrv6-small");
-if (action === "setup") await setup();
+if (action === "setup") {
+  await setup();
+  buildGeometry();
+}
 verify();
 console.log(JSON.stringify({
   status: "verified",
@@ -29,7 +32,6 @@ console.log(JSON.stringify({
 
 async function setup() {
   if (existsSync(runtimeRoot) && existsSync(modelRoot)) {
-    verify();
     return;
   }
   mkdirSync(resolve("native-libs/ocr-runtime"), { recursive: true, mode: 0o755 });
@@ -62,6 +64,14 @@ function verify() {
   assertDigest(join(runtimeRoot, selected.pdfium.library_path), selected.pdfium.library_sha256);
   assertDigest(join(runtimeRoot, selected.onnx_runtime.library_path), selected.onnx_runtime.library_sha256);
   for (const model of manifest.models) assertDigest(join(modelRoot, model.name), model.sha256);
+  if (!existsSync(join(runtimeRoot, manifest.pdf_inspector_geometry_source.library_name))) {
+    throw new Error("PDF Inspector geometry binding is missing; run pnpm ocr:setup for this platform");
+  }
+}
+
+function buildGeometry() {
+  const result = spawnSync(process.execPath, ["scripts/build-pdf-inspector-geometry.mjs", platform], { stdio: "inherit" });
+  if (result.status !== 0) throw new Error("Could not build PDF Inspector geometry binding");
 }
 
 async function download(url, target, expectedDigest) {

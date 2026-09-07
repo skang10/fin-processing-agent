@@ -23,6 +23,7 @@ const ocrMode = process.env["OCR_MODE"] === "fake" ? "fake" : "pdf_inspector";
 const ocrModelDirectory = process.env["OCR_MODEL_DIRECTORY"];
 const pdfiumLibraryPath = process.env["PDFIUM_LIB_PATH"];
 const onnxRuntimeLibraryPath = process.env["ORT_DYLIB_PATH"];
+const pdfInspectorNativeLibraryPath = process.env["NAPI_RS_NATIVE_LIBRARY_PATH"];
 if (ocrMode === "pdf_inspector" && (!ocrModelDirectory || !pdfiumLibraryPath || !onnxRuntimeLibraryPath)) {
   throw new Error("OCR_MODEL_DIRECTORY, PDFIUM_LIB_PATH, and ORT_DYLIB_PATH are required when OCR_MODE=pdf_inspector");
 }
@@ -140,6 +141,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
         ocrMode, ...(ocrModelDirectory ? { ocrModelDirectory } : {}),
         ...(pdfiumLibraryPath ? { pdfiumLibraryPath } : {}),
         ...(onnxRuntimeLibraryPath ? { onnxRuntimeLibraryPath } : {}),
+        ...(pdfInspectorNativeLibraryPath ? { pdfInspectorNativeLibraryPath } : {}),
       }, document.mediaType);
     const inspection = sandboxResult.inspection;
     const demoAnalysis = process.env["FINDOC_SYNTHETIC_DEMO"] === "true"
