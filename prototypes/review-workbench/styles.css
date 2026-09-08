@@ -152,7 +152,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   letter-spacing: .08em;
   text-transform: uppercase;
 }
-.icon-button, .user {
+.icon-button, .reviewer-avatar {
   width: 30px;
   height: 30px;
   padding: 0;
@@ -161,10 +161,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: #fff;
   display: grid;
   place-items: center;
-  cursor: pointer;
 }
+.icon-button { cursor: pointer; }
 .icon-button:hover { background: var(--surface-soft); }
-.user { border-radius: 50%; background: #28343c; border-color: #28343c; color: #fff; font-size: 10px; font-weight: 700; }
+.reviewer-avatar { border-radius: 50%; background: #28343c; border-color: #28343c; color: #fff; }
+.reviewer-avatar svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 .screen { display: none; height: calc(100vh - 58px); overflow: auto; }
 .screen.active { display: block; }
@@ -496,11 +497,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .persisted-log .agent-run-events { margin: 0; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
 .persisted-log .agent-run-timeline { min-height: 0; max-height: none; flex: 1 1 auto; overflow-y: auto; }
 .persisted-log .agent-log-outcome { flex: 0 0 38px; margin: 0; border-width: 1px 0 0; }
+.persisted-log .inline-agent-stop { align-self: flex-start; margin-top: 12px; }
 .demo-preview-workspace.running { padding: 0; overflow: hidden; }
 .demo-preview-workspace.running #demo-launch { min-height: 0; height: 100%; grid-template-rows: minmax(0, 1fr); }
 .demo-preview-workspace.running .pending-agent-log { min-height: 0; height: 100%; margin-top: 0; grid-template-rows: auto minmax(0, 1fr) auto; }
 .demo-preview-workspace.running .agent-run-timeline { min-height: 0; max-height: none; height: 100%; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
-.demo-preview-workspace.running .agent-stop { margin: 0 0 16px; }
+.demo-preview-workspace.running .agent-stop { margin: 12px 0 16px; }
 .demo-preview-workspace h2 { max-width: 360px; margin: 10px 0 12px; font-size: 24px; line-height: 1.16; }
 .demo-preview-workspace p { max-width: 430px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
 .demo-preview-workspace .button { width: fit-content; margin-top: 24px; }
@@ -879,7 +881,7 @@ body { font-size: 14px; }
 .rail-status strong { font-size: 12px; }
 .rail-status small { font-size: 10px; }
 .topbar > div:first-child strong { font-size: 14px; }
-.topbar > div:first-child span, .user { font-size: 11px; }
+.topbar > div:first-child span { font-size: 11px; }
 .page-heading h1, .summary-main h1 { font-size: 28px; }
 .page-heading > div > p:last-child, .summary-lead { font-size: 13px; }
 .button { font-size: 13px; }
