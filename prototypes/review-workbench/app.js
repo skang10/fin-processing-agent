@@ -513,6 +513,19 @@ function currentIssue() {
   };
 }
 
+function focusIssueEvidence(issue) {
+  if (!issue) return;
+  const region = issue.values?.map(function (value) { return apiEvidenceByReference[value.reference]; })
+    .find(function (evidence) {
+      return evidence?.evidence_type === 'page_region' && evidence.page_number === issue.pageNumber &&
+        (!issue.sourceDocument || evidence.document_version_id === issue.sourceDocument.document_id);
+    });
+  sourceView = 'document';
+  sourceOverride = null;
+  activeApplicationPointer = null;
+  activeEvidenceRegion = region || null;
+}
+
 function render() {
   const issue = currentIssue();
   document.querySelector('[data-case-tab="issues"] span').textContent = String(issues.length);
@@ -682,6 +695,7 @@ function renderIssueList() {
   document.querySelectorAll('[data-issue-card]').forEach(function (card) {
     card.addEventListener('click', function () {
       current = Number(card.dataset.issueCard);
+      focusIssueEvidence(currentIssue());
       editing = false;
       confirming = false;
       ignoring = false;
@@ -1132,6 +1146,7 @@ function renderSummary() {
   document.querySelectorAll('[data-summary-issue]').forEach(function (button) {
     button.addEventListener('click', function () {
       current = Number(button.dataset.summaryIssue);
+      focusIssueEvidence(currentIssue());
       editing = false;
       confirming = false;
       render();
@@ -1220,8 +1235,8 @@ document.querySelector('#queue-nav').addEventListener('click', function () { voi
 document.querySelector('#changes-nav').addEventListener('click', function () { void refreshQueue('changes_requested'); });
 document.querySelector('#completed-nav').addEventListener('click', function () { void refreshQueue('completed'); });
 document.querySelector('#back').addEventListener('click', function () { void refreshQueue(activeQueueView); });
-document.querySelector('#previous').addEventListener('click', function () { if (current > 0) { current -= 1; editing = false; confirming = false; render(); } });
-document.querySelector('#next').addEventListener('click', function () { if (current < issues.length - 1) { current += 1; editing = false; confirming = false; render(); } });
+document.querySelector('#previous').addEventListener('click', function () { if (current > 0) { current -= 1; focusIssueEvidence(currentIssue()); editing = false; confirming = false; render(); } });
+document.querySelector('#next').addEventListener('click', function () { if (current < issues.length - 1) { current += 1; focusIssueEvidence(currentIssue()); editing = false; confirming = false; render(); } });
 document.querySelector('#create-issue').addEventListener('click', function () {
   if (caseReadOnly) return;
   issues.push({
@@ -1383,6 +1398,11 @@ function activateCaseTab(view) {
   if (requested?.disabled) return;
   document.querySelectorAll('[data-case-tab]').forEach(function (button) { button.classList.toggle('active', button.dataset.caseTab === view); });
   document.querySelectorAll('[data-case-view]').forEach(function (panel) { panel.classList.toggle('active', panel.dataset.caseView === view); });
+  if (view === 'issues' && issues.length) {
+    focusIssueEvidence(currentIssue());
+    renderSource(currentIssue());
+    renderThumbnails(currentIssue().pageNumber);
+  }
   if (view === 'agent-log') requestAnimationFrame(function () {
     document.querySelectorAll('[data-case-view="agent-log"].active .pending-agent-log, [data-case-view="agent-log"].active .agent-run-events').forEach(function (host) {
       const timeline = host.querySelector('.agent-run-timeline');
@@ -1618,7 +1638,8 @@ function renderAgentLog() {
 function wireReportNavigation() {
   document.querySelectorAll('[data-report-issue]').forEach(function (button) {
     button.addEventListener('click', function () {
-      current = Number(button.dataset.reportIssue); sourceView = 'document'; sourceOverride = null;
+      current = Number(button.dataset.reportIssue);
+      focusIssueEvidence(currentIssue());
       editing = false; confirming = false; render(); activateCaseTab('issues');
     });
   });
