@@ -312,13 +312,12 @@ describe("PostgresCaseCommandService", () => {
       // The synthetic session fixture is dated before the run rows this test creates, so the
       // system-preprocessing event sorts after it here; in a real run it precedes the session.
       events: [
-        { activity: "Started the bounded case review session" },
-        { activity: "Listed deterministic findings", toolLabel: "list_findings", actor: "agent" },
-        { activity: "Submitted a Case Review Brief", toolLabel: "submit_case_review_brief", actor: "agent" },
-        { activity: "Session ended: report submitted" },
+        { activity: "Started Agent review" },
+        { activity: "Reviewed validation findings", toolLabel: "list_findings", actor: "agent" },
+        { activity: "Prepared Agent report", toolLabel: "submit_case_review_brief", actor: "agent" },
         { activity: "Prepared 1 page; 1 requires text recognition.", actor: "system" },
-        { activity: "Deterministic reconciliation accepted the Agent's monthly net income candidate from page 1" },
-        { activity: "Checked 4 facts" }, { activity: "Created 1 review issues" }, { activity: "Generated review report" },
+        { activity: "Accepted 1 extracted value" },
+        { activity: "Completed review: 1 issue, 4 checked facts" },
       ],
     });
     const [[sessionCount], [stepCount], [gapCount], [resolutionCount], [eligibilityCount]] = await Promise.all([
@@ -365,6 +364,9 @@ describe("PostgresCaseCommandService", () => {
     const started = await service.startAgentReview(accepted.caseId, "openai/gpt-5.6-terra");
     expect(started).toMatchObject({ caseId: accepted.caseId, started: true });
     await expect(queries.get(accepted.caseId)).resolves.toMatchObject({ lifecycle: "processing" });
+    await expect(queries.getAgentLog(accepted.caseId)).resolves.toMatchObject({
+      availability: "pending", currentStep: "processing", events: [],
+    });
   });
 
   it("persists issue resolution, requested-change revisions, and final review atomically", async () => {

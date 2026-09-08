@@ -643,11 +643,12 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     }).from(agentReports).where(eq(agentReports.caseId, caseId)).orderBy(sql`${agentReports.createdAt} desc`).limit(1);
     const currentStep = caseRecord.lifecycle === "processing" ? "processing" as const
       : caseRecord.lifecycle === "review_complete" ? "review_completed" as const : "awaiting_human_review" as const;
-    const runId = report?.runId ?? caseRecord.currentRunId;
+    const runId = caseRecord.lifecycle === "processing" ? caseRecord.currentRunId : report?.runId ?? caseRecord.currentRunId;
     if (!runId) return { availability: "pending", currentStep, events: [] };
+    const activeReport = report?.runId === runId ? report : undefined;
 
     const sessions = await this.db.select().from(agentSessions).where(eq(agentSessions.runId, runId)).orderBy(asc(agentSessions.startedAt));
-    if (!report && sessions.length === 0) return { availability: "pending", currentStep, events: [] };
+    if (!activeReport && sessions.length === 0) return { availability: "pending", currentStep, events: [] };
     const preprocessing = await this.db.select({
       processor: documentInspections.processor, processorVersion: documentInspections.processorVersion,
       createdAt: documentInspections.createdAt, pageNumber: pages.pageNumber, needsOcr: pages.needsOcr,
@@ -665,14 +666,6 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       }).from(gapResolutions).innerJoin(extractionGaps, eq(gapResolutions.gapId, extractionGaps.id))
         .where(eq(extractionGaps.runId, runId)).orderBy(asc(gapResolutions.createdAt)),
     ]);
-    // A gap anchors on its logical document's first page; the reviewer needs the page the accepted
-    // value actually came from, which is the page of the resolving claim's evidence.
-    const claimEvidencePages = await this.db.select({ claimId: claimEvidenceLinks.claimId, pageNumber: evidenceRecords.pageNumber })
-      .from(claimEvidenceLinks)
-      .innerJoin(claimRecords, eq(claimEvidenceLinks.claimId, claimRecords.id))
-      .innerJoin(evidenceRecords, eq(claimEvidenceLinks.evidenceId, evidenceRecords.id))
-      .where(eq(claimRecords.runId, runId));
-    const evidencePageOfClaim = new Map(claimEvidencePages.flatMap((row) => row.pageNumber === null ? [] : [[row.claimId, row.pageNumber] as const]));
     const attemptCount = new Map<string, number>();
     for (const attempt of attempts) attemptCount.set(attempt.sessionId, (attemptCount.get(attempt.sessionId) ?? 0) + 1);
     const originatingAttempt = new Map<string, string | null>();
@@ -690,21 +683,28 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       ...(session.usageAvailable ? { inputTokens: session.inputTokens, outputTokens: session.outputTokens } : {}),
       ...(session.completedAt ? { durationMs: Math.max(0, session.completedAt.getTime() - session.startedAt.getTime()) } : {}),
     });
-    const currentSession = sessions.find((session) => session.id === report?.sessionId) ?? sessions.at(-1);
-    const reportEvents = report && report.failureReason !== "agent_not_run"
-      ? [
-        { timestamp: report.createdAt.toISOString(), activity: `Checked ${(report.checkedFacts as unknown[]).length} facts` },
-        { timestamp: report.createdAt.toISOString(), activity: `Created ${(report.issueLinks as unknown[]).length} review issues` },
-        { timestamp: report.createdAt.toISOString(), activity: report.availability === "ready" ? "Generated review report" : "Report verification failed" },
-      ]
+    const currentSession = sessions.find((session) => session.id === activeReport?.sessionId) ?? sessions.at(-1);
+    const reportEvents = activeReport && activeReport.failureReason !== "agent_not_run"
+      ? [{
+        timestamp: activeReport.createdAt.toISOString(),
+        activity: activeReport.availability === "ready"
+          ? `Completed review: ${(activeReport.issueLinks as unknown[]).length} ${(activeReport.issueLinks as unknown[]).length === 1 ? "issue" : "issues"}, ${(activeReport.checkedFacts as unknown[]).length} checked facts`
+          : "Report verification failed",
+      }]
+      : [];
+    const reconciliationEvents = resolvedGaps.length > 0
+      ? [{
+        timestamp: resolvedGaps.at(-1)!.createdAt.toISOString(),
+        activity: `Accepted ${resolvedGaps.length} extracted ${resolvedGaps.length === 1 ? "value" : "values"}`,
+      }]
       : [];
     return {
-      availability: report ? (report.availability === "ready" ? "ready" : "unavailable") : "pending",
-      ...(report ? { modelLabel: report.modelLabel } : currentSession ? { modelLabel: currentSession.modelLabel } : {}),
+      availability: activeReport ? (activeReport.availability === "ready" ? "ready" : "unavailable") : "pending",
+      ...(activeReport ? { modelLabel: activeReport.modelLabel } : currentSession ? { modelLabel: currentSession.modelLabel } : {}),
       ...(currentSession?.modelRoute === "live" && currentSession.usageAvailable
         ? { estimatedCost: { amount: (currentSession.costMicroUsd / COST_MICRO_SCALE).toFixed(6), currency: "USD" as const } }
-        : report?.estimatedCost != null
-          ? { estimatedCost: { amount: report.estimatedCost, currency: "EUR" as const } }
+        : activeReport?.estimatedCost != null
+          ? { estimatedCost: { amount: activeReport.estimatedCost, currency: "EUR" as const } }
           : {}),
       currentStep,
       ...(currentSession ? { session: view(currentSession) } : {}),
@@ -719,7 +719,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
           }]
           : []),
         ...sessions.flatMap((session) => [
-          { timestamp: session.startedAt.toISOString(), activity: "Started the bounded case review session" },
+          { timestamp: session.startedAt.toISOString(), activity: "Started Agent review" },
           ...attempts.filter((attempt) => attempt.sessionId === session.id && attempt.attemptNumber > 1)
             .map((attempt) => ({ timestamp: attempt.startedAt.toISOString(), activity: "Processing resumed from saved progress" })),
           ...steps.filter((step) => step.sessionId === session.id)
@@ -727,14 +727,11 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
               timestamp: step.completedAt.toISOString(), activity: reviewerActivity(step, originatingAttempt), toolLabel: step.toolName,
               actor: AGENT_DOCUMENT_TOOLS.has(step.toolName) ? "agent_document_tool" as const : "agent" as const,
             })),
-          ...(session.completedAt && session.terminalReason
+          ...(session.completedAt && session.terminalReason && session.terminalReason !== "report_submitted"
             ? [{ timestamp: session.completedAt.toISOString(), activity: `Session ended: ${session.terminalReason.replace(/_/g, " ")}` }]
             : []),
         ]),
-        ...resolvedGaps.map((gap) => ({
-          timestamp: gap.createdAt.toISOString(),
-          activity: `Deterministic reconciliation accepted the Agent's ${gap.fieldSchemaId === "income.monthly_net" ? "monthly net income" : gap.fieldSchemaId.replace(/[._]/g, " ")} candidate from page ${evidencePageOfClaim.get(gap.reference) ?? gap.pageNumber}`,
-        })),
+        ...reconciliationEvents,
         ...reportEvents,
       ].sort((left, right) => left.timestamp.localeCompare(right.timestamp)),
     };
@@ -1734,16 +1731,34 @@ const AGENT_DOCUMENT_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 function reviewerStepSummary(step: typeof agentSteps.$inferSelect): string {
+  const page = /page (\d+)/iu.exec(step.summary)?.[1];
+  const onPage = (activity: string): string => page ? `${activity} on page ${page}` : activity;
+  if (step.toolName === "get_case_manifest") return "Read case details";
+  if (step.toolName === "inspect_page") return page ? `Inspected page ${page}` : "Inspected page";
+  if (step.toolName === "get_native_text") return onPage("Read text");
+  if (step.toolName === "run_ocr") return onPage("Read scanned text");
+  if (step.toolName === "render_page_region") return onPage("Viewed document");
+  if (step.toolName === "classify_page") return page ? `Classified page ${page}` : "Classified page";
+  if (step.toolName === "detect_document_boundaries") return "Checked document boundaries";
+  if (step.toolName === "extract_local_table") return onPage("Checked tables");
+  if (step.toolName === "extract_with_vlm") return onPage("Read with visual model");
+  if (step.toolName === "submit_extraction_candidates") {
+    const count = /(?:Proposed|Submitted) (\d+)/u.exec(step.summary)?.[1];
+    return count ? `Submitted ${count} extracted values` : "Submitted extracted values";
+  }
   if (step.toolName === "request_reconciliation" && step.summary.startsWith("Sent 0 Agent-proposed values")) {
     return "No document value could be extracted for reconciliation";
   }
+  if (step.toolName === "request_reconciliation") return "Checked extracted values";
   if (step.toolName === "request_validation") {
     const attention = /; (\d+) findings? requires? attention$/u.exec(step.summary)?.[1];
-    if (attention === "0") return "Completed the validation checks; no issues found";
+    if (attention === "0") return "Validation checks found no issues";
+    if (attention) return `Validation checks found ${attention} ${attention === "1" ? "issue" : "issues"}`;
+    return "Ran validation checks";
   }
-  if (step.toolName === "get_current_result" && step.summary === "Reviewed deterministic findings and document-processing disposition") {
-    return "Reviewed the case results before preparing the report";
-  }
+  if (step.toolName === "get_current_result") return "Reviewed case results";
+  if (step.toolName === "list_findings") return "Reviewed validation findings";
+  if (step.toolName === "submit_case_review_brief") return "Prepared Agent report";
   return step.summary;
 }
 
