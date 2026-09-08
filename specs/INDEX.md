@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 3.12.0
+Version: 3.13.0
 
 Status: Approved
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.1, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.2.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.7.0, `components/REVIEW_WORKBENCH.md` version 3.7.0, and `API_CONTRACTS.md` version 1.11.0. All four ADRs are accepted; ADR-003 selects the opt-in live default and fallback from bounded synthetic benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
+All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.1, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.2.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.7.0, `components/REVIEW_WORKBENCH.md` version 3.8.0, and `API_CONTRACTS.md` version 1.11.0. All four ADRs are accepted; ADR-003 selects the opt-in live default and fallback from bounded synthetic benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
 
 ## 3. Product Baseline
 
@@ -367,6 +367,7 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.13.0 | 2026-09-08 | Approved | Registered the continuous Agent-log and automatic in-place processing-to-report transition. |
 | 3.12.0 | 2026-09-08 | Approved | Registered stopped-Agent restart and immutable manual-review fallback across Agent, data, API, and Review Workbench owners. |
 | 3.11.0 | 2026-09-08 | Approved | Registered the cooperative reviewer-requested Agent stop across Agent, API, and Review Workbench owners. |
 | 3.10.0 | 2026-09-08 | Approved | Registered Review Workbench 3.5.0 and API Contracts 1.9.0 for generated demo-case launch, allowlisted immutable Agent-model selection, paid confirmation, processing log, and report transition. |

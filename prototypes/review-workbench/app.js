@@ -228,13 +228,10 @@ function setDemoPreview(prepared) {
   document.querySelector('#demo-launch').hidden = false;
   document.querySelector('#persisted-agent-log').hidden = true;
   document.querySelector('#demo-preview').classList.remove('running', 'completed');
-  document.querySelector('#demo-run-title').textContent = 'Ready to run Agent review';
-  document.querySelector('#demo-run-description').textContent = 'This generated demo case currently contains only its application data and original document. Choose the Agent model, then start the review.';
   document.querySelector('.agent-model-field').hidden = false;
   document.querySelector('#pending-agent-log').hidden = true;
   document.querySelector('#run-agent-review').hidden = false;
   document.querySelector('#agent-model').disabled = false;
-  document.querySelector('#agent-run-note').textContent = 'Running the Agent creates a durable case and starts the bounded review workflow.';
   setCaseTabsAvailability(false);
   updateWorkflowProgress('generated');
   show('workspace');
@@ -317,16 +314,22 @@ async function requestAgentRestart(caseId, button) {
   }
 }
 
+function agentRunMarkup(log, modelLabel, state, costLabel) {
+  const events = log?.events || [];
+  return '<header class="agent-run-header"><div><span class="agent-run-state"><i></i>' + escapeHtml(state) + '</span><strong>Agent review</strong></div><div class="agent-run-summary"><small>' + escapeHtml(modelLabel) + '</small>' +
+    '<strong>' + escapeHtml(costLabel || 'Cost calculating…') + '</strong></div></header>' +
+    '<div class="agent-run-timeline">' + (events.length ? events.map(function (event, index) {
+      const latest = index === events.length - 1 && state === 'Running';
+      return '<div class="agent-run-event' + (latest ? ' current' : '') + '"><i></i><div><strong>' + escapeHtml(formatPendingAgentActivity(event)) + '</strong>' +
+        (event.tool_label ? '<small>' + escapeHtml(event.tool_label) + '</small>' : '') + '</div></div>';
+    }).join('') : '<div class="agent-run-event current"><i></i><div><strong>Starting Agent session…</strong><small>Case accepted and persisted</small></div></div>') + '</div>';
+}
+
 function renderPendingAgentLog(log, modelLabel, completedCase, runningCase) {
   const panel = document.querySelector('#pending-agent-log');
   panel.hidden = false;
-  const events = log?.events || [];
-  panel.innerHTML = '<header class="agent-run-header"><div><span class="agent-run-state"><i></i>' + (completedCase ? 'Completed' : 'Running') + '</span><strong>Agent review</strong></div><small>' + escapeHtml(modelLabel) + '</small></header>' +
-    '<div class="agent-run-timeline">' + (events.length ? events.map(function (event, index) {
-      const latest = index === events.length - 1 && !completedCase;
-      return '<div class="agent-run-event' + (latest ? ' current' : '') + '"><i></i><div><strong>' + escapeHtml(formatPendingAgentActivity(event)) + '</strong>' +
-        (event.tool_label ? '<small>' + escapeHtml(event.tool_label) + '</small>' : '') + '</div></div>';
-    }).join('') : '<div class="agent-run-event current"><i></i><div><strong>Starting Agent session…</strong><small>Case accepted and persisted</small></div></div>') + '</div>' +
+  const cost = log?.estimated_cost ? log.estimated_cost.currency + ' ' + log.estimated_cost.amount : '';
+  panel.innerHTML = agentRunMarkup(log, modelLabel, completedCase ? 'Completed' : 'Running', completedCase ? cost : '') +
     (completedCase ? '<div class="agent-run-complete"><strong>Review report is ready</strong><span>The Agent Log remains available with the persisted report.</span></div><button class="button primary" id="view-agent-report">View review report</button>' : '') +
     (runningCase ? '<button class="button quiet agent-stop" id="stop-agent-review">Stop Agent review</button>' : '');
   if (completedCase) document.querySelector('#view-agent-report').addEventListener('click', function () { openCompletedAgentReport(completedCase); });
@@ -363,21 +366,17 @@ async function followAgentRun(created, modelLabel) {
       if (status.lifecycle !== 'ready_for_review') {
         if (!demoStopRequested) throw new Error('Agent review did not produce a review report');
         document.querySelector('#demo-preview').classList.remove('running');
-        document.querySelector('#demo-run-title').textContent = 'Agent review stopped';
-        document.querySelector('#demo-run-description').textContent = 'No further Agent steps will start. Activity and usage already committed remain in the durable Agent Log.';
-        document.querySelector('#agent-run-note').textContent = 'A provider request already in progress at stop time may still be included in the recorded cost.';
         updateWorkflowProgress('stopped');
         renderPendingAgentLog(latestLog, modelLabel);
         return;
       }
-      document.querySelector('#demo-run-title').textContent = 'Agent review completed';
-      document.querySelector('#demo-run-description').textContent = 'The persisted Agent Log below records how this run produced the review report.';
-      document.querySelector('#agent-run-note').textContent = 'Open the report when you are ready. The Agent Log will remain available from the case.';
       document.querySelector('#demo-preview').classList.remove('running');
       document.querySelector('#demo-preview').classList.add('completed');
       setCaseTabsAvailability(true);
       updateWorkflowProgress('review');
       renderPendingAgentLog(latestLog, modelLabel, created);
+      window.history.replaceState({}, '', '?case_id=' + encodeURIComponent(created.case_id) + '&queue_view=review');
+      await loadCaseFromApi();
       return;
     }
     await new Promise(function (resolve) { setTimeout(resolve, 500); });
@@ -390,6 +389,7 @@ function leaveDemoPreview() {
   document.querySelector('.case-progress').hidden = false;
   document.querySelector('#case-agent-trigger').hidden = false;
   document.querySelector('#demo-launch').hidden = true;
+  document.querySelector('#pending-agent-log').innerHTML = '';
   document.querySelector('#persisted-agent-log').hidden = false;
   setCaseTabsAvailability(true);
 }
@@ -1189,26 +1189,18 @@ document.querySelector('#run-agent-review').addEventListener('click', async func
   document.querySelector('.agent-model-field').hidden = true;
   document.querySelector('#demo-preview').classList.add('running');
   updateWorkflowProgress('preparing');
-  document.querySelector('#demo-run-title').textContent = 'Agent review in progress';
-  document.querySelector('#demo-run-description').textContent = 'Follow the durable Agent activity below. This page will stay here when the report is ready.';
   try {
     createdCase = await startDemoCase(preparedDemoCase, model.id);
     button.hidden = true;
-    document.querySelector('#agent-run-note').textContent = 'The case is now durable. Activity below is refreshed from the persisted Agent Log.';
     renderPendingAgentLog(null, model.label, null, createdCase);
     await followAgentRun(createdCase, model.label);
   } catch (error) {
     toast(error instanceof Error ? error.message : 'Agent review could not be started');
     if (createdCase) {
       document.querySelector('#demo-preview').classList.remove('running');
-      document.querySelector('#demo-run-title').textContent = 'Agent review status needs attention';
-      document.querySelector('#demo-run-description').textContent = 'The case is already durable. Refresh or open the case from the queue; do not start a duplicate run.';
-      document.querySelector('#agent-run-note').textContent = 'No retry was started automatically.';
     } else {
       document.querySelector('#demo-preview').classList.remove('running');
       document.querySelector('.agent-model-field').hidden = false;
-      document.querySelector('#demo-run-title').textContent = 'Ready to run Agent review';
-      document.querySelector('#demo-run-description').textContent = 'This generated demo case currently contains only its application data and original document. Choose the Agent model, then start the review.';
       button.disabled = false;
       button.hidden = false;
       button.textContent = 'Run agent review';
@@ -1414,76 +1406,26 @@ function renderApiReport(report) {
 
 function renderAgentLog() {
   if (!apiAgentLog) return;
-  const stepLabels = { processing: 'Processing', awaiting_human_review: 'Awaiting human review', review_completed: 'Review completed' };
-  const activityLabels = {
-    'Submitted a Case Review Brief': 'Submitted review report',
-  };
-  // Who performed the step: system preprocessing, an Agent document tool, or the Agent itself.
-  const actorLabels = {
-    system: 'System preprocessing',
-    agent_document_tool: 'Agent document tool',
-    agent: 'Agent',
-  };
-  const toolLabels = {
-    get_case_manifest: 'Get case manifest', inspect_page: 'Inspect page', get_native_text: 'Get native text',
-    run_ocr: 'Run OCR', render_page_region: 'Render page region', classify_page: 'Classify page',
-    detect_document_boundaries: 'Detect document boundaries', extract_local_table: 'Extract local table',
-    extract_with_vlm: 'Extract with VLM', submit_extraction_candidates: 'Submit candidates',
-    request_reconciliation: 'Request reconciliation', request_validation: 'Request validation',
-    get_current_result: 'Get current result',
-    submit_case_review_brief: 'Submit report',
-  };
   const modelLabel = apiAgentLog.model_label && apiAgentLog.model_label.startsWith('findoc-fake/')
     ? 'Deterministic demo model'
     : (apiAgentLog.model_label || 'Unavailable');
-  const metaMarkup =
-    '<div><span>Model</span><strong title="' + escapeHtml(apiAgentLog.model_label || '') + '">' + escapeHtml(modelLabel) + '</strong></div>' +
-    '<div><span>Cost</span><strong>' + (apiAgentLog.estimated_cost
-      ? escapeHtml(apiAgentLog.estimated_cost.currency + ' ' + apiAgentLog.estimated_cost.amount)
-      : 'Unavailable') + '</strong></div>' +
-    '<div><span>Current step</span><strong>' + escapeHtml(stepLabels[apiAgentLog.current_step] || apiAgentLog.current_step) + '</strong></div>';
-  document.querySelectorAll('.agent-log-meta').forEach(function (element) { element.innerHTML = metaMarkup; });
-
-  const formatEvents = function (events) {
-    return events.filter(function (event) {
-      return event.activity !== 'Session ended: report submitted';
-    }).map(function (event) {
-      const date = new Date(event.timestamp);
-      const time = new Intl.DateTimeFormat('de-DE', {
-        day: '2-digit', month: '2-digit', year: 'numeric',
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-      }).format(date);
-      const activity = activityLabels[event.activity] || event.activity;
-      const actor = actorLabels[event.actor] || '';
-      const detail = [actor, event.tool_label ? 'Tool: ' + (toolLabels[event.tool_label] || event.tool_label) : '']
-        .filter(function (part) { return part; }).join(' \u00b7 ');
-      return '<div class="agent-log-event' + (event.actor === 'system' ? ' system' : '') + '"><time>' + escapeHtml(time) + '</time>' +
-        '<span><strong>' + escapeHtml(activity) + '</strong>' +
-        (detail ? '<small>' + escapeHtml(detail) + '</small>' : '') + '</span></div>';
-    }).join('');
-  };
-  const sessionHeader = function (title, session) {
-    if (!session) return '';
-    const detail = session.status === 'running' ? 'In progress'
-      : session.terminal_reason === 'report_submitted' ? ''
-        : session.terminal_reason === 'gaps_resolved' ? 'Recovery completed'
-          : (session.terminal_reason || 'Ended').replaceAll('_', ' ');
-    const resumed = session.attempts > 1
-      ? ', resumed ' + (session.attempts - 1) + (session.attempts === 2 ? ' time' : ' times')
-      : '';
-    return '<header><div><h3>' + title + '</h3>' + (detail ? '<span>' + escapeHtml(detail) + '</span>' : '') + '</div>' +
-      '<small>' + session.iterations + ' iterations, ' + session.tool_calls + ' tool calls' + escapeHtml(resumed) + '</small></header>';
-  };
-  const reportOutcome = apiReport && apiReport.failure_reason === 'reviewer_stopped_agent'
+  const stopped = apiReport?.failure_reason === 'reviewer_stopped_agent' || apiAgentLog.session?.terminal_reason === 'cancelled_by_workflow';
+  const completed = apiReport?.availability === 'ready';
+  const state = stopped ? 'Stopped' : completed ? 'Completed' : 'Running';
+  const cost = apiAgentLog.estimated_cost
+    ? apiAgentLog.estimated_cost.currency + ' ' + apiAgentLog.estimated_cost.amount
+    : completed || stopped ? 'Cost unavailable' : '';
+  const persisted = document.querySelector('#persisted-agent-log');
+  persisted.classList.toggle('completed', completed);
+  document.querySelectorAll('.agent-log-meta').forEach(function (element) { element.hidden = true; });
+  const reportOutcome = stopped
     ? '<div class="agent-log-outcome stopped"><span>Agent stopped by reviewer</span><small>Human review remains available</small></div>'
     : apiReport && apiReport.availability === 'unavailable'
     ? '<div class="agent-log-outcome rejected"><span>Report rejected by verifier</span><small>' +
       escapeHtml(reportFailureMessage(apiReport.failure_reason)) + '</small></div>'
     : apiReport && apiReport.availability === 'ready'
       ? '<div class="agent-log-outcome ready"><span>Report ready</span></div>' : '';
-  const eventMarkup = (apiAgentLog.events.length || apiAgentLog.session
-    ? '<section class="agent-log-session">' + sessionHeader('Case review', apiAgentLog.session) + formatEvents(apiAgentLog.events) + reportOutcome + '</section>'
-    : '<p class="agent-log-empty">Agent activity is not available yet.</p>') +
+  const eventMarkup = agentRunMarkup(apiAgentLog, modelLabel, state, cost) + reportOutcome +
     (apiCaseRecord?.lifecycle === 'processing' ? '<button class="button quiet agent-stop inline-agent-stop">Stop Agent review</button>' : '');
   document.querySelectorAll('.agent-run-events').forEach(function (element) { element.innerHTML = eventMarkup; });
   document.querySelectorAll('.inline-agent-stop').forEach(function (button) {

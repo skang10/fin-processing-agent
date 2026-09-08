@@ -127,12 +127,8 @@
             <nav class="case-tabs" aria-label="Case review sections"><button data-case-tab="agent-log">Agent log</button><button class="active" data-case-tab="report">Agent report</button><button data-case-tab="issues">Issues <span>3</span></button><button data-case-tab="submit">Review & submit</button></nav>
             <section class="case-view agent-log-workspace demo-preview-workspace" id="demo-preview" data-case-view="agent-log">
               <div id="demo-launch">
-              <span class="preview-kicker">Synthetic demo case</span>
-              <h2 id="demo-run-title">Ready to run Agent review</h2>
-              <p id="demo-run-description">This generated demo case currently contains only its application data and original document. Choose the Agent model, then start the review.</p>
               <label class="agent-model-field" for="agent-model"><span>Agent model</span><select id="agent-model"></select><small id="agent-model-cost"></small></label>
               <button class="button primary" id="run-agent-review">Run agent review</button>
-              <small id="agent-run-note">Running the Agent creates a durable case and starts the bounded review workflow.</small>
               <div class="pending-agent-log" id="pending-agent-log" hidden aria-live="polite"></div>
               </div>
               <div class="inline-agent-log" id="persisted-agent-log" hidden>
