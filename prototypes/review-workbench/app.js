@@ -231,7 +231,10 @@ function setDemoPreview(prepared) {
   document.querySelector('#demo-preview').classList.remove('persisted-log');
   document.querySelector('.agent-model-field').hidden = false;
   document.querySelector('#pending-agent-log').hidden = true;
-  document.querySelector('#run-agent-review').hidden = false;
+  const runAgentButton = document.querySelector('#run-agent-review');
+  runAgentButton.hidden = false;
+  runAgentButton.disabled = false;
+  runAgentButton.textContent = 'Run agent review';
   document.querySelector('#agent-model').disabled = false;
   setCaseTabsAvailability(false);
   updateWorkflowProgress('generated');
