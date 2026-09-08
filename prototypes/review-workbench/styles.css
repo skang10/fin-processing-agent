@@ -564,8 +564,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .issue-list-toggle b { color: var(--quiet); text-align: right; }
 .issue-list { overflow: visible; }
 .issue-card-rail { padding: 10px 12px; border-top: 1px solid #eef1f2; background: #fafbfb; display: flex; gap: 8px; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: thin; }
-.issue-card { min-width: 190px; min-height: 60px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 5px; background: #fff; display: grid; grid-template-columns: 24px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 8px; text-align: left; cursor: pointer; }
-.issue-card-rail.single .issue-card { width: 100%; min-width: 0; }
+.issue-card { width: 220px; min-width: 220px; min-height: 60px; flex: 0 0 220px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 5px; background: #fff; display: grid; grid-template-columns: 24px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 8px; text-align: left; cursor: pointer; }
 .issue-card:hover { border-color: #aebbd8; }
 .issue-card.active { border-color: #8ba7ee; background: var(--accent-soft); box-shadow: 0 0 0 1px rgba(36,87,214,.08); }
 .issue-card-number { grid-row: 1 / 3; width: 22px; height: 22px; border: 1px solid #d7dde1; border-radius: 50%; color: #76828a; display: grid; place-items: center; font-size: 8px; font-weight: 700; }
@@ -613,8 +612,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .claim-copy > strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .evidence-value { font-size: 11px; white-space: nowrap; }
 .field-name { display: block; color: var(--muted); font-size: 9px; }
-.claim-card.evidence-note { grid-template-columns: minmax(0, 1fr); }
-.claim-card.evidence-note .claim-copy > strong { white-space: normal; }
+.claim-card.evidence-note { min-height: 0; padding: 11px 12px; grid-template-columns: minmax(0, 1fr); background: var(--surface-soft); }
+.claim-card.evidence-note .claim-copy > strong { color: #3f4f5b; font-size: 11px; font-weight: 500; line-height: 1.5; white-space: normal; }
 .comparison-divider { margin: 9px 0 2px; color: var(--quiet); font-size: 9px; text-align: center; }
 .evidence-link { padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 9px; cursor: pointer; }
 .evidence-link span { margin-right: 5px; }

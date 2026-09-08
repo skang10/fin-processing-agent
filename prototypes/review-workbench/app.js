@@ -393,21 +393,28 @@ async function requestAgentRestart(caseId, button) {
 
 function agentRunMarkup(log, modelLabel, state, costLabel, includeRequested = true, includeTimeline = true) {
   const events = log?.events || [];
-  const waitingForSession = state === 'Running' && !log?.session;
+  const startedEventIndex = events.findIndex(function (event) { return event.activity === 'Started Agent review'; });
+  const waitingForStart = state === 'Running' && startedEventIndex === -1;
   const acceptedEvent = includeRequested
-    ? '<div class="agent-run-event' + (!events.length && state === 'Running' ? ' current' : '') + '"><i></i><div><strong>Agent review requested</strong><small>Case accepted and persisted</small></div></div>'
+    ? '<div class="agent-run-event"><i></i><div><strong>Agent review requested</strong><small>Case accepted and persisted</small></div></div>'
     : '';
   const header = '<header class="agent-run-header"><div class="agent-run-identity"><span class="agent-run-state"><i></i>' + escapeHtml(state) + '</span><strong>Agent review</strong></div>' +
     '<div class="agent-run-summary"><div><span>Model</span><strong title="' + escapeHtml(modelLabel) + '">' + escapeHtml(modelLabel) + '</strong></div>' +
     '<div><span>Cost</span><strong>' + escapeHtml(costLabel || 'Calculating') + '</strong></div></div></header>';
   if (!includeTimeline) return header;
-  return header + '<div class="agent-run-timeline">' + acceptedEvent + (events.length ? events.map(function (event, index) {
-      const latest = index === events.length - 1 && state === 'Running';
+  const eventMarkup = function (event, index) {
+      const latest = index === events.length - 1 && state === 'Running' && !waitingForStart;
       return '<div class="agent-run-event' + (latest ? ' current' : '') + '"><i></i><div><strong>' + escapeHtml(formatPendingAgentActivity(event)) + '</strong>' +
         (event.tool_label ? '<small>' + escapeHtml(event.tool_label) + '</small>' : '') + '</div></div>';
-    }).join('') : '') + (waitingForSession
-      ? '<div class="agent-run-event current"><i></i><div><strong>Waiting for Agent to start</strong><small>Queued for the Agent worker</small></div></div>'
-      : '') + '</div>';
+    };
+  const waitingEvent = includeRequested
+    ? '<div class="agent-run-event' + (waitingForStart ? ' current' : '') + '"><i></i><div><strong>Waiting for Agent to start</strong><small>Queued for the Agent worker</small></div></div>'
+    : '';
+  const beforeStart = startedEventIndex === -1 ? events : events.slice(0, startedEventIndex);
+  const afterStart = startedEventIndex === -1 ? [] : events.slice(startedEventIndex);
+  return header + '<div class="agent-run-timeline">' + acceptedEvent +
+    beforeStart.map(eventMarkup).join('') + waitingEvent +
+    afterStart.map(function (event, offset) { return eventMarkup(event, startedEventIndex + offset); }).join('') + '</div>';
 }
 
 function replaceAgentRunMarkup(host, markup) {
@@ -524,6 +531,19 @@ function focusIssueEvidence(issue) {
   sourceOverride = null;
   activeApplicationPointer = null;
   activeEvidenceRegion = region || null;
+}
+
+function allowIssueNavigation(targetIndex) {
+  if (targetIndex === current) return true;
+  if (creatingIssue) {
+    toast('Save or cancel the new issue before switching');
+    return false;
+  }
+  if (editing || confirming || ignoring) {
+    toast('Finish or cancel the current edit before switching');
+    return false;
+  }
+  return true;
 }
 
 function render() {
@@ -688,13 +708,16 @@ function renderIssueList() {
   if (issues.length === 0) { target.innerHTML = ''; return; }
   target.innerHTML = '<div class="issue-card-rail ' + (issues.length === 1 ? 'single' : '') + '">' + issues.map(function (issue, index) {
     const decision = decisions[index];
+    const draft = issue.origin === 'human' && !issue.issueId;
     return '<button class="issue-card ' + (index === current ? 'active' : '') + '" data-issue-card="' + index + '" aria-pressed="' + (index === current) + '">' +
       '<span class="issue-card-number">' + String(index + 1).padStart(2, '0') + '</span><span class="issue-card-copy"><strong>' + escapeHtml(issue.title || 'New issue') + '</strong><small>' +
-      (issue.origin === 'human' ? 'Human created' : 'System generated') + '</small></span><em class="' + decision + '">' + escapeHtml(outcomeLabel(decision)) + '</em></button>';
+      (draft ? 'Unsaved' : issue.origin === 'human' ? 'Human created' : 'System generated') + '</small></span><em class="' + decision + '">' + (draft ? 'Draft' : escapeHtml(outcomeLabel(decision))) + '</em></button>';
   }).join('') + '</div>';
   document.querySelectorAll('[data-issue-card]').forEach(function (card) {
     card.addEventListener('click', function () {
-      current = Number(card.dataset.issueCard);
+      const targetIndex = Number(card.dataset.issueCard);
+      if (!allowIssueNavigation(targetIndex)) return;
+      current = targetIndex;
       focusIssueEvidence(currentIssue());
       editing = false;
       confirming = false;
@@ -770,7 +793,7 @@ function issueDetail(issue) {
     return '<article class="claim-card"><div class="claim-copy"><span>' + (isApplication ? 'Application data' : 'Document') + '</span><strong title="' + escapeHtml(item.role) + '">' + escapeHtml(item.label) + '</strong>' +
       '</div><strong class="evidence-value">' + escapeHtml(value) + '</strong>' + evidenceControl + '</article>';
   }).join('');
-  const reviewedEvidence = values || '<article class="claim-card evidence-note"><div class="claim-copy"><span>Reviewer evidence note</span>' +
+  const reviewedEvidence = values || '<article class="claim-card evidence-note"><div class="claim-copy"><span>No page evidence</span>' +
     '<strong>' + escapeHtml(issue.noReferenceReason || 'No supporting evidence was provided.') + '</strong></div></article>';
   const outcome = decisions[current];
   const recordedOutcome = outcome === 'pending' ? '' : '<div class="recorded-outcome"><span class="outcome-icon">' +
@@ -1145,7 +1168,9 @@ function renderSummary() {
   }).join('');
   document.querySelectorAll('[data-summary-issue]').forEach(function (button) {
     button.addEventListener('click', function () {
-      current = Number(button.dataset.summaryIssue);
+      const targetIndex = Number(button.dataset.summaryIssue);
+      if (!allowIssueNavigation(targetIndex)) return;
+      current = targetIndex;
       focusIssueEvidence(currentIssue());
       editing = false;
       confirming = false;
@@ -1235,8 +1260,8 @@ document.querySelector('#queue-nav').addEventListener('click', function () { voi
 document.querySelector('#changes-nav').addEventListener('click', function () { void refreshQueue('changes_requested'); });
 document.querySelector('#completed-nav').addEventListener('click', function () { void refreshQueue('completed'); });
 document.querySelector('#back').addEventListener('click', function () { void refreshQueue(activeQueueView); });
-document.querySelector('#previous').addEventListener('click', function () { if (current > 0) { current -= 1; focusIssueEvidence(currentIssue()); editing = false; confirming = false; render(); } });
-document.querySelector('#next').addEventListener('click', function () { if (current < issues.length - 1) { current += 1; focusIssueEvidence(currentIssue()); editing = false; confirming = false; render(); } });
+document.querySelector('#previous').addEventListener('click', function () { if (current > 0 && allowIssueNavigation(current - 1)) { current -= 1; focusIssueEvidence(currentIssue()); editing = false; confirming = false; render(); } });
+document.querySelector('#next').addEventListener('click', function () { if (current < issues.length - 1 && allowIssueNavigation(current + 1)) { current += 1; focusIssueEvidence(currentIssue()); editing = false; confirming = false; render(); } });
 document.querySelector('#create-issue').addEventListener('click', function () {
   if (caseReadOnly) return;
   issues.push({
@@ -1638,7 +1663,9 @@ function renderAgentLog() {
 function wireReportNavigation() {
   document.querySelectorAll('[data-report-issue]').forEach(function (button) {
     button.addEventListener('click', function () {
-      current = Number(button.dataset.reportIssue);
+      const targetIndex = Number(button.dataset.reportIssue);
+      if (!allowIssueNavigation(targetIndex)) return;
+      current = targetIndex;
       focusIssueEvidence(currentIssue());
       editing = false; confirming = false; render(); activateCaseTab('issues');
     });
