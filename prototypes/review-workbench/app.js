@@ -58,6 +58,8 @@ let zoom = 92;
 let sourceView = 'document';
 let sourceOverride = null;
 let activeFilter = 'all';
+const queuePageSize = 10;
+let currentQueuePage = 1;
 const initialQueueView = new URLSearchParams(window.location.search).get('queue_view');
 let activeQueueView = ['review', 'changes_requested', 'completed'].includes(initialQueueView) ? initialQueueView : 'review';
 let decisions = ['pending', 'pending', 'pending'];
@@ -94,7 +96,11 @@ function renderCases() {
     return (activeFilter === 'all' || item.status === activeFilter) &&
       (item.name + ' ' + item.id + ' ' + item.methodTitle + ' ' + item.methodDetail).toLowerCase().includes(query);
   });
-  caseList.innerHTML = visible.map(function (item) {
+  const pageCount = Math.max(1, Math.ceil(visible.length / queuePageSize));
+  currentQueuePage = Math.min(currentQueuePage, pageCount);
+  const pageStart = (currentQueuePage - 1) * queuePageSize;
+  const pageCases = visible.slice(pageStart, pageStart + queuePageSize);
+  caseList.innerHTML = pageCases.map(function (item) {
     return '<tr class="case-row" data-route-id="' + escapeHtml(item.routeId || item.id) + '" tabindex="0" aria-label="Open ' + item.id + ', ' + item.name + '">' +
       '<td><strong>' + item.id + '</strong></td><td><strong>' + item.name + '</strong></td>' +
       '<td class="review-method"><strong>' + escapeHtml(item.methodTitle) + '</strong><small>' + escapeHtml(item.methodDetail) + '</small></td><td><span class="issue-number">' + item.issues + '</span></td>' +
@@ -103,6 +109,13 @@ function renderCases() {
       '<td class="row-arrow">→</td></tr>';
   }).join('');
   document.querySelector('#empty-state').hidden = visible.length > 0;
+  const pagination = document.querySelector('#queue-pagination');
+  pagination.hidden = visible.length <= queuePageSize;
+  document.querySelector('#queue-page-summary').textContent = visible.length === 0 ? ''
+    : (pageStart + 1) + '–' + Math.min(pageStart + queuePageSize, visible.length) + ' of ' + visible.length + ' cases';
+  document.querySelector('#queue-page-position').textContent = 'Page ' + currentQueuePage + ' of ' + pageCount;
+  document.querySelector('#queue-page-previous').disabled = currentQueuePage === 1;
+  document.querySelector('#queue-page-next').disabled = currentQueuePage === pageCount;
   caseList.querySelectorAll('.case-row').forEach(function (row) {
     row.addEventListener('click', function () { openQueueCase(row.dataset.routeId); });
     row.addEventListener('keydown', function (event) {
@@ -152,6 +165,7 @@ async function refreshQueue(view = activeQueueView, updateLocation = true) {
     document.querySelectorAll('.nav-item').forEach(function (item) { item.classList.remove('active'); });
     document.querySelector(view === 'changes_requested' ? '#changes-nav' : view === 'completed' ? '#completed-nav' : '#queue-nav').classList.add('active');
     activeFilter = 'all';
+    currentQueuePage = 1;
     document.querySelectorAll('.filter').forEach(function (item) { item.classList.toggle('active', item.dataset.filter === 'all'); });
     updateQueueCounts();
     renderCases();
@@ -1147,14 +1161,22 @@ function updateSubmissionActions() {
   });
 }
 
-searchInput.addEventListener('input', renderCases);
+searchInput.addEventListener('input', function () { currentQueuePage = 1; renderCases(); });
 document.querySelectorAll('.filter').forEach(function (button) {
   button.addEventListener('click', function () {
     document.querySelectorAll('.filter').forEach(function (item) { item.classList.remove('active'); });
     button.classList.add('active');
     activeFilter = button.dataset.filter;
+    currentQueuePage = 1;
     renderCases();
   });
+});
+document.querySelector('#queue-page-previous').addEventListener('click', function () {
+  if (currentQueuePage > 1) { currentQueuePage -= 1; renderCases(); }
+});
+document.querySelector('#queue-page-next').addEventListener('click', function () {
+  currentQueuePage += 1;
+  renderCases();
 });
 document.querySelector('#queue-nav').addEventListener('click', function () { void refreshQueue('review'); });
 document.querySelector('#changes-nav').addEventListener('click', function () { void refreshQueue('changes_requested'); });

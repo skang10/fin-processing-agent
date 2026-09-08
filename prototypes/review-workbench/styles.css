@@ -242,6 +242,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .filter span { margin-left: 4px; color: inherit; opacity: .72; }
 .last-updated { margin-left: auto; color: var(--quiet); font-size: 10px; }
 .table-wrap { overflow-x: auto; }
+.queue-pagination {
+  min-height: 52px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+}
+.queue-pagination[hidden] { display: none; }
+.queue-pagination > div { display: flex; align-items: center; gap: 10px; }
+.queue-pagination .button { min-height: 30px; }
+.queue-pagination .button:disabled { background: var(--surface-soft); }
 .case-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .case-table th {
   height: 38px;
