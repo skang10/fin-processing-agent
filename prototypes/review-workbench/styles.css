@@ -580,9 +580,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .finding-tone.failed { background: var(--danger-soft); color: var(--danger); }
 .finding-tone.warning { background: var(--warning-soft); color: var(--warning); }
 .finding-tone.neutral { background: var(--accent-soft); color: var(--accent); }
-.review-prompt { padding: 15px 16px; margin-bottom: 20px; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.review-prompt { margin-bottom: 20px; }
+.review-prompt::before { content: 'What needs review'; display: block; margin-bottom: 8px; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .review-prompt strong { display: block; font-size: 14px; line-height: 1.35; }
-.review-prompt p { margin: 0; color: #3f4f5b; font-size: 11px; line-height: 1.5; }
+.review-prompt p { margin: 0; color: #3f4f5b; font-size: 11px; line-height: 1.55; }
 .claim-comparison { border-top: 1px solid var(--line); }
 .block-label { padding: 15px 0 8px; display: flex; justify-content: space-between; align-items: center; }
 .block-label span { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
