@@ -435,7 +435,7 @@ describe("case intake", () => {
     const reviewCommands = {
       createIssue: vi.fn(async () => ({ issueId: "4c816f67-5f2f-4e21-8c17-7eb1e5383992", issueVersion: 1, caseVersion: 3 })),
       editIssue: vi.fn(async () => ({ issueVersion: 2 })),
-      resolveIssue: vi.fn(async () => ({ issueVersion: 2, reviewState: "confirmed" as const })),
+      resolveIssue: vi.fn(async () => ({ issueVersion: 2, reviewState: "confirmed" as "pending" | "confirmed" | "ignored" })),
       saveRequestedChange: vi.fn(async () => ({ draftRevisionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383994", revision: 1 })),
       submitFinalReview: vi.fn(async () => ({
         finalReviewId: "4c816f67-5f2f-4e21-8c17-7eb1e5383993", caseVersion: 3, action: "request_changes" as const,
@@ -467,6 +467,13 @@ describe("case intake", () => {
     expect(ignored.statusCode).toBe(200);
     expect(reviewCommands.resolveIssue).toHaveBeenCalledWith(expect.objectContaining({ action: "dismiss_signal" }));
     expect(reviewCommands.resolveIssue).toHaveBeenLastCalledWith(expect.not.objectContaining({ reason: expect.anything() }));
+    reviewCommands.resolveIssue.mockResolvedValueOnce({ issueVersion: 3, reviewState: "pending" as const });
+    const reopened = await app.inject({ method: "POST", url: `${base}/issues/${issueId}/reopen`, payload: {
+      result_revision_id: resultRevisionId, command_id: "reopen_1", expected_issue_version: 2,
+    } });
+    expect(reopened.statusCode).toBe(200);
+    expect(reopened.json()).toEqual({ issue_id: issueId, review_state: "pending", version: 3 });
+    expect(reviewCommands.resolveIssue).toHaveBeenLastCalledWith(expect.objectContaining({ action: "reopen_issue" }));
     const draft = await app.inject({ method: "PUT", url: `${base}/issues/${issueId}/requested-change`, payload: {
       result_revision_id: resultRevisionId, command_id: "draft_1", text: "Please provide a current document.", included: true,
     } });

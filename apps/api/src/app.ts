@@ -25,6 +25,7 @@ import {
   ProblemDetailsSchema,
   RequestedChangeCommandSchema,
   RequestedChangeResultSchema,
+  ReopenIssueResultSchema,
   ResolveIssueCommandSchema,
   ResolveIssueResultSchema,
   ReviewIssuesSchema,
@@ -499,9 +500,23 @@ export function buildApp(
         action: action === "confirm" ? "accept_signal" : "dismiss_signal",
         ...(body.reason ? { reason: body.reason } : {}),
       });
-      return { issue_id: issueId, review_state: result.reviewState, version: result.issueVersion };
+      return { issue_id: issueId, review_state: action === "confirm" ? "confirmed" as const : "ignored" as const, version: result.issueVersion };
     });
   }
+
+  app.post("/api/v1/cases/:case_id/issues/:issue_id/reopen", {
+    schema: { body: ResolveIssueCommandSchema, response: { 200: ReopenIssueResultSchema, 400: ProblemDetailsSchema, 404: ProblemDetailsSchema, 409: ProblemDetailsSchema } },
+  }, async (request) => {
+    if (!reviewCommands) throw new Error("Review commands are not configured");
+    const { case_id: caseId, issue_id: issueId } = request.params as { case_id: string; issue_id: string };
+    const body = request.body as { result_revision_id: string; command_id: string; expected_issue_version: number; reason?: string };
+    const result = await reviewCommands.resolveIssue({
+      caseId, issueId, resultRevisionId: body.result_revision_id, commandId: body.command_id,
+      expectedIssueVersion: body.expected_issue_version, action: "reopen_issue",
+      ...(body.reason ? { reason: body.reason } : {}),
+    });
+    return { issue_id: issueId, review_state: "pending" as const, version: result.issueVersion };
+  });
 
   app.put("/api/v1/cases/:case_id/issues/:issue_id/requested-change", {
     schema: { body: RequestedChangeCommandSchema, response: { 200: RequestedChangeResultSchema, 400: ProblemDetailsSchema, 404: ProblemDetailsSchema, 409: ProblemDetailsSchema } },

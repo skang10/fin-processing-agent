@@ -2,7 +2,7 @@
 
 Document ID: `UI`
 
-Version: 3.9.0
+Version: 3.10.0
 
 Status: Approved
 
@@ -225,6 +225,8 @@ clear_for_downstream
 `UI-REQ-073` For each Agent-raised signal, the reviewer must accept the signal, dismiss it, or edit it before accepting; the reviewer may also create an issue the Agent did not raise.
 
 The workbench presents `accept_signal` as **Confirm issue** and `dismiss_signal` as **Ignore issue**. These user-facing labels describe whether the reviewer considers the Agent-raised issue valid; the persisted action values remain unchanged.
+
+`UI-REQ-177` Before final review, a reviewer must be able to choose **Reopen issue** for a confirmed or ignored issue. Reopening must preserve the earlier decision in the audit history, return the current issue state to pending, and restore the **Ignore issue** and **Confirm issue** choices. It must not silently change or delete an earlier requested-change revision.
 
 When a reviewer chooses **Confirm issue**, the workbench presents an Agent-generated applicant-readable requested-change draft for review and editing before the confirmation is saved. The draft must state what information or document is needed in plain language and must not expose internal processing terminology. The confirmed draft is selected for the message by default, the reviewer may exclude it before final submission, and choosing `request_changes` records selected drafts without sending or delivering them. The draft must not contain or imply a final banking decision.
 
@@ -468,6 +470,7 @@ No unresolved Review Workbench boundary decision blocks review of this document.
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.10.0 | 2026-09-08 | Approved | Added audited issue reopening before final review. |
 | 3.9.0 | 2026-09-08 | Approved | Made generated demo cases durable and human-reviewable before an optional Agent run. |
 | 3.8.1 | 2026-09-08 | Approved | Required a live Agent log to follow new activity only from its end while preserving deliberate reviewer scrolling through history. |
 | 3.8.0 | 2026-09-08 | Approved | Made processing-to-report transition automatic and kept one continuous Agent-log model, activity, and final-cost presentation. |

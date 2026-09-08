@@ -546,6 +546,10 @@ function renderIssueFooter() {
     footer.innerHTML = '<div class="review-actions"><button class="button quiet" id="dismiss">Ignore issue</button><button class="button primary" id="confirm">Confirm issue</button></div>';
     return;
   }
+  if (!caseReadOnly) {
+    footer.innerHTML = '<div class="review-actions"><button class="button quiet" id="change-outcome">Reopen issue</button></div>';
+    return;
+  }
   footer.innerHTML = '<div class="footer-outcome">' + (caseReadOnly && outcome === 'pending' ? 'Not reviewed' : outcomeLabel(outcome)) + '</div>';
 }
 
@@ -854,7 +858,7 @@ function wireIssueActions() {
   const change = document.querySelector('#change-outcome');
   if (confirm) confirm.addEventListener('click', function () { confirming = true; ignoring = false; render(); });
   if (dismiss) dismiss.addEventListener('click', function () { ignoring = true; confirming = false; render(); });
-  if (change) change.addEventListener('click', function () { toast('Saved review decisions cannot be undone; edit the issue or refresh its authoritative state.'); });
+  if (change) change.addEventListener('click', function () { void reopenCurrentIssue(); });
   ['#cancel', '#cancel-bottom'].forEach(function (selector) {
     const button = document.querySelector(selector);
     if (button) button.addEventListener('click', function () {
@@ -1078,6 +1082,25 @@ async function persistDecision(kind, noteOrReason) {
     decide(kind);
   } catch (error) {
     showReviewError(error, 'Review decision could not be saved');
+  }
+}
+
+async function reopenCurrentIssue() {
+  const issue = issues[current];
+  if (!apiCaseRecord || !apiReport?.result_revision || !issue.issueId) return;
+  try {
+    const result = await resolveIssue(apiCaseRecord.case_id, issue.issueId, 'reopen', {
+      result_revision_id: apiReport.result_revision.id,
+      command_id: crypto.randomUUID(),
+      expected_issue_version: issue.version,
+    });
+    issue.version = result.version;
+    decisions[current] = 'pending';
+    editing = false; confirming = false; ignoring = false;
+    render();
+    toast('Issue reopened');
+  } catch (error) {
+    showReviewError(error, 'Issue could not be reopened');
   }
 }
 

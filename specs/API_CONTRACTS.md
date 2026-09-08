@@ -2,7 +2,7 @@
 
 Document ID: `API`
 
-Version: 1.12.0
+Version: 1.13.0
 
 Status: Approved
 
@@ -225,6 +225,7 @@ POST  /api/v1/cases/{case_id}/issues
 PATCH /api/v1/cases/{case_id}/issues/{issue_id}
 POST  /api/v1/cases/{case_id}/issues/{issue_id}/confirm
 POST  /api/v1/cases/{case_id}/issues/{issue_id}/ignore
+POST  /api/v1/cases/{case_id}/issues/{issue_id}/reopen
 PUT   /api/v1/cases/{case_id}/issues/{issue_id}/requested-change
 POST  /api/v1/cases/{case_id}/final-review
 ```
@@ -236,6 +237,8 @@ POST  /api/v1/cases/{case_id}/final-review
 `API-REQ-052` Confirming an Agent-raised issue must persist action `accept_signal`; ignoring it must persist `dismiss_signal`. Transport responses may additionally provide the approved user-facing labels `Confirm issue` and `Ignore issue` but must not change stored semantics.
 
 `API-REQ-053` Ignoring an issue may include an optional reviewer note. Confirming, ignoring, editing, or creating an issue must record reviewer, time, predecessor result revision, command identity, and resulting resource version.
+
+`API-REQ-107` Reopening a confirmed or ignored issue must append an idempotent `reopen_issue` reviewer action, require the current issue version and predecessor result revision, return the issue to `pending`, preserve earlier actions and requested-change revisions, and reject pending, stale, or final-reviewed issues.
 
 `API-REQ-054` A confirm response may create or expose a verified Agent-proposed requested-change draft for human editing. The Review Workbench must select that draft for the message by default and let the reviewer exclude it before final submission.
 
@@ -326,7 +329,7 @@ The API contracts are acceptable for implementation when automated contract and 
 
 `API-REQ-087` Evidence fixtures distinguish page-region, page-level, structured-input, missing, purged, and unauthorized states and enforce scoped artifact access.
 
-`API-REQ-088` Issue create, edit, confirm, ignore, and requested-change commands preserve immutable Agent sources, append review state, enforce optimistic concurrency, and reject stale result revisions.
+`API-REQ-088` Issue create, edit, confirm, ignore, reopen, and requested-change commands preserve immutable Agent sources and earlier reviewer actions, append review state, enforce optimistic concurrency, and reject stale result revisions.
 
 `API-REQ-089` Final-review tests enforce issue completion and the action-specific requested-change inclusion rules atomically.
 
@@ -355,6 +358,7 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.13.0 | 2026-09-08 | Approved | Added the idempotent, append-only reopen-issue command with optimistic concurrency. |
 | 1.12.0 | 2026-09-08 | Approved | Added durable Agent-optional demo intake and the guarded start-Agent command for a prepared case. |
 | 1.11.0 | 2026-09-08 | Approved | Added the guarded new-run restart command for a reviewer-stopped Agent review. |
 | 1.10.0 | 2026-09-08 | Approved | Added the idempotent case-scoped command for cooperative Agent-review stopping. |

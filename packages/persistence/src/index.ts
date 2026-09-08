@@ -366,7 +366,8 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
       )).limit(1);
       if (replayed) return {
         issueVersion: replayed.resultingVersion,
-        reviewState: replayed.action === "accept_signal" ? "confirmed" as const : "ignored" as const,
+        reviewState: replayed.action === "accept_signal" ? "confirmed" as const
+          : replayed.action === "dismiss_signal" ? "ignored" as const : "pending" as const,
       };
       const [issue] = await tx.select({
         id: reviewIssues.id, version: reviewIssues.version, reviewState: reviewIssues.reviewState,
@@ -378,10 +379,13 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
       const [revision] = await tx.select({ id: resultRevisions.id }).from(resultRevisions).where(and(
         eq(resultRevisions.id, command.resultRevisionId), eq(resultRevisions.caseId, command.caseId), eq(resultRevisions.runId, issue.runId),
       )).limit(1);
-      if (!revision || issue.lifecycle !== "ready_for_review" || issue.version !== command.expectedIssueVersion || issue.reviewState !== "pending") {
+      const reopening = command.action === "reopen_issue";
+      const stateAllowsAction = reopening ? issue.reviewState !== "pending" : issue.reviewState === "pending";
+      if (!revision || issue.lifecycle !== "ready_for_review" || issue.version !== command.expectedIssueVersion || !stateAllowsAction) {
         throw new ReviewConflictError("stale_review", "This issue has changed. Refresh to review the latest version.");
       }
-      const reviewState = command.action === "accept_signal" ? "confirmed" as const : "ignored" as const;
+      const reviewState = command.action === "accept_signal" ? "confirmed" as const
+        : command.action === "dismiss_signal" ? "ignored" as const : "pending" as const;
       const nextVersion = issue.version + 1;
       const updated = await tx.update(reviewIssues).set({ reviewState, version: nextVersion }).where(and(
         eq(reviewIssues.id, issue.id), eq(reviewIssues.version, issue.version),

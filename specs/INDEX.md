@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 3.14.0
+Version: 3.15.0
 
 Status: Approved
 
@@ -367,6 +367,7 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.15.0 | 2026-09-08 | Approved | Registered append-only review-issue reopening across Data Model 3.4.0, API Contracts 1.13.0, and Review Workbench 3.10.0. |
 | 3.14.0 | 2026-09-08 | Approved | Registered durable Agent-optional demo intake, immediate human review, and guarded later Agent start. |
 | 3.13.1 | 2026-09-08 | Approved | Registered Review Workbench 3.8.1 live Agent-log follow and reviewer-scroll behavior. |
 | 3.13.0 | 2026-09-08 | Approved | Registered the continuous Agent-log and automatic in-place processing-to-report transition. |

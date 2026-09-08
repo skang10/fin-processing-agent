@@ -389,6 +389,12 @@ export const ResolveIssueResultSchema = Type.Object({
   version: Type.Integer({ minimum: 2 }),
 }, { additionalProperties: false });
 
+export const ReopenIssueResultSchema = Type.Object({
+  issue_id: Type.String({ format: "uuid" }),
+  review_state: Type.Literal("pending"),
+  version: Type.Integer({ minimum: 2 }),
+}, { additionalProperties: false });
+
 export const RequestedChangeCommandSchema = Type.Object({
   ...ReviewCommandBase,
   text: Type.String({ minLength: 1, maxLength: 2000 }),

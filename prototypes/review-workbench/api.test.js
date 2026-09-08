@@ -194,12 +194,14 @@ describe('review commands', () => {
     await createIssue('case-1', { command_id: 'create' }, fetcher);
     await editIssue('case-1', 'issue-1', { command_id: 'edit' }, fetcher);
     await resolveIssue('case-1', 'issue-1', 'confirm', { command_id: 'one' }, fetcher);
+    await resolveIssue('case-1', 'issue-1', 'reopen', { command_id: 'reopen' }, fetcher);
     await saveRequestedChange('case-1', 'issue-1', { command_id: 'two', text: 'Update it', included: true }, fetcher);
     await submitFinalReview('case-1', { command_id: 'three', action: 'request_changes' }, fetcher);
     expect(fetcher.mock.calls.map((call) => [call[0], call[1].method])).toEqual([
       ['/api/v1/cases/case-1/issues', 'POST'],
       ['/api/v1/cases/case-1/issues/issue-1', 'PATCH'],
       ['/api/v1/cases/case-1/issues/issue-1/confirm', 'POST'],
+      ['/api/v1/cases/case-1/issues/issue-1/reopen', 'POST'],
       ['/api/v1/cases/case-1/issues/issue-1/requested-change', 'PUT'],
       ['/api/v1/cases/case-1/final-review', 'POST'],
     ]);

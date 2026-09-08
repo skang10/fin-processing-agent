@@ -2,7 +2,7 @@
 
 Document ID: `DAT`
 
-Version: 3.3.0
+Version: 3.4.0
 
 Status: Approved
 
@@ -495,7 +495,7 @@ A Claim is a reconciled raw or normalized assertion linked to evidence. A Claim 
 
 `DAT-REQ-127` Dataset-candidate nomination must not mutate golden truth or make the nominated data part of a dataset release automatically.
 
-`DAT-REQ-192` A review issue must identify its case and predecessor result revision, origin as Agent-raised or human-raised, immutable source signal or supporting references when applicable, current human-review state, and append-only human edit revisions without mutating the original Case Review Brief.
+`DAT-REQ-192` A review issue must identify its case and predecessor result revision, origin as Agent-raised or human-raised, immutable source signal or supporting references when applicable, current human-review state, and append-only human edit revisions without mutating the original Case Review Brief. Reopening a confirmed or ignored issue must append a reviewer action referencing the prior resource version before the current state returns to pending; it must not delete or rewrite the earlier confirm or ignore action.
 
 `DAT-REQ-193` A requested-change draft must reference one review issue, retain its Agent-proposed text when applicable and current human-edited text separately, record inclusion state and acting reviewer, and remain a draft without delivery or customer-contact authority.
 
@@ -662,6 +662,7 @@ The following details are intentionally deferred to later owning specifications:
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.4.0 | 2026-09-08 | Approved | Added append-only reopening of a confirmed or ignored review issue without erasing its earlier reviewer action. |
 | 3.3.0 | 2026-09-08 | Approved | Added the durable manual-review baseline and guarded later Agent-run transition for generated synthetic cases. |
 | 3.2.0 | 2026-09-08 | Approved | Added the sealed human-review anchor used when a reviewer stops the Agent before a machine baseline exists. |
 | 3.1.0 | 2026-09-07 | Approved | Added the immutable `FD-YYYY-NNNN` reviewer-facing case reference while retaining the UUID as the relational technical identifier. |

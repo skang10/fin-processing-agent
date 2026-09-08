@@ -608,9 +608,9 @@ export interface ReviewCommandService {
   resolveIssue(command: ReviewCommandContext & {
     readonly issueId: string;
     readonly expectedIssueVersion: number;
-    readonly action: "accept_signal" | "dismiss_signal";
+    readonly action: "accept_signal" | "dismiss_signal" | "reopen_issue";
     readonly reason?: string;
-  }): Promise<{ readonly issueVersion: number; readonly reviewState: "confirmed" | "ignored" }>;
+  }): Promise<{ readonly issueVersion: number; readonly reviewState: "pending" | "confirmed" | "ignored" }>;
   saveRequestedChange(command: ReviewCommandContext & {
     readonly issueId: string;
     readonly text: string;

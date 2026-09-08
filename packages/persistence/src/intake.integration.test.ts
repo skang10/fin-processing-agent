@@ -44,6 +44,7 @@ import {
   reconciliationDecisions,
   recommendedDispositions,
   resultRevisions,
+  reviewIssueActions,
   reviewIssues,
   stageExecutions,
   validationFindings,
@@ -389,10 +390,33 @@ describe("PostgresCaseCommandService", () => {
       supportingReferences: [], noReferenceReason: "Reviewer observed a sequence gap in the synthetic package.",
     });
     expect(edited).toEqual({ issueVersion: 2 });
+    await expect(service.resolveIssue({
+      caseId: reviewFixture.caseId, issueId: created.issueId, resultRevisionId: reviewFixture.resultRevisionId,
+      commandId: "reopen_pending_human_1", expectedIssueVersion: 2, action: "reopen_issue",
+    })).rejects.toMatchObject({ code: "stale_review" });
     await service.resolveIssue({
       caseId: reviewFixture.caseId, issueId: created.issueId, resultRevisionId: reviewFixture.resultRevisionId,
       commandId: "confirm_human_1", expectedIssueVersion: 2, action: "accept_signal",
     });
+    const reopened = await service.resolveIssue({
+      caseId: reviewFixture.caseId, issueId: created.issueId, resultRevisionId: reviewFixture.resultRevisionId,
+      commandId: "reopen_human_1", expectedIssueVersion: 3, action: "reopen_issue",
+    });
+    expect(reopened).toEqual({ issueVersion: 4, reviewState: "pending" });
+    await expect(service.resolveIssue({
+      caseId: reviewFixture.caseId, issueId: created.issueId, resultRevisionId: reviewFixture.resultRevisionId,
+      commandId: "reopen_human_1", expectedIssueVersion: 3, action: "reopen_issue",
+    })).resolves.toEqual(reopened);
+    await service.resolveIssue({
+      caseId: reviewFixture.caseId, issueId: created.issueId, resultRevisionId: reviewFixture.resultRevisionId,
+      commandId: "reconfirm_human_1", expectedIssueVersion: 4, action: "accept_signal",
+    });
+    const humanIssueActions = await connection.db.select({ action: reviewIssueActions.action })
+      .from(reviewIssueActions).where(eq(reviewIssueActions.issueId, created.issueId));
+    expect(humanIssueActions).toEqual(expect.arrayContaining([
+      { action: "accept_signal" }, { action: "reopen_issue" },
+    ]));
+    expect(humanIssueActions).toHaveLength(3);
     const resolved = await service.resolveIssue({
       ...reviewFixture, expectedIssueVersion: 1, action: "accept_signal", commandId: "confirm_1",
     });
@@ -429,6 +453,10 @@ describe("PostgresCaseCommandService", () => {
       description: "This edit must not be accepted.", recommendedAction: "Please provide information.",
       supportingReferences: [], noReferenceReason: "Attempted after final review.",
     })).rejects.toMatchObject({ code: "stale_review" });
+    await expect(service.resolveIssue({
+      caseId: reviewFixture.caseId, issueId: created.issueId, resultRevisionId: reviewFixture.resultRevisionId,
+      commandId: "reopen_after_final", expectedIssueVersion: 5, action: "reopen_issue",
+    })).rejects.toMatchObject({ code: "stale_review" });
     const persistedIssues = await new PostgresCaseQueryService(connection.db).getIssues(reviewFixture.caseId);
     expect(persistedIssues).toEqual(expect.arrayContaining([expect.objectContaining({
       reviewState: "confirmed", version: 2,
@@ -436,7 +464,7 @@ describe("PostgresCaseCommandService", () => {
     }), expect.objectContaining({
       issueId: created.issueId, origin: "human", title: "Missing document page",
       description: "One supporting document page appears to be missing.", editRevision: 2,
-      reviewState: "confirmed", version: 3,
+      reviewState: "confirmed", version: 5,
     })]));
     const queries = new PostgresCaseQueryService(connection.db);
     await expect(queries.list("review")).resolves.not.toEqual(expect.arrayContaining([
