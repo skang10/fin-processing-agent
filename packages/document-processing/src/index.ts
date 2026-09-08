@@ -503,12 +503,14 @@ export interface PdfInspectorEngine {
   classify(buffer: Buffer): Promise<PdfClassification>;
   extract(buffer: Buffer): Promise<PagesExtractionResult>;
   positions(buffer: Buffer): Promise<readonly TextItem[]>;
+  pageSizes(buffer: Buffer): Promise<readonly { readonly width: number; readonly height: number }[]>;
 }
 
 const nativeEngine: PdfInspectorEngine = {
   classify: classifyPdfAsync,
   extract: (buffer) => extractPagesMarkdownAsync(buffer),
   positions: async (buffer) => extractTextWithPositions(buffer),
+  pageSizes: pdfPageSizes,
 };
 
 export class PdfInspectorAdapter {
@@ -516,10 +518,11 @@ export class PdfInspectorAdapter {
 
   async inspect(buffer: Buffer, targetDpi = 72): Promise<PdfInspection> {
     if (!Number.isFinite(targetDpi) || targetDpi < 72 || targetDpi > 300) throw new Error("Native coordinate target DPI is invalid");
-    const [classification, extraction, positions] = await Promise.all([
+    const [classification, extraction, positions, pageSizes] = await Promise.all([
       this.engine.classify(buffer),
       this.engine.extract(buffer),
       this.engine.positions(buffer),
+      this.engine.pageSizes(buffer),
     ]);
     if (!Number.isInteger(classification.pageCount) || classification.pageCount < 1) {
       throw new Error("PDF Inspector returned an invalid page count");
@@ -530,6 +533,7 @@ export class PdfInspectorAdapter {
     if (classification.pageCount !== extraction.pages.length) {
       throw new Error("PDF Inspector returned inconsistent page counts");
     }
+    if (classification.pageCount !== pageSizes.length) throw new Error("PDF page-size inspection returned an inconsistent page count");
     const pages = [...extraction.pages].sort((left, right) => left.page - right.page);
     if (pages.some((page, index) => page.page !== index)) {
       throw new Error("PDF Inspector returned invalid page identities");
@@ -545,7 +549,7 @@ export class PdfInspectorAdapter {
       pages: pages.map((page) => ({
         pageNumber: page.page + 1,
         nativeMarkdown: page.markdown,
-        nativeSpans: positionedNativeSpans(positions.filter((item) => item.page === page.page + 1), targetDpi),
+        nativeSpans: positionedNativeSpans(positions.filter((item) => item.page === page.page + 1), targetDpi, pageSizes[page.page]!.height),
         needsOcr: page.needsOcr,
         ...(page.ocrReason ? { ocrReason: page.ocrReason } : {}),
         hasTable: extraction.pagesWithTables.includes(page.page + 1),
@@ -555,13 +559,30 @@ export class PdfInspectorAdapter {
   }
 }
 
-function positionedNativeSpans(items: readonly TextItem[], targetDpi: number): InspectedPage["nativeSpans"] {
+async function pdfPageSizes(buffer: Buffer): Promise<readonly { readonly width: number; readonly height: number }[]> {
+  const library = await PDFiumLibrary.init();
+  const document = await library.loadDocument(buffer);
+  try {
+    return Array.from({ length: document.getPageCount() }, (_, index) => {
+      const { originalWidth, originalHeight } = document.getPage(index).getOriginalSize();
+      return { width: originalWidth, height: originalHeight };
+    });
+  } finally {
+    document.destroy();
+    library.destroy();
+  }
+}
+
+function positionedNativeSpans(items: readonly TextItem[], targetDpi: number, pageHeight: number): InspectedPage["nativeSpans"] {
   const scale = targetDpi / 72;
   return items.filter((item) => item.itemType === "Text" && item.text.length > 0).map((item) => {
-    if (![item.x, item.y, item.width, item.height].every(Number.isFinite) || item.x < 0 || item.y < 0 || item.width <= 0 || item.height <= 0) {
+    if (![item.x, item.y, item.width, item.height, pageHeight].every(Number.isFinite) || item.x < 0 || item.y < 0 || item.width <= 0 || item.height <= 0 || item.y + item.height > pageHeight + 1e-6) {
       throw new Error("PDF Inspector returned an invalid positioned native-text span");
     }
-    return { text: item.text, bbox: [item.x * scale, item.y * scale, (item.x + item.width) * scale, (item.y + item.height) * scale] as const };
+    return {
+      text: item.text,
+      bbox: [item.x * scale, (pageHeight - item.y - item.height) * scale, (item.x + item.width) * scale, (pageHeight - item.y) * scale] as const,
+    };
   });
 }
 

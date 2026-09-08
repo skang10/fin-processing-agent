@@ -43,12 +43,13 @@ describe("PdfInspectorAdapter", () => {
         font: "Helvetica", fontTag: "F1", fontSize: 12, isBold: false, isItalic: false,
         isUnderline: false, isStrikeout: false,
       }],
+      pageSizes: async () => [{ width: 100, height: 100 }, { width: 100, height: 100 }],
     };
     const result = await new PdfInspectorAdapter(engine).inspect(Buffer.from("fixture"), 144);
 
     expect(result).toMatchObject({ pdfType: "mixed", pageCount: 2, routingSignal: 0.7 });
     expect(result.pages).toEqual([
-      { pageNumber: 1, nativeMarkdown: "native", nativeSpans: [{ text: "native", bbox: [20, 40, 80, 56] }], needsOcr: false, hasTable: true, hasColumns: false },
+      { pageNumber: 1, nativeMarkdown: "native", nativeSpans: [{ text: "native", bbox: [20, 144, 80, 160] }], needsOcr: false, hasTable: true, hasColumns: false },
       { pageNumber: 2, nativeMarkdown: "", nativeSpans: [], needsOcr: true, ocrReason: "no_text", hasTable: false, hasColumns: false },
     ]);
   });
@@ -58,6 +59,7 @@ describe("PdfInspectorAdapter", () => {
       classify: async () => ({ pdfType: PdfType.TextBased, pageCount: 2, pagesNeedingOcr: [], confidence: 1 }),
       extract: async () => ({ pages: [], pagesWithTables: [], pagesWithColumns: [], pagesNeedingOcr: [], ocrReasonsByPage: [], isComplex: false }),
       positions: async () => [],
+      pageSizes: async () => [{ width: 100, height: 100 }, { width: 100, height: 100 }],
     };
     await expect(new PdfInspectorAdapter(engine).inspect(Buffer.from("fixture")))
       .rejects.toThrow("inconsistent page counts");

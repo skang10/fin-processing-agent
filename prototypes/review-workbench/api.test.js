@@ -1,5 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createIssue, editIssue, formatPendingAgentActivity, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, prepareDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, stopAgentReview, submitDemoCase, submitFinalReview } from './api.js';
+import { createIssue, editIssue, formatPendingAgentActivity, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, normalizeEvidenceProjection, prepareDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, stopAgentReview, submitDemoCase, submitFinalReview } from './api.js';
+
+describe('normalizeEvidenceProjection', () => {
+  it('corrects only legacy native-text regions persisted with a bottom-left Y axis', () => {
+    const legacy = {
+      evidence_id: 'evidence-1', evidence_type: 'page_region', extraction_method: 'agent_native_text_reading',
+      processor_version: 'agent-native-text-reading-1.1.0', normalized_region: { x: 0.18, y: 0.62, width: 0.13, height: 0.01 },
+    };
+    expect(normalizeEvidenceProjection(legacy).normalized_region).toEqual({ x: 0.18, y: 0.37, width: 0.13, height: 0.01 });
+    expect(normalizeEvidenceProjection({ ...legacy, processor_version: 'agent-native-text-reading-1.2.0' })).toEqual({ ...legacy, processor_version: 'agent-native-text-reading-1.2.0' });
+  });
+});
 
 describe('formatPendingAgentActivity', () => {
   it('uses the durable Agent Log activity', () => {

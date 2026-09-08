@@ -8,13 +8,24 @@ export async function loadCaseBundle(caseId, fetcher = fetch) {
   const payloads = await Promise.all(responses.map(function (response) { return response.json(); }));
   const report = payloads[1];
   const findings = payloads[2].findings;
-  const evidenceByReference = Object.fromEntries(payloads[6].evidence.map(function (evidence) {
+  const evidenceByReference = Object.fromEntries(payloads[6].evidence.map(function (rawEvidence) {
+    const evidence = normalizeEvidenceProjection(rawEvidence);
     return [base + '/evidence/' + evidence.evidence_id, evidence];
   }));
   return {
     caseRecord: payloads[0], report, findings,
     issues: payloads[3].issues, applicationData: payloads[4], documents: payloads[5].documents,
     evidenceByReference, agentLog: payloads[7],
+  };
+}
+
+export function normalizeEvidenceProjection(evidence) {
+  if (evidence.evidence_type !== 'page_region' || evidence.extraction_method !== 'agent_native_text_reading' ||
+      evidence.processor_version !== 'agent-native-text-reading-1.1.0') return evidence;
+  const region = evidence.normalized_region;
+  return {
+    ...evidence,
+    normalized_region: { ...region, y: Math.max(0, Math.min(1 - region.height, 1 - region.y - region.height)) },
   };
 }
 

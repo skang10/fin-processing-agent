@@ -73,7 +73,7 @@ export function resolveEvidenceSource(
 }
 
 export const AGENT_OCR_READING_VERSION = "agent-ocr-reading-1.0.0";
-export const AGENT_NATIVE_TEXT_READING_VERSION = "agent-native-text-reading-1.1.0";
+export const AGENT_NATIVE_TEXT_READING_VERSION = "agent-native-text-reading-1.2.0";
 
 const PageParameters = {
   document_version_id: Type.String({ minLength: 1, maxLength: 64 }),

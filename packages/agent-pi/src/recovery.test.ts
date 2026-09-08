@@ -73,7 +73,7 @@ describe("native-text evidence geometry", () => {
       "EUR 2980.00",
     )).toEqual({
       extractionMethod: "agent_native_text_reading",
-      processorVersion: "agent-native-text-reading-1.1.0",
+      processorVersion: "agent-native-text-reading-1.2.0",
       region,
     });
   });
