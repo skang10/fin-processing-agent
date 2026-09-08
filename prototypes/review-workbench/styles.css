@@ -196,6 +196,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .button:disabled { cursor: default; opacity: .5; }
 .button.primary { border-color: var(--accent); background: var(--accent); color: #fff; }
 .button.primary:hover:not(:disabled) { border-color: var(--accent-dark); background: var(--accent-dark); }
+.button.danger { border-color: var(--danger); background: var(--danger); color: #fff; }
+.button.danger:hover:not(:disabled) { border-color: #8f1d14; background: #8f1d14; }
 .button.quiet { background: #fff; }
 .button.full { width: 100%; margin-top: 10px; }
 .button.square { width: 34px; min-height: 32px; padding: 0; }
@@ -333,6 +335,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .confirmation-details dd { margin: 0; color: var(--ink); font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: right; }
 .confirmation-actions { margin-top: 22px; display: flex; justify-content: flex-end; gap: 9px; }
 .confirmation-actions .button { min-width: 104px; margin: 0; }
+.stop-confirmation-dialog .confirmation-icon { background: var(--danger-soft); color: var(--danger); font-size: 14px; }
+.stop-confirmation-dialog .confirmation-copy > span { color: var(--danger); }
 .agent-run-dialog > header { min-height: 70px; padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; }
 .agent-run-dialog > header span { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
 .agent-run-dialog h2 { margin: 0; font-size: 18px; }

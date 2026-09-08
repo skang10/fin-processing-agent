@@ -305,12 +305,34 @@ function confirmPaidAgentRun(model) {
   });
 }
 
+function confirmAgentStop() {
+  const dialog = document.querySelector('#stop-agent-confirmation');
+  return new Promise(function (resolve) {
+    const confirm = document.querySelector('#confirm-agent-stop');
+    const cancel = document.querySelector('#cancel-agent-stop');
+    const finish = function (accepted) {
+      confirm.removeEventListener('click', accept);
+      cancel.removeEventListener('click', decline);
+      dialog.removeEventListener('cancel', escape);
+      dialog.close();
+      resolve(accepted);
+    };
+    const accept = function () { finish(true); };
+    const decline = function () { finish(false); };
+    const escape = function (event) { event.preventDefault(); finish(false); };
+    confirm.addEventListener('click', accept);
+    cancel.addEventListener('click', decline);
+    dialog.addEventListener('cancel', escape);
+    dialog.showModal();
+  });
+}
+
 function openCompletedAgentReport(created) {
   window.location.search = '?case_id=' + encodeURIComponent(created.case_id) + '&queue_view=review';
 }
 
 async function requestAgentStop(caseId, button, onStopped) {
-  if (!window.confirm('Stop this Agent review? Any model request already in progress may still complete and count toward the recorded cost.')) return;
+  if (!await confirmAgentStop()) return;
   button.disabled = true;
   button.textContent = 'Stopping…';
   try {
