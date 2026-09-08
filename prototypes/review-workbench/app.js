@@ -228,6 +228,7 @@ function setDemoPreview(prepared) {
   document.querySelector('#demo-launch').hidden = false;
   document.querySelector('#persisted-agent-log').hidden = true;
   document.querySelector('#demo-preview').classList.remove('running', 'completed');
+  document.querySelector('#demo-preview').classList.remove('persisted-log');
   document.querySelector('.agent-model-field').hidden = false;
   document.querySelector('#pending-agent-log').hidden = true;
   document.querySelector('#run-agent-review').hidden = false;
@@ -415,6 +416,7 @@ function leaveDemoPreview() {
   document.querySelector('#demo-launch').hidden = true;
   document.querySelector('#pending-agent-log').innerHTML = '';
   document.querySelector('#persisted-agent-log').hidden = false;
+  document.querySelector('#demo-preview').classList.add('persisted-log');
   setCaseTabsAvailability(true);
 }
 
