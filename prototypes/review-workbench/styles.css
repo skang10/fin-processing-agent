@@ -611,7 +611,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .claim-card { min-height: 58px; padding: 9px 2px; border-bottom: 1px solid var(--line); background: #fff; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; }
 .claim-card:first-of-type { border-top: 1px solid var(--line); }
 .claim-copy { min-width: 0; display: grid; gap: 3px; }
-.claim-copy > span { color: var(--muted); font-size: 8px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.claim-copy > span { color: var(--muted); font-size: 8px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .claim-head { display: flex; justify-content: space-between; align-items: center; }
 .claim-head span { color: var(--muted); font-size: 8px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 .claim-head small { color: var(--quiet); font-size: 8px; }
