@@ -675,34 +675,21 @@ function applicationData(activeIssue) {
 function renderIssueList() {
   const target = document.querySelector('#issue-list');
   if (issues.length === 0) { target.innerHTML = ''; return; }
-  const issue = issues[current];
-  const decision = decisions[current];
-  const displayTitle = issue.title || 'New issue';
-  const selector = issues.length > 1
-    ? '<label class="issue-picker"><span>Issue ' + (current + 1) + ' of ' + issues.length + '</span><select id="issue-select" aria-label="Select issue">' + issues.map(function (candidate, index) {
-      return '<option value="' + index + '" ' + (index === current ? 'selected' : '') + '>' + String(index + 1).padStart(2, '0') + ' · ' + escapeHtml(candidate.title || 'New issue') + ' — ' + escapeHtml(outcomeLabel(decisions[index])) + '</option>';
-    }).join('') + '</select></label>'
-    : '<div class="issue-current"><strong>' + escapeHtml(displayTitle) + '</strong><small>' + (issue.origin === 'human' ? 'Human created' : 'System generated') + '</small></div>';
-  target.innerHTML = '<div class="issue-switcher">' + selector + '<span class="issue-switcher-state">' + escapeHtml(outcomeLabel(decision)) + '</span>' +
-    (caseReadOnly || decision === 'dismissed' || editing || confirming || ignoring ? '' : '<button class="issue-edit" id="issue-switcher-edit">' + (decision === 'confirmed' ? 'Edit request' : 'Edit') + '</button>') + '</div>';
-  const select = document.querySelector('#issue-select');
-  if (select) {
-    select.addEventListener('change', function () {
-      current = Number(select.value);
+  target.innerHTML = '<div class="issue-card-rail ' + (issues.length === 1 ? 'single' : '') + '">' + issues.map(function (issue, index) {
+    const decision = decisions[index];
+    return '<button class="issue-card ' + (index === current ? 'active' : '') + '" data-issue-card="' + index + '" aria-pressed="' + (index === current) + '">' +
+      '<span class="issue-card-number">' + String(index + 1).padStart(2, '0') + '</span><span class="issue-card-copy"><strong>' + escapeHtml(issue.title || 'New issue') + '</strong><small>' +
+      (issue.origin === 'human' ? 'Human created' : 'System generated') + '</small></span><em class="' + decision + '">' + escapeHtml(outcomeLabel(decision)) + '</em></button>';
+  }).join('') + '</div>';
+  document.querySelectorAll('[data-issue-card]').forEach(function (card) {
+    card.addEventListener('click', function () {
+      current = Number(card.dataset.issueCard);
       editing = false;
       confirming = false;
       ignoring = false;
       render();
     });
-  }
-  const edit = document.querySelector('#issue-switcher-edit');
-  if (edit) {
-    edit.addEventListener('click', function () {
-      confirming = decisions[current] === 'confirmed';
-      editing = !confirming;
-      render();
-    });
-  }
+  });
 }
 
 function renderThumbnails(activePage) {
@@ -775,7 +762,8 @@ function issueDetail(issue) {
   const recordedOutcome = outcome === 'pending' ? '' : '<div class="recorded-outcome"><span class="outcome-icon">' +
     (outcome === 'dismissed' ? '×' : '✓') + '</span><span><small>Recorded outcome</small><strong>' + escapeHtml(outcomeLabel(outcome)) + '</strong></span>' +
     (!caseReadOnly ? '<button id="change-outcome">Reopen issue</button>' : '') + '</div>';
-  return '<div class="review-prompt"><p>' + escapeHtml(issue.why) + '</p></div>' +
+  const editAction = caseReadOnly || outcome === 'dismissed' ? '' : '<button id="detail-edit">' + (outcome === 'confirmed' ? 'Edit request' : 'Edit issue') + '</button>';
+  return '<div class="review-prompt"><div class="review-prompt-head"><span>What needs review</span>' + editAction + '</div><p>' + escapeHtml(issue.why) + '</p></div>' +
     '<div class="claim-comparison"><div class="block-label"><span>Evidence reviewed</span></div>' +
     reviewedEvidence + '</div>' + recordedOutcome;
 }
@@ -860,9 +848,15 @@ function wireIssueActions() {
   const confirm = document.querySelector('#confirm');
   const dismiss = document.querySelector('#dismiss');
   const change = document.querySelector('#change-outcome');
+  const edit = document.querySelector('#detail-edit');
   if (confirm) confirm.addEventListener('click', function () { confirming = true; ignoring = false; render(); });
   if (dismiss) dismiss.addEventListener('click', function () { ignoring = true; confirming = false; render(); });
   if (change) change.addEventListener('click', function () { void reopenCurrentIssue(); });
+  if (edit) edit.addEventListener('click', function () {
+    confirming = decisions[current] === 'confirmed';
+    editing = !confirming;
+    render();
+  });
   ['#cancel', '#cancel-bottom'].forEach(function (selector) {
     const button = document.querySelector(selector);
     if (button) button.addEventListener('click', function () {
