@@ -374,7 +374,7 @@ async function requestAgentRestart(caseId, button) {
   button.textContent = 'Restarting…';
   try {
     const result = await restartAgentReview(caseId);
-    if (!result.restarted) throw new Error('Agent review can no longer be restarted after human review activity');
+    if (!result.restarted) throw new Error('Agent review cannot be restarted from its current state');
     window.location.search = '?case_id=' + encodeURIComponent(result.case_id) + '&queue_view=review';
   } catch (error) {
     button.disabled = false;
@@ -1269,6 +1269,8 @@ document.querySelector('#run-agent-review').addEventListener('click', async func
     toast(error instanceof Error ? error.message : 'Agent review could not be started');
     if (createdCase) {
       document.querySelector('#demo-preview').classList.remove('running');
+      window.history.replaceState({}, '', '?case_id=' + encodeURIComponent(createdCase.case_id) + '&queue_view=review');
+      await loadCaseFromApi();
     } else {
       document.querySelector('#demo-preview').classList.remove('running');
       document.querySelector('.agent-model-field').hidden = false;
