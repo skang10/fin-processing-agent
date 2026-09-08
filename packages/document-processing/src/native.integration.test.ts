@@ -13,6 +13,8 @@ describe("PDF Inspector native module", () => {
       pdfType: "text_based",
     });
     expect(result.pages[0]?.nativeMarkdown).toContain("Synthetic demo");
+    expect(result.pages[0]?.nativeSpans.length).toBeGreaterThan(0);
+    expect(result.pages[0]?.nativeSpans.some((span) => span.text.includes("Synthetic demo"))).toBe(true);
   });
 });
 

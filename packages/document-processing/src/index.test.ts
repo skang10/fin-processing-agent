@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
-import { PageContentSource, PdfType } from "@firecrawl/pdf-inspector";
+import { ItemType, PageContentSource, PdfType } from "@firecrawl/pdf-inspector";
 import sharp from "sharp";
 import { createHash } from "node:crypto";
 import { DocumentSandboxClient, FakeOcrEngine, PdfInspectorAdapter, PdfInspectorOcrAdapter, PdfiumPageRenderer, classifySyntheticDemoPages, cropPageRender, groupLogicalDocuments, prepareImageDocument, runSelectiveOcr, type BoundaryPrediction, type OcrEngine, type PageClassification, type PdfInspectorEngine } from "./index.js";
@@ -32,12 +32,17 @@ describe("PdfInspectorAdapter", () => {
       classify: async () => ({ pdfType: PdfType.Mixed, pageCount: 2, pagesNeedingOcr: [1], confidence: 0.7 }),
       extract: async () => ({
         pages: [
-          { page: 0, markdown: "native", nativeItems: [{ text: "native", x: 10, y: 20, width: 30, height: 8, itemType: "Text" }], needsOcr: false },
-          { page: 1, markdown: "", nativeItems: [], needsOcr: true, ocrReason: "no_text" },
+          { page: 0, markdown: "native", needsOcr: false },
+          { page: 1, markdown: "", needsOcr: true, ocrReason: "no_text" },
         ],
         pagesWithTables: [1], pagesWithColumns: [], pagesNeedingOcr: [2],
         ocrReasonsByPage: [{ page: 2, reasons: ["no_text"] }], isComplex: true,
       }),
+      positions: async () => [{
+        text: "native", x: 10, y: 20, width: 30, height: 8, page: 1, itemType: ItemType.Text,
+        font: "Helvetica", fontTag: "F1", fontSize: 12, isBold: false, isItalic: false,
+        isUnderline: false, isStrikeout: false,
+      }],
     };
     const result = await new PdfInspectorAdapter(engine).inspect(Buffer.from("fixture"), 144);
 
@@ -52,6 +57,7 @@ describe("PdfInspectorAdapter", () => {
     const engine: PdfInspectorEngine = {
       classify: async () => ({ pdfType: PdfType.TextBased, pageCount: 2, pagesNeedingOcr: [], confidence: 1 }),
       extract: async () => ({ pages: [], pagesWithTables: [], pagesWithColumns: [], pagesNeedingOcr: [], ocrReasonsByPage: [], isComplex: false }),
+      positions: async () => [],
     };
     await expect(new PdfInspectorAdapter(engine).inspect(Buffer.from("fixture")))
       .rejects.toThrow("inconsistent page counts");
