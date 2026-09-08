@@ -175,7 +175,7 @@ const DISPLAYS: Readonly<Record<string, {
 
 /** Registered display text for deterministic reason codes; shared by fake harness and fake model scripts. */
 export function attentionItemsForFindings(findings: readonly ReportFindingView[]): CaseReviewBriefCandidate["attention_items"] {
-  return findings.filter((finding) => finding.status !== "passed" && finding.status !== "not_applicable")
+  const items = findings.filter((finding) => finding.status !== "passed" && finding.status !== "not_applicable")
     .map((finding) => {
       const display = DISPLAYS[finding.reasonCode];
       if (!display) throw new Error(`No fake report fixture for ${finding.reasonCode}`);
@@ -184,6 +184,34 @@ export function attentionItemsForFindings(findings: readonly ReportFindingView[]
         references: [`finding:${finding.ruleId}`],
       };
     });
+  return composeDependentAttentionItems(items, findings);
+}
+
+/** Compose causally dependent findings into one reviewer task without changing either finding. */
+export function composeDependentAttentionItems(
+  items: readonly CaseReviewBriefCandidate["attention_items"][number][],
+  findings: readonly ReportFindingView[],
+): CaseReviewBriefCandidate["attention_items"] {
+  const missingDocument = findings.find((finding) => finding.reasonCode === "required_document_missing");
+  const unresolvedName = findings.find((finding) => finding.reasonCode === "person_name_unresolved");
+  if (!missingDocument || !unresolvedName) return [...items];
+
+  const missingReference = `finding:${missingDocument.ruleId}`;
+  const nameReference = `finding:${unresolvedName.ruleId}`;
+  const missingIndex = items.findIndex((item) => item.references.includes(missingReference));
+  const nameIndex = items.findIndex((item) => item.references.includes(nameReference));
+  if (missingIndex < 0 || nameIndex < 0 || missingIndex === nameIndex) return [...items];
+
+  return items.flatMap((item, index) => {
+    if (index === nameIndex) return [];
+    if (index !== missingIndex) return [item];
+    return [{
+      signal: "document_missing" as const,
+      suggested_action: "review_missing_document" as const,
+      description: "A required bank statement was not submitted, so the primary account-holder name could not be verified.",
+      references: [...new Set([...item.references, ...items[nameIndex]!.references])],
+    }];
+  });
 }
 
 export function reviewSummary(attentionItemCount: number): string {
@@ -238,7 +266,10 @@ export function verifyCaseReviewBrief(candidate: unknown, context: CaseReviewCon
   const prose = [candidate.summary, ...candidate.attention_items.map((item) => item.description)].join("\n");
   const policyViolation = PROHIBITED_REPORT_PATTERNS.find(({ pattern }) => pattern.test(prose));
   if (policyViolation) return { verified: false, reason: policyViolation.reason };
-  return { verified: true, brief: candidate };
+  return {
+    verified: true,
+    brief: { ...candidate, attention_items: composeDependentAttentionItems(candidate.attention_items, context.findings) },
+  };
 }
 
 export async function runVerifiedReport(harness: CaseReviewAgentHarness, context: CaseReviewContext): Promise<VerifiedReportOutcome> {

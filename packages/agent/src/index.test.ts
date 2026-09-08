@@ -24,6 +24,41 @@ describe("Case Review Brief verification", () => {
     expect(result.originalSubmission).toEqual(result.verified ? result.brief : undefined);
   });
 
+  it("composes a missing document and its dependent unresolved name into one review item", () => {
+    const dependentContext: CaseReviewContext = {
+      resultRevisionId: context().resultRevisionId,
+      findings: [
+        { ruleId: "VAL_DOC_COMPLETENESS_001", status: "failed", reasonCode: "required_document_missing" },
+        { ruleId: "VAL_NAME_CONSISTENCY_001", status: "inconclusive", reasonCode: "person_name_unresolved" },
+      ],
+      recommendedDisposition: "additional_documents_needed",
+      allowedReferences: new Set(["finding:VAL_DOC_COMPLETENESS_001", "finding:VAL_NAME_CONSISTENCY_001"]),
+    };
+    const candidate = {
+      schema_version: "1.0.0" as const,
+      result_revision_id: dependentContext.resultRevisionId,
+      report_status: "ready" as const,
+      summary: "A missing document requires review.",
+      attention_items: [
+        { signal: "document_missing" as const, suggested_action: "review_missing_document" as const, description: "A required bank statement was not submitted.", references: ["finding:VAL_DOC_COMPLETENESS_001"] },
+        { signal: "evidence_ambiguous" as const, suggested_action: "inspect_evidence" as const, description: "The account-holder name could not be verified.", references: ["finding:VAL_NAME_CONSISTENCY_001"] },
+      ],
+    };
+
+    expect(verifyCaseReviewBrief(candidate, dependentContext)).toEqual({
+      verified: true,
+      brief: {
+        ...candidate,
+        attention_items: [{
+          signal: "document_missing",
+          suggested_action: "review_missing_document",
+          description: "A required bank statement was not submitted, so the primary account-holder name could not be verified.",
+          references: ["finding:VAL_DOC_COMPLETENESS_001", "finding:VAL_NAME_CONSISTENCY_001"],
+        }],
+      },
+    });
+  });
+
   it("rejects schema-invalid output", () => {
     expect(verifyCaseReviewBrief({ summary: "Incomplete" }, context())).toEqual({ verified: false, reason: "schema_rejected" });
   });
