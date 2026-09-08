@@ -390,6 +390,7 @@ It is archived source material only and is marked `Superseded`. The approved own
 93. The issue-card rail uses a maximum of three cards per row, with a fourth issue wrapping to a new row instead of being clipped or requiring horizontal scrolling. One or two cards retain their consistent maximum 220 px width, while three cards share the available row width and may shrink as far as 140 px in a narrow review split. The Issues workspace and detail scroller explicitly prevent horizontal overflow. Evidence field names are now rendered as secondary 11 px labels rather than oversized 15 px display text, keeping the section title above them in the visual hierarchy.
 94. The Review Web product label is now the plain-language `Document Review`, with a matching `DR` mark and browser title. The redundant `Review workbench` subtitle and the former `FinDoc` label were removed; case identifiers retain their existing `FD-` prefix because those are persisted identifiers rather than interface branding.
 95. Evidence metadata labels such as `Application data`, `Document`, and `No page evidence` now render in their source sentence case instead of forced uppercase, with normal letter spacing and lighter emphasis.
+96. The zero-issue view now presents one concise empty state—`No issues found` with guidance to continue or add an issue manually—instead of leaving the detail area visually empty or repeating a second footer message.
 
 ## Target Specification Set
 

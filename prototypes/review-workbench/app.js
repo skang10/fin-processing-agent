@@ -552,9 +552,7 @@ function render() {
   document.querySelector('#previous').disabled = current === 0 || issues.length === 0;
   document.querySelector('#next').disabled = current >= issues.length - 1;
   document.querySelector('#issue-content').innerHTML = issues.length === 0
-    ? '<p class="empty-state">' + (apiReport?.failure_reason === 'agent_not_run'
-      ? 'No issues recorded. Adding one starts human review and disables Agent review.'
-      : 'No Agent-raised issues for this case. Its deterministic checked facts stay in the Agent report.') + '</p>'
+    ? '<div class="issue-empty"><strong>No issues found</strong><span>Continue the review or add an issue manually.</span></div>'
     : editing ? correctionForm(issue) : confirming ? confirmationForm(issue) : ignoring ? ignoreForm() : issueDetail(issue);
   renderIssueFooter();
   renderSource(issue);
@@ -568,7 +566,7 @@ function renderIssueFooter() {
   const formOpen = editing || confirming || ignoring;
   document.querySelector('.issue-footer').classList.toggle('form-open', formOpen);
   if (issues.length === 0) {
-    footer.innerHTML = '<div class="footer-outcome">No issues to review</div>';
+    footer.innerHTML = '';
     return;
   }
   if (formOpen) {
