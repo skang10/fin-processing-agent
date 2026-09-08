@@ -262,6 +262,23 @@
     </div>
   </dialog>
 
+  <dialog id="restart-agent-confirmation" class="confirmation-dialog" aria-labelledby="restart-agent-title">
+    <div class="confirmation-icon" aria-hidden="true">↻</div>
+    <div class="confirmation-copy">
+      <span>Agent review stopped</span>
+      <h2 id="restart-agent-title">Restart the Agent?</h2>
+      <p>A new run will continue this case using its durable review state.</p>
+    </div>
+    <dl class="confirmation-details">
+      <div><dt>Previous Agent Log</dt><dd>Preserved</dd></div>
+      <div><dt>Recorded cost</dt><dd>Preserved, not reset</dd></div>
+    </dl>
+    <div class="confirmation-actions">
+      <button type="button" class="button quiet" id="cancel-agent-restart">Cancel</button>
+      <button type="button" class="button primary" id="confirm-agent-restart">Restart Agent</button>
+    </div>
+  </dialog>
+
   <div id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="app.js"></script>
 </body>

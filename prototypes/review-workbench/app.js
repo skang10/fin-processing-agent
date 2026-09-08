@@ -327,6 +327,28 @@ function confirmAgentStop() {
   });
 }
 
+function confirmAgentRestart() {
+  const dialog = document.querySelector('#restart-agent-confirmation');
+  return new Promise(function (resolve) {
+    const confirm = document.querySelector('#confirm-agent-restart');
+    const cancel = document.querySelector('#cancel-agent-restart');
+    const finish = function (accepted) {
+      confirm.removeEventListener('click', accept);
+      cancel.removeEventListener('click', decline);
+      dialog.removeEventListener('cancel', escape);
+      dialog.close();
+      resolve(accepted);
+    };
+    const accept = function () { finish(true); };
+    const decline = function () { finish(false); };
+    const escape = function (event) { event.preventDefault(); finish(false); };
+    confirm.addEventListener('click', accept);
+    cancel.addEventListener('click', decline);
+    dialog.addEventListener('cancel', escape);
+    dialog.showModal();
+  });
+}
+
 function openCompletedAgentReport(created) {
   window.location.search = '?case_id=' + encodeURIComponent(created.case_id) + '&queue_view=review';
 }
@@ -347,7 +369,7 @@ async function requestAgentStop(caseId, button, onStopped) {
 }
 
 async function requestAgentRestart(caseId, button) {
-  if (!window.confirm('Restart this Agent review as a new run? The previous Agent Log and recorded cost will be preserved.')) return;
+  if (!await confirmAgentRestart()) return;
   button.disabled = true;
   button.textContent = 'Restarting…';
   try {
@@ -363,14 +385,15 @@ async function requestAgentRestart(caseId, button) {
 
 function agentRunMarkup(log, modelLabel, state, costLabel) {
   const events = log?.events || [];
+  const acceptedEvent = '<div class="agent-run-event' + (!events.length && state === 'Running' ? ' current' : '') + '"><i></i><div><strong>Agent review requested</strong><small>Case accepted and persisted</small></div></div>';
   return '<header class="agent-run-header"><div class="agent-run-identity"><span class="agent-run-state"><i></i>' + escapeHtml(state) + '</span><strong>Agent review</strong></div>' +
     '<div class="agent-run-summary"><div><span>Model</span><strong title="' + escapeHtml(modelLabel) + '">' + escapeHtml(modelLabel) + '</strong></div>' +
     '<div><span>Cost</span><strong>' + escapeHtml(costLabel || 'Calculating') + '</strong></div></div></header>' +
-    '<div class="agent-run-timeline">' + (events.length ? events.map(function (event, index) {
+    '<div class="agent-run-timeline">' + acceptedEvent + (events.length ? events.map(function (event, index) {
       const latest = index === events.length - 1 && state === 'Running';
       return '<div class="agent-run-event' + (latest ? ' current' : '') + '"><i></i><div><strong>' + escapeHtml(formatPendingAgentActivity(event)) + '</strong>' +
         (event.tool_label ? '<small>' + escapeHtml(event.tool_label) + '</small>' : '') + '</div></div>';
-    }).join('') : '<div class="agent-run-event current"><i></i><div><strong>Starting Agent session…</strong><small>Case accepted and persisted</small></div></div>') + '</div>';
+    }).join('') : '') + '</div>';
 }
 
 function renderPendingAgentLog(log, modelLabel, completedCase, runningCase) {
