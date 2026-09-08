@@ -224,7 +224,6 @@ function setDemoPreview(prepared) {
   document.querySelectorAll('.case-identity strong').forEach(function (element) { element.textContent = prepared.applicantDisplayName; });
   document.querySelector('.status-badge').textContent = 'Not reviewed';
   document.querySelector('.case-progress').hidden = false;
-  document.querySelector('#case-agent-trigger').hidden = true;
   document.querySelector('#demo-launch').hidden = false;
   document.querySelector('#persisted-agent-log').hidden = true;
   document.querySelector('#demo-preview').classList.remove('running', 'completed');
@@ -399,13 +398,33 @@ function agentRunMarkup(log, modelLabel, state, costLabel) {
     }).join('') : '') + '</div>';
 }
 
+function replaceAgentRunMarkup(host, markup) {
+  const previous = host.querySelector('.agent-run-timeline');
+  const previousScrollTop = previous ? previous.scrollTop : 0;
+  const followLatest = !previous
+    ? host.dataset.followLatest !== 'false'
+    : previous.scrollHeight - previous.clientHeight - previous.scrollTop <= 32;
+  host.dataset.followLatest = String(followLatest);
+  host.innerHTML = markup;
+  const timeline = host.querySelector('.agent-run-timeline');
+  if (!timeline) return;
+  timeline.addEventListener('scroll', function () {
+    host.dataset.followLatest = String(timeline.scrollHeight - timeline.clientHeight - timeline.scrollTop <= 32);
+  }, { passive: true });
+  requestAnimationFrame(function () {
+    timeline.scrollTop = followLatest
+      ? timeline.scrollHeight
+      : Math.min(previousScrollTop, Math.max(0, timeline.scrollHeight - timeline.clientHeight));
+  });
+}
+
 function renderPendingAgentLog(log, modelLabel, completedCase, runningCase) {
   const panel = document.querySelector('#pending-agent-log');
   panel.hidden = false;
   const cost = log?.estimated_cost ? log.estimated_cost.currency + ' ' + log.estimated_cost.amount : '';
-  panel.innerHTML = agentRunMarkup(log, modelLabel, completedCase ? 'Completed' : 'Running', completedCase ? cost : '') +
+  replaceAgentRunMarkup(panel, agentRunMarkup(log, modelLabel, completedCase ? 'Completed' : 'Running', completedCase ? cost : '') +
     (completedCase ? '<div class="agent-run-complete"><i>✓</i><strong>Report ready</strong></div>' : '') +
-    (runningCase ? '<button class="button quiet agent-stop" id="stop-agent-review">Stop Agent review</button>' : '');
+    (runningCase ? '<button class="button quiet agent-stop" id="stop-agent-review">Stop Agent review</button>' : ''));
   if (runningCase) document.querySelector('#stop-agent-review').addEventListener('click', async function (event) {
     await requestAgentStop(runningCase.case_id, event.currentTarget, function () { demoStopRequested = true; });
   });
@@ -460,7 +479,6 @@ async function followAgentRun(created, modelLabel) {
 function leaveDemoPreview() {
   preparedDemoCase = null;
   document.querySelector('.case-progress').hidden = false;
-  document.querySelector('#case-agent-trigger').hidden = false;
   document.querySelector('#demo-launch').hidden = true;
   document.querySelector('#pending-agent-log').innerHTML = '';
   document.querySelector('#persisted-agent-log').hidden = false;
@@ -1141,9 +1159,6 @@ document.querySelectorAll('.filter').forEach(function (button) {
 document.querySelector('#queue-nav').addEventListener('click', function () { void refreshQueue('review'); });
 document.querySelector('#changes-nav').addEventListener('click', function () { void refreshQueue('changes_requested'); });
 document.querySelector('#completed-nav').addEventListener('click', function () { void refreshQueue('completed'); });
-const caseAgentRun = document.querySelector('#case-agent-run');
-document.querySelector('#case-agent-trigger').addEventListener('click', function () { renderAgentLog(); caseAgentRun.showModal(); });
-document.querySelector('#close-agent-run').addEventListener('click', function () { caseAgentRun.close(); });
 document.querySelector('#back').addEventListener('click', function () { void refreshQueue(activeQueueView); });
 document.querySelector('#previous').addEventListener('click', function () { if (current > 0) { current -= 1; editing = false; confirming = false; render(); } });
 document.querySelector('#next').addEventListener('click', function () { if (current < issues.length - 1) { current += 1; editing = false; confirming = false; render(); } });
@@ -1300,6 +1315,12 @@ function activateCaseTab(view) {
   if (requested?.disabled) return;
   document.querySelectorAll('[data-case-tab]').forEach(function (button) { button.classList.toggle('active', button.dataset.caseTab === view); });
   document.querySelectorAll('[data-case-view]').forEach(function (panel) { panel.classList.toggle('active', panel.dataset.caseView === view); });
+  if (view === 'agent-log') requestAnimationFrame(function () {
+    document.querySelectorAll('[data-case-view="agent-log"].active .pending-agent-log, [data-case-view="agent-log"].active .agent-run-events').forEach(function (host) {
+      const timeline = host.querySelector('.agent-run-timeline');
+      if (timeline && host.dataset.followLatest !== 'false') timeline.scrollTop = timeline.scrollHeight;
+    });
+  });
   if (view === 'submit') renderSummary();
 }
 document.querySelectorAll('[data-case-tab]').forEach(function (button) {
@@ -1503,7 +1524,7 @@ function renderAgentLog() {
       ? '<div class="agent-log-outcome ready"><span>Report ready</span></div>' : '';
   const eventMarkup = agentRunMarkup(apiAgentLog, modelLabel, state, cost) + reportOutcome +
     (apiCaseRecord?.lifecycle === 'processing' ? '<button class="button quiet agent-stop inline-agent-stop">Stop Agent review</button>' : '');
-  document.querySelectorAll('.agent-run-events').forEach(function (element) { element.innerHTML = eventMarkup; });
+  document.querySelectorAll('.agent-run-events').forEach(function (element) { replaceAgentRunMarkup(element, eventMarkup); });
   document.querySelectorAll('.inline-agent-stop').forEach(function (button) {
     button.addEventListener('click', async function () {
       await requestAgentStop(apiCaseRecord.case_id, button, async function () { await loadCaseFromApi(); });
@@ -1551,6 +1572,16 @@ async function loadCaseFromApi() {
     apiDocuments = bundle.documents;
     apiEvidenceByReference = bundle.evidenceByReference;
     apiAgentLog = bundle.agentLog;
+    if (sourceView === 'document' && apiDocuments[0]) {
+      const documentRecord = apiDocuments[0];
+      const pageNumber = Math.min(Math.max(sourceOverride?.pageNumber || 1, 1), documentRecord.page_count);
+      sourceOverride = {
+        name: documentRecord.submitted_filename,
+        page: 'Page ' + pageNumber + ' of ' + documentRecord.page_count,
+        pageNumber, document: documentRecord, kind: pagePaperKind(pageNumber),
+      };
+      activeEvidenceRegion = null;
+    }
     issues = issueRecords.map(function (record, index) {
       return issuePresentation(record, findings.find(function (finding) { return finding.rule_id === record.code; }), index);
     });
@@ -1570,7 +1601,6 @@ async function loadCaseFromApi() {
     document.querySelector('[data-case-tab="issues"] span').textContent = String(issues.length);
     document.querySelector('#create-issue').hidden = caseReadOnly;
     document.querySelectorAll('.case-action').forEach(function (button) { button.hidden = caseReadOnly; });
-    document.querySelector('#case-agent-trigger strong').textContent = report.availability === 'ready' ? 'Generated review report' : 'Report unavailable';
     renderApiReport(report);
     renderAgentLog();
     render();

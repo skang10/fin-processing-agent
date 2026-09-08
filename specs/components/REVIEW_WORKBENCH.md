@@ -2,7 +2,7 @@
 
 Document ID: `UI`
 
-Version: 3.8.0
+Version: 3.8.1
 
 Status: Approved
 
@@ -312,7 +312,7 @@ The workbench presents `clear_for_downstream` as **Complete document review** so
 
 `UI-REQ-172` The synthetic demonstration may generate a not-yet-submitted demo case view containing only its application data and original source document. That view must not claim that an Agent report, finding, issue, Checked Fact, or durable Agent activity exists before the user starts the processing run.
 
-`UI-REQ-173` Before starting a generated synthetic demo case, the workbench may offer only configuration-allowlisted Agent models, must select the configured evaluated default, and must identify whether the selection can incur external-model cost. Starting a paid model must require an explicit confirmation that names the model and per-case cost ceiling. After acceptance, the workbench must poll and show the bounded persisted Agent log while processing, then load and select the verified Agent Report in place without requiring a browser refresh, or retain Agent Log as the selected view for an explicit unavailable state. The Agent Log presentation and selected model must remain continuous across that transition; cost may be shown as pending while processing and must resolve in the same location to the final persisted cumulative value. The selected model is immutable for the started run; this control is not runtime configuration editing.
+`UI-REQ-173` Before starting a generated synthetic demo case, the workbench may offer only configuration-allowlisted Agent models, must select the configured evaluated default, and must identify whether the selection can incur external-model cost. Starting a paid model must require an explicit confirmation that names the model and per-case cost ceiling. After acceptance, the workbench must poll and show the bounded persisted Agent log while processing, then load and select the verified Agent Report in place without requiring a browser refresh, or retain Agent Log as the selected view for an explicit unavailable state. While new activity arrives, the log must follow the newest event when the reviewer is already at its end, preserve the reviewer's position after they scroll into history, and always permit manual scrolling through the complete visible event list. The Agent Log presentation and selected model must remain continuous across that transition; cost may be shown as pending while processing and must resolve in the same location to the final persisted cumulative value. The selected model is immutable for the started run; this control is not runtime configuration editing.
 
 `UI-REQ-174` While a generated demo case is processing, the workbench must offer a confirmed **Stop Agent review** action. The stopped state must retain committed Agent-log activity and explain that an already in-flight provider request may still complete and count toward recorded cost; it must not expose a report unless a verified report was committed before the stop won the terminal-state race.
 
@@ -466,6 +466,7 @@ No unresolved Review Workbench boundary decision blocks review of this document.
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.8.1 | 2026-09-08 | Approved | Required a live Agent log to follow new activity only from its end while preserving deliberate reviewer scrolling through history. |
 | 3.8.0 | 2026-09-08 | Approved | Made processing-to-report transition automatic and kept one continuous Agent-log model, activity, and final-cost presentation. |
 | 3.7.0 | 2026-09-08 | Approved | Added stopped-run restart, manual-review fallback, and neutral skipped-Agent timeline presentation. |
 | 3.6.0 | 2026-09-08 | Approved | Added the confirmed cooperative stop action and durable stopped-state presentation for generated demo Agent runs. |
