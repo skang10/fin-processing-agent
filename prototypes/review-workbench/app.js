@@ -782,7 +782,6 @@ function issueDetail(issue) {
 function confirmationForm(issue) {
   const note = reviewNotes[current] || issue.recommendation || 'Please describe what information or document you need the applicant to provide.';
   return '<form id="confirmation-form" class="correct-form"><label>Requested change<textarea rows="5" required>' + escapeHtml(note) + '</textarea></label>' +
-    '<div class="revision-note"><strong>Applicant-facing draft</strong><span>Review and edit this message before confirming the issue. It is used only if you request changes.</span></div>' +
     '<div class="form-actions"><button type="button" class="button quiet" id="cancel-confirm-bottom">Cancel</button><button class="button primary">' + (decisions[current] === 'confirmed' ? 'Save requested change' : 'Save confirmation') + '</button></div></form>';
 }
 
