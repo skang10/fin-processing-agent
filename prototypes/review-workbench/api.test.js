@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createIssue, editIssue, formatPendingAgentActivity, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, normalizeEvidenceProjection, prepareDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, startDemoCase, startPersistedAgentReview, stopAgentReview, submitDemoCase, submitFinalReview } from './api.js';
+import { createIssue, demoCaseOptions, editIssue, formatPendingAgentActivity, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, normalizeEvidenceProjection, prepareDemoCase, prepareSelectedDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, startDemoCase, startPersistedAgentReview, stopAgentReview, submitDemoCase, submitFinalReview } from './api.js';
 
 describe('normalizeEvidenceProjection', () => {
   it('corrects only legacy native-text regions persisted with a bottom-left Y axis', () => {
@@ -114,6 +114,19 @@ describe('loadCaseBundle', () => {
 });
 
 describe('loadDemoCase', () => {
+  it('exposes all seven selectable synthetic scenarios', () => {
+    expect(demoCaseOptions).toHaveLength(7);
+    expect(demoCaseOptions.map(function (candidate) { return candidate.caseId; })).toContain('golden-007-instruction-with-income-conflict');
+  });
+
+  it('prepares the explicitly selected synthetic case', async () => {
+    const fetcher = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }));
+    await expect(prepareSelectedDemoCase('golden-004-missing-bank-evidence', fetcher)).resolves.toMatchObject({
+      caseId: 'golden-004-missing-bank-evidence', applicantDisplayName: 'Eva Sample', pageCount: 2,
+    });
+    expect(fetcher.mock.calls[0][0]).toContain('golden-004-missing-bank-evidence.pdf');
+  });
+
   it('prepares a frozen synthetic case without submitting it', async () => {
     const fetcher = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }));
 

@@ -44,6 +44,12 @@ export function formatQueueSummary(issueCount, workflowStatus) {
 
 export async function prepareDemoCase(fetcher = fetch, random = Math.random) {
   const selected = demoCases[Math.min(demoCases.length - 1, Math.floor(Math.max(0, random()) * demoCases.length))];
+  return prepareSelectedDemoCase(selected.caseId, fetcher);
+}
+
+export async function prepareSelectedDemoCase(caseId, fetcher = fetch) {
+  const selected = demoCases.find(function (candidate) { return candidate.caseId === caseId; });
+  if (!selected) throw new Error('Demo case is not available');
   const documentResponse = await fetcher(selected.documentUrl);
   if (!documentResponse.ok) throw new Error('Demo document could not be loaded');
   return { ...selected, documentBytes: await documentResponse.arrayBuffer() };
@@ -186,4 +192,19 @@ const demoCases = [
     pageCount: candidate.pageCount,
     documentUrl: candidate.documentUrl,
   };
+});
+
+const demoCasePresentation = {
+  'golden-001-native-clear': ['Clear documents', 'Complete native-text documents with consistent values.'],
+  'golden-002-employer-conflict': ['Employer mismatch', 'Payslip employer and salary-credit sender do not match.'],
+  'golden-003-multiple-review-issues': ['Multiple review issues', 'A four-page case containing more than one inconsistency.'],
+  'golden-004-missing-bank-evidence': ['Missing bank statement', 'Required bank-statement evidence is absent.'],
+  'golden-005-instruction-inert': ['Instruction-like content', 'Document text contains an untrusted instruction with no conflict.'],
+  'golden-006-scanned-adaptive-unavailable': ['Scanned documents', 'Image-based pages require text recognition and visual review.'],
+  'golden-007-instruction-with-income-conflict': ['Instruction and income mismatch', 'Untrusted instruction-like content plus an income inconsistency.'],
+};
+
+export const demoCaseOptions = demoCases.map(function (candidate) {
+  const presentation = demoCasePresentation[candidate.caseId];
+  return { caseId: candidate.caseId, title: presentation[0], description: presentation[1], pageCount: candidate.pageCount };
 });

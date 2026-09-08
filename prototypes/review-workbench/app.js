@@ -1,4 +1,4 @@
-import { createIssue, editIssue, formatPendingAgentActivity, loadCaseBundle, loadCaseQueue, loadDemoAgentModels, prepareDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, startDemoCase, startPersistedAgentReview, stopAgentReview, submitFinalReview } from './api.js';
+import { createIssue, demoCaseOptions, editIssue, formatPendingAgentActivity, loadCaseBundle, loadCaseQueue, loadDemoAgentModels, prepareSelectedDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, startDemoCase, startPersistedAgentReview, stopAgentReview, submitFinalReview } from './api.js';
 import { presentIssue } from './issue-presentation.js';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -287,6 +287,41 @@ function renderDemoAgentModels(configuration) {
 
 function selectedDemoAgentModel() {
   return demoAgentModels?.models.find(function (model) { return model.id === document.querySelector('#agent-model').value; });
+}
+
+function chooseDemoCase() {
+  const dialog = document.querySelector('#demo-case-picker');
+  const options = document.querySelector('#demo-case-options');
+  let selectedCaseId = demoCaseOptions[0].caseId;
+  const renderOptions = function () {
+    options.innerHTML = demoCaseOptions.map(function (candidate, index) {
+      const selected = candidate.caseId === selectedCaseId;
+      return '<button type="button" class="demo-case-option" role="option" aria-selected="' + selected + '" data-demo-case="' + escapeHtml(candidate.caseId) + '">' +
+        '<b>' + String(index + 1).padStart(2, '0') + '</b><span><strong>' + escapeHtml(candidate.title) + '</strong><small>' + escapeHtml(candidate.description) + '</small></span></button>';
+    }).join('');
+    options.querySelectorAll('[data-demo-case]').forEach(function (option) {
+      option.addEventListener('click', function () { selectedCaseId = option.dataset.demoCase; renderOptions(); });
+    });
+  };
+  renderOptions();
+  return new Promise(function (resolve) {
+    const confirm = document.querySelector('#confirm-demo-case');
+    const cancel = document.querySelector('#cancel-demo-case');
+    const finish = function (caseId) {
+      confirm.removeEventListener('click', accept);
+      cancel.removeEventListener('click', decline);
+      dialog.removeEventListener('cancel', escape);
+      dialog.close();
+      resolve(caseId);
+    };
+    const accept = function () { finish(selectedCaseId); };
+    const decline = function () { finish(null); };
+    const escape = function (event) { event.preventDefault(); finish(null); };
+    confirm.addEventListener('click', accept);
+    cancel.addEventListener('click', decline);
+    dialog.addEventListener('cancel', escape);
+    dialog.showModal();
+  });
 }
 
 function confirmPaidAgentRun(model) {
@@ -1342,10 +1377,12 @@ document.querySelector('#refresh-queue').addEventListener('click', async functio
 
 document.querySelector('#load-demo-case').addEventListener('click', async function (event) {
   const button = event.currentTarget;
+  const selectedCaseId = await chooseDemoCase();
+  if (!selectedCaseId) return;
   button.disabled = true;
   button.textContent = 'Generating case…';
   try {
-    const [prepared, models] = await Promise.all([prepareDemoCase(), loadDemoAgentModels()]);
+    const [prepared, models] = await Promise.all([prepareSelectedDemoCase(selectedCaseId), loadDemoAgentModels()]);
     renderDemoAgentModels(models);
     const created = await startDemoCase(prepared, models.default_model, fetch, false);
     for (let attempt = 0; attempt < 120; attempt += 1) {

@@ -343,6 +343,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .confirmation-actions .button { min-width: 104px; margin: 0; }
 .stop-confirmation-dialog .confirmation-icon { background: var(--danger-soft); color: var(--danger); font-size: 14px; }
 .stop-confirmation-dialog .confirmation-copy > span { color: var(--danger); }
+.demo-case-dialog { width: min(680px, calc(100vw - 32px)); }
+.demo-case-dialog .confirmation-copy { margin-top: 0; }
+.demo-case-options { max-height: min(480px, calc(100vh - 230px)); margin-top: 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; overflow-y: auto; }
+.demo-case-option { min-height: 76px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 6px; background: #fff; display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: start; gap: 9px; color: var(--ink); text-align: left; cursor: pointer; }
+.demo-case-option:hover { border-color: #aebbd8; background: #fafbff; }
+.demo-case-option[aria-selected="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px rgba(36,87,214,.08); }
+.demo-case-option > b { width: 22px; height: 22px; border: 1px solid var(--line-strong); border-radius: 50%; display: grid; place-items: center; color: var(--muted); font-size: 9px; }
+.demo-case-option[aria-selected="true"] > b { border-color: var(--accent); background: var(--accent); color: #fff; }
+.demo-case-option span { min-width: 0; display: grid; gap: 4px; }
+.demo-case-option strong { font-size: 11px; }
+.demo-case-option small { color: var(--muted); font-size: 9px; line-height: 1.4; }
+@media (max-width: 680px) { .demo-case-options { grid-template-columns: 1fr; } }
 .agent-log-meta { padding: 14px 16px; border: 1px solid var(--line); background: var(--surface-soft); display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(90px, .6fr) minmax(0, 1fr); gap: 18px; }
 .agent-log-meta div { min-width: 0; display: grid; gap: 4px; }
 .agent-log-meta span { color: var(--muted); font-size: 10px; }

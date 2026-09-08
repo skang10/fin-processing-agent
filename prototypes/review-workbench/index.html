@@ -244,6 +244,19 @@
     </div>
   </dialog>
 
+  <dialog id="demo-case-picker" class="confirmation-dialog demo-case-dialog" aria-labelledby="demo-case-title">
+    <div class="confirmation-copy">
+      <span>Synthetic demo data</span>
+      <h2 id="demo-case-title">Choose a demo case</h2>
+      <p>Select the document scenario you want to review.</p>
+    </div>
+    <div class="demo-case-options" id="demo-case-options" role="listbox" aria-label="Demo cases"></div>
+    <div class="confirmation-actions">
+      <button type="button" class="button quiet" id="cancel-demo-case">Cancel</button>
+      <button type="button" class="button primary" id="confirm-demo-case">Generate case</button>
+    </div>
+  </dialog>
+
   <dialog id="stop-agent-confirmation" class="confirmation-dialog stop-confirmation-dialog" aria-labelledby="stop-agent-title">
     <div class="confirmation-icon" aria-hidden="true">■</div>
     <div class="confirmation-copy">
