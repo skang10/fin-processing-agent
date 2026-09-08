@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { createIssue, editIssue, formatPendingAgentActivity, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, prepareDemoCase, resolveIssue, saveRequestedChange, submitDemoCase, submitFinalReview } from './api.js';
 
 describe('formatPendingAgentActivity', () => {
-  it('uses the durable Agent Log activity and includes its tool label', () => {
+  it('uses the durable Agent Log activity', () => {
     expect(formatPendingAgentActivity({ activity: 'Inspected document page', tool_label: 'render_page_region' }))
-      .toBe('Inspected document page · render_page_region');
+      .toBe('Inspected document page');
   });
 
   it('uses a safe fallback only when activity is absent', () => {

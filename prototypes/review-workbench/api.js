@@ -45,8 +45,7 @@ export async function loadDemoAgentModels(fetcher = fetch) {
 }
 
 export function formatPendingAgentActivity(event) {
-  const activity = event?.activity || 'Agent activity';
-  return event?.tool_label ? activity + ' · ' + event.tool_label : activity;
+  return event?.activity || 'Agent activity';
 }
 
 export async function startDemoCase(prepared, agentModel, fetcher = fetch) {

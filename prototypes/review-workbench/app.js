@@ -225,6 +225,10 @@ function setDemoPreview(prepared) {
   document.querySelector('#case-agent-trigger').hidden = true;
   document.querySelector('.review-panel').classList.add('previewing');
   document.querySelector('#demo-preview').hidden = false;
+  document.querySelector('#demo-preview').classList.remove('running', 'completed');
+  document.querySelector('#demo-run-title').textContent = 'Ready to run Agent review';
+  document.querySelector('#demo-run-description').textContent = 'This generated demo case currently contains only its application data and original document. Choose the Agent model, then start the review.';
+  document.querySelector('.agent-model-field').hidden = false;
   document.querySelector('#pending-agent-log').hidden = true;
   document.querySelector('#run-agent-review').hidden = false;
   document.querySelector('#agent-model').disabled = false;
@@ -263,9 +267,12 @@ function renderPendingAgentLog(log, modelLabel, completedCase) {
   const panel = document.querySelector('#pending-agent-log');
   panel.hidden = false;
   const events = (log?.events || []).slice(-6);
-  panel.innerHTML = '<strong>Agent Log · ' + escapeHtml(modelLabel) + '</strong>' +
-    (events.length ? events.map(function (event) { return '<span>' + escapeHtml(formatPendingAgentActivity(event)) + '</span>'; }).join('')
-      : '<span>Case accepted. Waiting for the Agent session to start…</span>') +
+  panel.innerHTML = '<header class="agent-run-header"><div><span class="agent-run-state"><i></i>' + (completedCase ? 'Completed' : 'Running') + '</span><strong>Agent review</strong></div><small>' + escapeHtml(modelLabel) + '</small></header>' +
+    '<div class="agent-run-timeline">' + (events.length ? events.map(function (event, index) {
+      const latest = index === events.length - 1 && !completedCase;
+      return '<div class="agent-run-event' + (latest ? ' current' : '') + '"><i></i><div><strong>' + escapeHtml(formatPendingAgentActivity(event)) + '</strong>' +
+        (event.tool_label ? '<small>' + escapeHtml(event.tool_label) + '</small>' : '') + '</div></div>';
+    }).join('') : '<div class="agent-run-event current"><i></i><div><strong>Starting Agent session…</strong><small>Case accepted and persisted</small></div></div>') + '</div>' +
     (completedCase ? '<div class="agent-run-complete"><strong>Review report is ready</strong><span>The Agent Log remains available with the persisted report.</span></div><button class="button primary" id="view-agent-report">View review report</button>' : '');
   if (completedCase) document.querySelector('#view-agent-report').addEventListener('click', function () { openCompletedAgentReport(completedCase); });
 }
@@ -285,6 +292,8 @@ async function followAgentRun(created, modelLabel) {
       document.querySelector('#demo-run-title').textContent = 'Agent review completed';
       document.querySelector('#demo-run-description').textContent = 'The persisted Agent Log below records how this run produced the review report.';
       document.querySelector('#agent-run-note').textContent = 'Open the report when you are ready. The Agent Log will remain available from the case.';
+      document.querySelector('#demo-preview').classList.remove('running');
+      document.querySelector('#demo-preview').classList.add('completed');
       renderPendingAgentLog(latestLog, modelLabel, created);
       return;
     }
@@ -1093,6 +1102,8 @@ document.querySelector('#run-agent-review').addEventListener('click', async func
   button.disabled = true;
   button.textContent = 'Agent review in progress…';
   document.querySelector('#agent-model').disabled = true;
+  document.querySelector('.agent-model-field').hidden = true;
+  document.querySelector('#demo-preview').classList.add('running');
   document.querySelector('#demo-run-title').textContent = 'Agent review in progress';
   document.querySelector('#demo-run-description').textContent = 'Follow the durable Agent activity below. This page will stay here when the report is ready.';
   try {
@@ -1104,10 +1115,13 @@ document.querySelector('#run-agent-review').addEventListener('click', async func
   } catch (error) {
     toast(error instanceof Error ? error.message : 'Agent review could not be started');
     if (createdCase) {
+      document.querySelector('#demo-preview').classList.remove('running');
       document.querySelector('#demo-run-title').textContent = 'Agent review status needs attention';
       document.querySelector('#demo-run-description').textContent = 'The case is already durable. Refresh or open the case from the queue; do not start a duplicate run.';
       document.querySelector('#agent-run-note').textContent = 'No retry was started automatically.';
     } else {
+      document.querySelector('#demo-preview').classList.remove('running');
+      document.querySelector('.agent-model-field').hidden = false;
       document.querySelector('#demo-run-title').textContent = 'Ready to run Agent review';
       document.querySelector('#demo-run-description').textContent = 'This generated demo case currently contains only its application data and original document. Choose the Agent model, then start the review.';
       button.disabled = false;
