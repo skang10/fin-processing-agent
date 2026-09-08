@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, AgentAttemptSupersededError, AgentInvocationConflictError, AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError, EMPTY_AGENT_CONSUMED_BUDGET,
   addConsumedBudget, evaluateAgentSessionCompatibility,
-  type AcceptedCase, type AgentAttemptStartReason, type AgentCommittedToolResult, type AgentConsumedBudget,
+  type AcceptedCase, type AgentAttemptStartReason, type AgentCommittedToolResult, type AgentConsumedBudget, type AgentReviewCommandService,
   type AgentLogSessionView, type AgentLogView, type AgentProducedReference, type AgentRecoverySnapshot,
   type AgentSessionConfiguration, type AgentSessionLifecyclePort, type AgentSessionMode, type AgentSessionStart,
   type AgentSessionTerminalResult, type AgentSessionTrace, type AgentStepOutcome, type AgentStepPhase,
@@ -56,7 +56,7 @@ export function createDatabase(databaseUrl: string) {
   return { client, db: drizzle(client) };
 }
 
-export class PostgresCaseCommandService implements CaseCommandService, ReviewCommandService {
+export class PostgresCaseCommandService implements CaseCommandService, ReviewCommandService, AgentReviewCommandService {
   constructor(
     private readonly db: ReturnType<typeof drizzle>,
     private readonly actorId: string,
@@ -158,6 +158,45 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
         result: accepted,
       });
       return accepted;
+    });
+  }
+
+  async stopAgentReview(caseId: string): Promise<{ caseId: string; runId: string; stopped: boolean }> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${caseId}, 0))`);
+      const [record] = await tx.select({ lifecycle: cases.lifecycle, runId: cases.currentRunId })
+        .from(cases).where(eq(cases.id, caseId)).limit(1);
+      if (!record?.runId) throw new CaseNotFoundError();
+      if (record.lifecycle !== "processing") return { caseId, runId: record.runId, stopped: false };
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${record.runId}, 0))`);
+      const [run] = await tx.select({ status: processingRuns.status }).from(processingRuns)
+        .where(and(eq(processingRuns.id, record.runId), eq(processingRuns.caseId, caseId))).limit(1);
+      if (!run || (run.status !== "created" && run.status !== "running")) return { caseId, runId: record.runId, stopped: false };
+
+      const [session] = await tx.select({ id: agentSessions.id })
+        .from(agentSessions).where(eq(agentSessions.runId, record.runId)).limit(1);
+      const completedAt = new Date();
+      if (session) {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${session.id}, 2))`);
+        const [lockedSession] = await tx.select({ terminalReason: agentSessions.terminalReason })
+          .from(agentSessions).where(eq(agentSessions.id, session.id)).limit(1);
+        if (lockedSession?.terminalReason) return { caseId, runId: record.runId, stopped: false };
+        await tx.update(agentSessionAttempts).set({
+          status: "terminal", terminalReason: "cancelled_by_workflow", completedAt,
+        }).where(and(eq(agentSessionAttempts.sessionId, session.id), eq(agentSessionAttempts.status, "running")));
+        await tx.update(agentSessions).set({ terminalReason: "cancelled_by_workflow", completedAt })
+          .where(and(eq(agentSessions.id, session.id), isNull(agentSessions.terminalReason)));
+      }
+      await tx.update(processingRuns).set({ status: "failed", completedAt }).where(eq(processingRuns.id, record.runId));
+      await tx.insert(processingRunTransitions).values({
+        id: randomUUID(), runId: record.runId, priorStatus: run.status, newStatus: "failed", reason: "reviewer_requested_agent_stop",
+      });
+      await tx.update(cases).set({ lifecycle: "processing_exception", version: sql`${cases.version} + 1` }).where(eq(cases.id, caseId));
+      await tx.insert(caseStateTransitions).values({
+        id: randomUUID(), caseId, runId: record.runId, priorState: "processing",
+        newState: "processing_exception", reason: "reviewer_requested_agent_stop", actor: this.actorId,
+      });
+      return { caseId, runId: record.runId, stopped: true };
     });
   }
 

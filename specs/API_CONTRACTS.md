@@ -2,7 +2,7 @@
 
 Document ID: `API`
 
-Version: 1.9.0
+Version: 1.10.0
 
 Status: Approved
 
@@ -150,6 +150,8 @@ GET  /api/v1/cases/{case_id}/events
 `API-REQ-101` The synthetic demo configuration route must return only configuration-allowlisted Agent model identifiers, reviewer-readable labels, paid-operation status, the configured default, and the fixed per-case cost ceiling when applicable; it must not expose credentials or provider configuration internals.
 
 `API-REQ-102` Synthetic multipart intake may bind one allowlisted Agent model to the created processing run. The selected model must participate in the idempotency request hash and immutable run configuration, and an unknown model must be rejected before durable acceptance. Model selection must not grant arbitrary provider or model routing authority.
+
+`API-REQ-103` `POST /cases/{case_id}/agent-review/stop` must request cooperative termination through the Workflow Coordinator and return the bound `case_id`, `run_id`, and whether this request stopped an active run. Repeating the command after terminal state must be safe and return `stopped: false`; the API must not claim that an already in-flight provider request was interrupted.
 
 ## 9. Case Review Query Routes
 
@@ -346,6 +348,7 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.10.0 | 2026-09-08 | Approved | Added the idempotent case-scoped command for cooperative Agent-review stopping. |
 | 1.9.0 | 2026-09-08 | Approved | Added bounded synthetic-demo Agent-model discovery and immutable allowlisted model selection at case intake. |
 | 1.8.0 | 2026-09-07 | Approved | Added the immutable reviewer-facing `case_code` to queue and case projections while retaining UUID-based routes. |
 | 1.7.0 | 2026-09-07 | Approved | Added bounded session duration, model-call count, and available token totals to the case Agent-log projection so evaluation capture can satisfy operational reporting without exposing model or document payloads. |

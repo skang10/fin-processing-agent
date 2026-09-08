@@ -36,6 +36,7 @@ const app = buildApp(
       ? { id, label: "Deterministic demo Agent", paid: false }
       : { id, label: id, paid: true, maximumCaseCostUsd: "0.25" }),
   },
+  commandService,
 );
 app.addHook("onClose", async () => client.end());
 

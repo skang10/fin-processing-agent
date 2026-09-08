@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createIssue, editIssue, formatPendingAgentActivity, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, prepareDemoCase, resolveIssue, saveRequestedChange, submitDemoCase, submitFinalReview } from './api.js';
+import { createIssue, editIssue, formatPendingAgentActivity, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, prepareDemoCase, resolveIssue, saveRequestedChange, stopAgentReview, submitDemoCase, submitFinalReview } from './api.js';
 
 describe('formatPendingAgentActivity', () => {
   it('uses the durable Agent Log activity', () => {
@@ -9,6 +9,14 @@ describe('formatPendingAgentActivity', () => {
 
   it('uses a safe fallback only when activity is absent', () => {
     expect(formatPendingAgentActivity({})).toBe('Agent activity');
+  });
+});
+
+describe('stopAgentReview', () => {
+  it('requests a durable workflow stop for the selected case', async () => {
+    const fetcher = vi.fn(async () => ({ ok: true, json: async () => ({ case_id: 'case-1', run_id: 'run-1', stopped: true }) }));
+    await expect(stopAgentReview('case/1', fetcher)).resolves.toMatchObject({ stopped: true });
+    expect(fetcher).toHaveBeenCalledWith('/api/v1/cases/case%2F1/agent-review/stop', { method: 'POST' });
   });
 });
 

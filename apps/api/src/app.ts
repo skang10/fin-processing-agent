@@ -28,8 +28,9 @@ import {
   ResolveIssueCommandSchema,
   ResolveIssueResultSchema,
   ReviewIssuesSchema,
+  StopAgentReviewResultSchema,
 } from "@findoc/contracts";
-import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService, type IntakeDocument, type ObjectStore, type ReviewCommandService, type SourceArtifactIntake, type AgentLogSessionView } from "@findoc/core";
+import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AgentReviewCommandService, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService, type IntakeDocument, type ObjectStore, type ReviewCommandService, type SourceArtifactIntake, type AgentLogSessionView } from "@findoc/core";
 import { DocumentSizeLimitError, EmptyDocumentError, readObjectBytes, UnsupportedDocumentMediaError } from "@findoc/storage";
 
 class IntakeRequestError extends Error {}
@@ -43,6 +44,7 @@ export function buildApp(
   demoAgentModels: { readonly defaultModel: string; readonly models: readonly { readonly id: string; readonly label: string; readonly paid: boolean; readonly maximumCaseCostUsd?: string }[] } = {
     defaultModel: "fake", models: [{ id: "fake", label: "Deterministic demo Agent", paid: false }],
   },
+  agentReviewCommands?: AgentReviewCommandService,
 ) {
   const app = Fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
   void app.register(multipart, { limits: { files: 10, fields: 10 } });
@@ -255,6 +257,15 @@ export function buildApp(
         ...(event.toolLabel ? { tool_label: event.toolLabel } : {}),
         ...(event.actor ? { actor: event.actor } : {}) })),
     };
+  });
+
+  app.post("/api/v1/cases/:case_id/agent-review/stop", {
+    schema: { response: { 200: StopAgentReviewResultSchema, 404: ProblemDetailsSchema } },
+  }, async (request) => {
+    if (!agentReviewCommands) throw new CaseNotFoundError();
+    const { case_id: caseId } = request.params as { case_id: string };
+    const result = await agentReviewCommands.stopAgentReview(caseId);
+    return { case_id: result.caseId, run_id: result.runId, stopped: result.stopped };
   });
 
   app.get("/api/v1/cases/:case_id/evidence/:evidence_id", {

@@ -574,6 +574,10 @@ export interface CaseCommandService {
   accept(command: CaseIntakeCommand): Promise<AcceptedCase>;
 }
 
+export interface AgentReviewCommandService {
+  stopAgentReview(caseId: CaseId): Promise<{ readonly caseId: CaseId; readonly runId: RunId; readonly stopped: boolean }>;
+}
+
 export interface ReviewCommandContext {
   readonly caseId: CaseId;
   readonly resultRevisionId: string;

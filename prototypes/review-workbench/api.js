@@ -60,6 +60,12 @@ export async function startDemoCase(prepared, agentModel, fetcher = fetch) {
   return createdResponse.json();
 }
 
+export async function stopAgentReview(caseId, fetcher = fetch) {
+  const response = await fetcher('/api/v1/cases/' + encodeURIComponent(caseId) + '/agent-review/stop', { method: 'POST' });
+  if (!response.ok) throw new Error('Agent review could not be stopped');
+  return response.json();
+}
+
 export async function submitDemoCase(prepared, agentModel = 'fake', fetcher = fetch, wait = function () { return new Promise(function (resolve) { setTimeout(resolve, 500); }); }) {
   const created = await startDemoCase(prepared, agentModel, fetcher);
   for (let attempt = 0; attempt < 60; attempt += 1) {

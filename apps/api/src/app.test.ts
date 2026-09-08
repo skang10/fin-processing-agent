@@ -143,6 +143,17 @@ describe("case intake", () => {
     await app.close();
   });
 
+  it("routes an Agent stop request through the durable workflow command", async () => {
+    const accept = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", replayed: false }));
+    const stopAgentReview = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", stopped: true }));
+    const app = buildApp({ accept }, caseQueries, undefined, undefined, undefined, undefined, { stopAgentReview });
+    const response = await app.inject({ method: "POST", url: "/api/v1/cases/case_1/agent-review/stop" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ case_id: "case_1", run_id: "run_1", stopped: true });
+    expect(stopAgentReview).toHaveBeenCalledWith("case_1");
+    await app.close();
+  });
+
   it("exposes only allowlisted demo Agent models and binds the selected model", async () => {
     const accept = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", replayed: false }));
     const models = { defaultModel: "openai/gpt-5.6-terra", models: [

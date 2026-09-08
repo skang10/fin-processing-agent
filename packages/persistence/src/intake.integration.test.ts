@@ -464,4 +464,23 @@ describe("PostgresCaseCommandService", () => {
       .where(eq(processingRunTransitions.runId, accepted.runId));
     expect(runTransitionCount?.value).toBe(3);
   });
+
+  it("stops a processing Agent run durably and idempotently", async () => {
+    const service = new PostgresCaseCommandService(connection.db, "reviewer_stop_test");
+    const accepted = await service.accept({
+      applicantDisplayName: "Synthetic Stop Test",
+      applicationData: { applicant_display_name: "Synthetic Stop Test" },
+      idempotencyKey: "stop_agent_review",
+      agentModel: "fake",
+      documents: [],
+    });
+    const coordinator = new PostgresWorkflowCoordinator(connection.db);
+    await coordinator.markRunRunning(accepted.caseId, accepted.runId);
+
+    await expect(service.stopAgentReview(accepted.caseId)).resolves.toMatchObject({ stopped: true, runId: accepted.runId });
+    await expect(service.stopAgentReview(accepted.caseId)).resolves.toMatchObject({ stopped: false, runId: accepted.runId });
+    await expect(new PostgresCaseQueryService(connection.db).get(accepted.caseId)).resolves.toMatchObject({
+      lifecycle: "processing_exception", resultAvailability: "unavailable",
+    });
+  });
 });

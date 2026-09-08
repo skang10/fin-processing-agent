@@ -200,6 +200,12 @@ export const AgentLogSchema = Type.Object({
   }, { additionalProperties: false })),
 }, { additionalProperties: false });
 
+export const StopAgentReviewResultSchema = Type.Object({
+  case_id: Type.String(),
+  run_id: Type.String(),
+  stopped: Type.Boolean(),
+}, { additionalProperties: false });
+
 const EvidenceBase = {
   evidence_id: Type.String({ format: "uuid" }),
   extraction_method: Type.String(),
