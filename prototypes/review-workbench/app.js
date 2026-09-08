@@ -517,8 +517,6 @@ function currentIssue() {
 
 function render() {
   const issue = currentIssue();
-  const resolved = decisions.filter(function (decision) { return decision !== 'pending'; }).length;
-  document.querySelector('#resolved-count').textContent = resolved + ' of ' + issues.length + ' reviewed';
   document.querySelector('[data-case-tab="issues"] span').textContent = String(issues.length);
   document.querySelector('#previous').disabled = current === 0 || issues.length === 0;
   document.querySelector('#next').disabled = current >= issues.length - 1;
@@ -675,33 +673,36 @@ function applicationData(activeIssue) {
 }
 
 function renderIssueList() {
-  document.querySelector('#issue-list').innerHTML = issues.map(function (issue, index) {
-    const decision = decisions[index];
-    const state = outcomeLabel(decision);
-    const marker = decision === 'pending' ? String(index + 1).padStart(2, '0') : decision === 'dismissed' ? '×' : decision === 'edited' ? '✎' : '✓';
-    const displayTitle = issue.title || 'New issue';
-    return '<div class="issue-list-item ' + (index === current ? 'active' : '') + '"><button class="issue-open" data-index="' + index + '">' +
-      '<span class="issue-state ' + decision + '">' + marker + '</span><span class="issue-list-title"><strong>' + escapeHtml(displayTitle) + '</strong><small>' +
-      (issue.origin === 'human' ? 'Human created' : 'System generated') + '</small></span><em>' + state + '</em></button>' +
-      (caseReadOnly || decision === 'dismissed' || ((editing || confirming || ignoring) && index === current) ? '' : '<button class="issue-edit" data-edit-index="' + index + '" aria-label="' + (decision === 'confirmed' ? 'Edit requested change for ' : 'Edit ') + escapeHtml(displayTitle) + '">' + (decision === 'confirmed' ? 'Edit request' : 'Edit') + '</button>') + '</div>';
-  }).join('');
-  document.querySelectorAll('.issue-open').forEach(function (button) {
-    button.addEventListener('click', function () {
-      current = Number(button.dataset.index);
+  const target = document.querySelector('#issue-list');
+  if (issues.length === 0) { target.innerHTML = ''; return; }
+  const issue = issues[current];
+  const decision = decisions[current];
+  const displayTitle = issue.title || 'New issue';
+  const selector = issues.length > 1
+    ? '<label class="issue-picker"><span>Issue ' + (current + 1) + ' of ' + issues.length + '</span><select id="issue-select" aria-label="Select issue">' + issues.map(function (candidate, index) {
+      return '<option value="' + index + '" ' + (index === current ? 'selected' : '') + '>' + String(index + 1).padStart(2, '0') + ' · ' + escapeHtml(candidate.title || 'New issue') + ' — ' + escapeHtml(outcomeLabel(decisions[index])) + '</option>';
+    }).join('') + '</select></label>'
+    : '<div class="issue-current"><strong>' + escapeHtml(displayTitle) + '</strong><small>' + (issue.origin === 'human' ? 'Human created' : 'System generated') + '</small></div>';
+  target.innerHTML = '<div class="issue-switcher">' + selector + '<span class="issue-switcher-state">' + escapeHtml(outcomeLabel(decision)) + '</span>' +
+    (caseReadOnly || decision === 'dismissed' || editing || confirming || ignoring ? '' : '<button class="issue-edit" id="issue-switcher-edit">' + (decision === 'confirmed' ? 'Edit request' : 'Edit') + '</button>') + '</div>';
+  const select = document.querySelector('#issue-select');
+  if (select) {
+    select.addEventListener('change', function () {
+      current = Number(select.value);
       editing = false;
       confirming = false;
       ignoring = false;
       render();
     });
-  });
-  document.querySelectorAll('.issue-edit').forEach(function (button) {
-    button.addEventListener('click', function () {
-      current = Number(button.dataset.editIndex);
+  }
+  const edit = document.querySelector('#issue-switcher-edit');
+  if (edit) {
+    edit.addEventListener('click', function () {
       confirming = decisions[current] === 'confirmed';
       editing = !confirming;
       render();
     });
-  });
+  }
 }
 
 function renderThumbnails(activePage) {
@@ -774,9 +775,7 @@ function issueDetail(issue) {
   const recordedOutcome = outcome === 'pending' ? '' : '<div class="recorded-outcome"><span class="outcome-icon">' +
     (outcome === 'dismissed' ? '×' : '✓') + '</span><span><small>Recorded outcome</small><strong>' + escapeHtml(outcomeLabel(outcome)) + '</strong></span>' +
     (!caseReadOnly ? '<button id="change-outcome">Reopen issue</button>' : '') + '</div>';
-  return '<header class="issue-detail-context"><div><span>Issue ' + String(current + 1).padStart(2, '0') + ' of ' + String(issues.length).padStart(2, '0') + '</span>' +
-    '<strong>' + escapeHtml(issue.title) + '</strong></div><em>' + escapeHtml(outcomeLabel(outcome)) + '</em></header>' +
-    '<div class="review-prompt"><p>' + escapeHtml(issue.why) + '</p></div>' +
+  return '<div class="review-prompt"><p>' + escapeHtml(issue.why) + '</p></div>' +
     '<div class="claim-comparison"><div class="block-label"><span>Evidence reviewed</span></div>' +
     reviewedEvidence + '</div>' + recordedOutcome;
 }
@@ -1229,13 +1228,6 @@ document.querySelector('#completed-nav').addEventListener('click', function () {
 document.querySelector('#back').addEventListener('click', function () { void refreshQueue(activeQueueView); });
 document.querySelector('#previous').addEventListener('click', function () { if (current > 0) { current -= 1; editing = false; confirming = false; render(); } });
 document.querySelector('#next').addEventListener('click', function () { if (current < issues.length - 1) { current += 1; editing = false; confirming = false; render(); } });
-document.querySelector('#issue-list-toggle').addEventListener('click', function (event) {
-  const list = document.querySelector('#issue-list');
-  const expanded = event.currentTarget.getAttribute('aria-expanded') === 'true';
-  event.currentTarget.setAttribute('aria-expanded', String(!expanded));
-  list.hidden = expanded;
-  event.currentTarget.querySelector('b').textContent = expanded ? '⌄' : '⌃';
-});
 document.querySelector('#create-issue').addEventListener('click', function () {
   if (caseReadOnly) return;
   issues.push({
