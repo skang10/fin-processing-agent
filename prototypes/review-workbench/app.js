@@ -521,7 +521,7 @@ function render() {
   document.querySelector('#next').disabled = current >= issues.length - 1;
   document.querySelector('#issue-content').innerHTML = issues.length === 0
     ? '<p class="empty-state">' + (apiReport?.failure_reason === 'agent_not_run'
-      ? 'No issues have been recorded. Create an issue if human review identifies one.'
+      ? 'No issues recorded. Adding one starts human review and disables Agent review.'
       : 'No Agent-raised issues for this case. Its deterministic checked facts stay in the Agent report.') + '</p>'
     : editing ? correctionForm(issue) : confirming ? confirmationForm(issue) : ignoring ? ignoreForm() : issueDetail(issue);
   renderIssueFooter();
