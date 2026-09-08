@@ -676,10 +676,11 @@ function renderIssueList() {
     const decision = decisions[index];
     const state = outcomeLabel(decision);
     const marker = decision === 'pending' ? String(index + 1).padStart(2, '0') : decision === 'dismissed' ? '×' : decision === 'edited' ? '✎' : '✓';
+    const displayTitle = issue.title || 'New issue';
     return '<div class="issue-list-item ' + (index === current ? 'active' : '') + '"><button class="issue-open" data-index="' + index + '">' +
-      '<span class="issue-state ' + decision + '">' + marker + '</span><span class="issue-list-title"><strong>' + escapeHtml(issue.title) + '</strong><small>' +
+      '<span class="issue-state ' + decision + '">' + marker + '</span><span class="issue-list-title"><strong>' + escapeHtml(displayTitle) + '</strong><small>' +
       (issue.origin === 'human' ? 'Human created' : 'System generated') + '</small></span><em>' + state + '</em></button>' +
-      (caseReadOnly || decision === 'dismissed' || ((editing || confirming || ignoring) && index === current) ? '' : '<button class="issue-edit" data-edit-index="' + index + '" aria-label="' + (decision === 'confirmed' ? 'Edit requested change for ' : 'Edit ') + escapeHtml(issue.title) + '">' + (decision === 'confirmed' ? 'Edit request' : 'Edit') + '</button>') + '</div>';
+      (caseReadOnly || decision === 'dismissed' || ((editing || confirming || ignoring) && index === current) ? '' : '<button class="issue-edit" data-edit-index="' + index + '" aria-label="' + (decision === 'confirmed' ? 'Edit requested change for ' : 'Edit ') + escapeHtml(displayTitle) + '">' + (decision === 'confirmed' ? 'Edit request' : 'Edit') + '</button>') + '</div>';
   }).join('');
   document.querySelectorAll('.issue-open').forEach(function (button) {
     button.addEventListener('click', function () {
@@ -816,16 +817,16 @@ function evidencePicker(issue) {
     '<option value="">Select a source</option>' +
     (applicationOptions.length ? '<optgroup label="Application data">' + applicationOptions.join('') + '</optgroup>' : '') +
     (documentOptions.length ? '<optgroup label="Documents">' + documentOptions.join('') + '</optgroup>' : '') +
-    '<option value="__none__">No supporting evidence</option></select><button type="button" class="button quiet" id="add-evidence">Add</button></div>' +
+    '<option value="__none__"' + (issue.noReferenceReason ? ' selected' : '') + '>No supporting evidence</option></select><button type="button" class="button quiet" id="add-evidence">Add</button></div>' +
     '<div id="selected-evidence">' + selectedEvidenceMarkup(issue.supportingReferences || []) + '</div>' +
     '<label id="no-source-reason"' + (issue.noReferenceReason ? '' : ' hidden') + '>Why no supporting evidence is available' +
     '<textarea rows="3" placeholder="For example: the required document was not submitted">' + escapeHtml(issue.noReferenceReason || '') + '</textarea></label></fieldset>';
 }
 
 function correctionForm(issue) {
-  return '<form id="inline-form" class="correct-form"><label>Issue title<input value="' + escapeHtml(issue.title) + '" required></label>' +
-    '<label>Issue description<textarea rows="4" required>' + escapeHtml(issue.why) + '</textarea></label>' +
-    '<label>Requested change<textarea rows="4" required>' + escapeHtml(issue.recommendation || '') + '</textarea></label>' + evidencePicker(issue) +
+  return '<form id="inline-form" class="correct-form"><label>Issue title<input value="' + escapeHtml(issue.title) + '" placeholder="Summarize the issue" required></label>' +
+    '<label>Issue description<textarea rows="4" placeholder="Describe what needs review and why" required>' + escapeHtml(issue.why) + '</textarea></label>' +
+    '<label>Requested change<textarea rows="4" placeholder="Describe what information or document is needed" required>' + escapeHtml(issue.recommendation || '') + '</textarea></label>' + evidencePicker(issue) +
     '<div class="form-actions"><button type="button" class="button quiet" id="cancel-bottom">Cancel</button><button class="button primary">Save issue</button></div></form>';
 }
 
@@ -903,13 +904,27 @@ function wireIssueActions() {
   }
   wireEvidenceRemoval();
   const addEvidence = document.querySelector('#add-evidence');
+  const evidenceSelect = document.querySelector('#evidence-reference');
+  function showNoSupportingEvidence() {
+    selectedEvidence.innerHTML = '<p class="evidence-picker-empty">No evidence selected</p>';
+    noSourceReason.hidden = false;
+    noSourceReason.querySelector('textarea').required = true;
+    addEvidence.hidden = true;
+  }
+  if (evidenceSelect?.value === '__none__') showNoSupportingEvidence();
+  evidenceSelect?.addEventListener('change', function () {
+    if (evidenceSelect.value === '__none__') {
+      showNoSupportingEvidence();
+      noSourceReason.querySelector('textarea').focus();
+      return;
+    }
+    addEvidence.hidden = false;
+  });
   if (addEvidence) addEvidence.addEventListener('click', function () {
-    const select = document.querySelector('#evidence-reference');
+    const select = evidenceSelect;
     if (!select.value) return;
     if (select.value === '__none__') {
-      selectedEvidence.innerHTML = '<p class="evidence-picker-empty">No evidence selected</p>';
-      noSourceReason.hidden = false;
-      noSourceReason.querySelector('textarea').required = true;
+      showNoSupportingEvidence();
       return;
     }
     noSourceReason.hidden = true;
@@ -930,7 +945,7 @@ function wireIssueActions() {
     const supportingReferences = [...event.currentTarget.querySelectorAll('[data-selected-reference]')].map(function (item) { return item.dataset.selectedReference; });
     const noReferenceReason = noSourceReason?.querySelector('textarea').value.trim() || '';
     if (!supportingReferences.length && !noReferenceReason) {
-      toast('Select supporting evidence or explain why none is available');
+      toast('Select supporting evidence, or choose “No supporting evidence” and enter a reason below');
       return;
     }
     if (!apiCaseRecord || !apiReport?.result_revision) return;
@@ -1218,9 +1233,8 @@ document.querySelector('#issue-list-toggle').addEventListener('click', function 
 document.querySelector('#create-issue').addEventListener('click', function () {
   if (caseReadOnly) return;
   issues.push({
-    type: 'Reviewer-created', tone: 'neutral', title: 'New review issue',
-    why: 'Add the issue details and supporting evidence.',
-    recommendation: 'Please describe what information or document you need the applicant to provide.',
+    type: 'Reviewer-created', origin: 'human', tone: 'neutral', title: '',
+    why: '', recommendation: '',
     doc: 'Uploaded package.pdf', page: 'Page 1 of ' + (apiDocuments[0]?.page_count || 5), pageNumber: 1, paper: 'boundary',
     value: '', valueLabel: '', values: []
   });
