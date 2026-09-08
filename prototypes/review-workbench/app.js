@@ -340,8 +340,9 @@ async function requestAgentRestart(caseId, button) {
 
 function agentRunMarkup(log, modelLabel, state, costLabel) {
   const events = log?.events || [];
-  return '<header class="agent-run-header"><div><span class="agent-run-state"><i></i>' + escapeHtml(state) + '</span><strong>Agent review</strong></div><div class="agent-run-summary"><small>' + escapeHtml(modelLabel) + '</small>' +
-    '<strong>' + escapeHtml(costLabel || 'Cost calculating…') + '</strong></div></header>' +
+  return '<header class="agent-run-header"><div class="agent-run-identity"><span class="agent-run-state"><i></i>' + escapeHtml(state) + '</span><strong>Agent review</strong></div>' +
+    '<div class="agent-run-summary"><div><span>Model</span><strong title="' + escapeHtml(modelLabel) + '">' + escapeHtml(modelLabel) + '</strong></div>' +
+    '<div><span>Cost</span><strong>' + escapeHtml(costLabel || 'Calculating') + '</strong></div></div></header>' +
     '<div class="agent-run-timeline">' + (events.length ? events.map(function (event, index) {
       const latest = index === events.length - 1 && state === 'Running';
       return '<div class="agent-run-event' + (latest ? ' current' : '') + '"><i></i><div><strong>' + escapeHtml(formatPendingAgentActivity(event)) + '</strong>' +
@@ -354,9 +355,8 @@ function renderPendingAgentLog(log, modelLabel, completedCase, runningCase) {
   panel.hidden = false;
   const cost = log?.estimated_cost ? log.estimated_cost.currency + ' ' + log.estimated_cost.amount : '';
   panel.innerHTML = agentRunMarkup(log, modelLabel, completedCase ? 'Completed' : 'Running', completedCase ? cost : '') +
-    (completedCase ? '<div class="agent-run-complete"><strong>Review report is ready</strong><span>The Agent Log remains available with the persisted report.</span></div><button class="button primary" id="view-agent-report">View review report</button>' : '') +
+    (completedCase ? '<div class="agent-run-complete"><i>✓</i><strong>Report ready</strong></div>' : '') +
     (runningCase ? '<button class="button quiet agent-stop" id="stop-agent-review">Stop Agent review</button>' : '');
-  if (completedCase) document.querySelector('#view-agent-report').addEventListener('click', function () { openCompletedAgentReport(completedCase); });
   if (runningCase) document.querySelector('#stop-agent-review').addEventListener('click', async function (event) {
     await requestAgentStop(runningCase.case_id, event.currentTarget, function () { demoStopRequested = true; });
   });

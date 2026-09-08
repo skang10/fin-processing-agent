@@ -358,7 +358,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .agent-log-outcome small { color: var(--muted); font-size: 9px; text-transform: capitalize; }
 .agent-log-outcome.rejected { background: #fff7f5; color: var(--danger); }
 .agent-log-outcome.stopped { background: var(--surface-soft); color: var(--muted); }
-.agent-log-outcome.ready { background: var(--success-soft); color: var(--success); place-items: center; text-align: center; }
+.agent-log-outcome.ready { min-height: 38px; padding: 8px 12px; background: var(--success-soft); color: var(--success); display: flex; align-items: center; }
 .agent-log-empty { margin: 0; padding: 14px; border: 1px solid var(--line); color: var(--muted); font-size: 10px; }
 @media (max-width: 560px) {
   .agent-log-meta { grid-template-columns: 1fr; gap: 12px; }
@@ -498,10 +498,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .agent-model-field small { color: var(--quiet); font-size: 9px; }
 .pending-agent-log { width: 100%; margin-top: 22px; display: grid; }
 .pending-agent-log[hidden] { display: none; }
-.agent-run-header { padding: 14px 16px; border: 1px solid var(--line); border-radius: 7px 7px 0 0; background: var(--surface-soft); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.agent-run-header > div { display: grid; gap: 5px; }
+.agent-run-header { min-height: 72px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 7px 7px 0 0; background: var(--surface-soft); display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.agent-run-identity { flex: 0 0 auto; display: grid; gap: 5px; }
 .agent-run-header strong { font-size: 13px; }
-.agent-run-header small { color: var(--muted); font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.agent-run-summary { min-width: 0; display: grid; grid-template-columns: minmax(150px, 1fr) minmax(92px, auto); gap: 22px; }
+.agent-run-summary div { min-width: 0; display: grid; gap: 3px; }
+.agent-run-summary span { color: var(--quiet); font-size: 8px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; }
+.agent-run-summary strong { overflow: hidden; color: var(--ink); font: 600 10px ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .agent-run-state { color: var(--accent); display: flex; align-items: center; gap: 6px; font-size: 8px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
 .agent-run-state i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px rgba(36,87,214,.1); animation: runPulse 1.4s ease-in-out infinite; }
 .completed .agent-run-state { color: var(--success); }
@@ -516,9 +519,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .agent-run-event div { min-width: 0; display: grid; gap: 4px; }
 .agent-run-event strong { color: var(--ink); font-size: 10px; font-weight: 600; line-height: 1.45; }
 .agent-run-event small { width: fit-content; padding: 2px 5px; border-radius: 3px; background: #eef2f5; color: var(--muted); font: 8px ui-monospace, SFMono-Regular, Menlo, monospace; }
-.pending-agent-log .agent-run-complete { margin-top: 8px; padding: 12px; border-radius: 5px; background: var(--success-soft); display: grid; gap: 4px; }
-.pending-agent-log .agent-run-complete strong { color: var(--success); }
-.pending-agent-log .agent-run-complete span { color: var(--muted); }
+.pending-agent-log .agent-run-complete { min-height: 38px; padding: 8px 12px; border: 1px solid #cce7d7; border-top: 0; border-radius: 0 0 5px 5px; background: var(--success-soft); color: var(--success); display: flex; align-items: center; gap: 7px; }
+.pending-agent-log .agent-run-complete i { width: 17px; height: 17px; border-radius: 50%; background: #d9f0e2; display: grid; place-items: center; font-size: 9px; font-style: normal; }
+.pending-agent-log .agent-run-complete strong { font-size: 10px; }
 .pending-agent-log .button { margin-top: 4px; }
 .pending-agent-log .agent-stop { color: var(--danger); border-color: #efc8c1; background: #fff; }
 @keyframes runPulse { 50% { opacity: .45; transform: scale(.85); } }
