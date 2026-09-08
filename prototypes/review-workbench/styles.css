@@ -570,12 +570,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .issue-card.confirmed, .issue-card.edited { border-color: #b9ddc7; background: var(--success-soft); }
 .issue-card.confirmed:hover, .issue-card.edited:hover,
 .issue-card.confirmed.active, .issue-card.edited.active { border-color: #79bb91; background: #e8f5ed; box-shadow: 0 0 0 1px rgba(31,126,74,.08); }
+.issue-card.dismissed { border-color: #d7dde1; background: var(--surface-soft); }
+.issue-card.dismissed:hover, .issue-card.dismissed.active { border-color: #aeb8be; background: #eef1f3; box-shadow: 0 0 0 1px rgba(76,89,97,.06); }
 .issue-card-number { grid-row: 1 / 3; width: 22px; height: 22px; border: 1px solid #d7dde1; border-radius: 50%; color: #76828a; display: grid; place-items: center; font-size: 8px; font-weight: 700; }
 .issue-card-copy { min-width: 0; display: grid; gap: 2px; }
 .issue-card-copy strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .issue-card-copy small { color: var(--quiet); font-size: 8px; }
 .issue-card em { align-self: end; color: var(--muted); font-size: 8px; font-style: normal; }
 .issue-card em.confirmed, .issue-card em.edited { color: var(--success); }
+.issue-card em.dismissed { color: var(--muted); }
 .issue-list-item { width: 100%; min-height: 48px; border-top: 1px solid #eef1f2; background: #fff; display: grid; grid-template-columns: 1fr auto; align-items: stretch; }
 .issue-list-item:hover { background: #f8f9fb; }
 .issue-list-item.active { background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); }

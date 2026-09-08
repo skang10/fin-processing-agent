@@ -386,6 +386,7 @@ It is archived source material only and is marked `Superseded`. The approved own
 89. Confirmed and edited-and-confirmed issue cards use a success-green border and background, including while selected, so completion state is not visually overridden by the blue active-card treatment. The peer section labels `What needs review` and `Evidence reviewed` now use the same 10 px type size. `pnpm check` passed all 208 tests, and the Review Web production build and `git diff --check` passed.
 90. Message preview remains borderless in its empty state, but applicant-facing content now renders in a bounded, softly filled block so an actual outbound draft is visually distinct from surrounding review metadata. `pnpm check` passed all 208 tests, and the Review Web production build and `git diff --check` passed.
 91. Issue-detail section headings now match the Agent report's title treatment: `What needs review` and `Evidence reviewed` use normal title casing, 12 px bold text, and no metadata-style letter spacing. The Internal note header now keeps `Visible to reviewers only · Optional` together on its right; the repeated visible label above the textarea was removed while an accessible form label remains. The Review Web production build and `git diff --check` passed.
+92. Ignored issue cards use a neutral grey border and background, including while selected, so ignored state remains distinct from green confirmed cards and blue pending selection. The Review Web production build and `git diff --check` passed.
 
 ## Target Specification Set
 
