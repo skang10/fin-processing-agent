@@ -395,6 +395,7 @@ async function requestAgentRestart(caseId, button) {
 
 function agentRunMarkup(log, modelLabel, state, costLabel, includeRequested = true, includeTimeline = true) {
   const events = log?.events || [];
+  const waitingForSession = state === 'Running' && !log?.session;
   const acceptedEvent = includeRequested
     ? '<div class="agent-run-event' + (!events.length && state === 'Running' ? ' current' : '') + '"><i></i><div><strong>Agent review requested</strong><small>Case accepted and persisted</small></div></div>'
     : '';
@@ -406,7 +407,9 @@ function agentRunMarkup(log, modelLabel, state, costLabel, includeRequested = tr
       const latest = index === events.length - 1 && state === 'Running';
       return '<div class="agent-run-event' + (latest ? ' current' : '') + '"><i></i><div><strong>' + escapeHtml(formatPendingAgentActivity(event)) + '</strong>' +
         (event.tool_label ? '<small>' + escapeHtml(event.tool_label) + '</small>' : '') + '</div></div>';
-    }).join('') : '') + '</div>';
+    }).join('') : '') + (waitingForSession
+      ? '<div class="agent-run-event current"><i></i><div><strong>Waiting for Agent to start</strong><small>Queued for the Agent worker</small></div></div>'
+      : '') + '</div>';
 }
 
 function replaceAgentRunMarkup(host, markup) {

@@ -497,10 +497,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .persisted-log .agent-run-header { border-width: 0 0 1px; border-radius: 0; padding-inline: 24px; }
 .persisted-log .agent-run-timeline { min-height: 0; max-height: none; flex: 1 1 auto; padding: 14px 24px 20px; border: 0; overflow-y: auto; }
 .persisted-log .agent-log-outcome { flex: 0 0 38px; margin: 0; border-width: 1px 0 0; }
-.demo-preview-workspace.running { padding: 24px; overflow: hidden; }
+.demo-preview-workspace.running { padding: 0; overflow: hidden; }
 .demo-preview-workspace.running #demo-launch { min-height: 0; height: 100%; grid-template-rows: minmax(0, 1fr); }
 .demo-preview-workspace.running .pending-agent-log { min-height: 0; height: 100%; margin-top: 0; grid-template-rows: auto minmax(0, 1fr) auto; }
-.demo-preview-workspace.running .agent-run-timeline { min-height: 0; max-height: none; height: 100%; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+.demo-preview-workspace.running .agent-run-header { border-width: 0 0 1px; border-radius: 0; padding-inline: 24px; }
+.demo-preview-workspace.running .agent-run-timeline { min-height: 0; max-height: none; height: 100%; padding: 14px 24px 20px; border: 0; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+.demo-preview-workspace.running .agent-stop { margin: 0 24px 16px; }
 .demo-preview-workspace h2 { max-width: 360px; margin: 10px 0 12px; font-size: 24px; line-height: 1.16; }
 .demo-preview-workspace p { max-width: 430px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
 .demo-preview-workspace .button { width: fit-content; margin-top: 24px; }
