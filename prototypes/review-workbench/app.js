@@ -1220,7 +1220,9 @@ function updateApplicantPreview() {
   const included = issues.map(function (_, index) { return index; }).filter(function (index) {
     return (decisions[index] === 'confirmed' || decisions[index] === 'edited') && includedRequests[index] !== false && reviewNotes[index] && reviewNotes[index].trim();
   });
-  document.querySelector('#applicant-message-preview').innerHTML = included.length
+  const messagePreview = document.querySelector('#applicant-message-preview');
+  messagePreview.classList.toggle('has-content', included.length > 0);
+  messagePreview.innerHTML = included.length
     ? '<p>Please make the following changes:</p><ol>' + included.map(function (index) { return '<li>' + escapeHtml(reviewNotes[index].trim()) + '</li>'; }).join('') + '</ol>'
     : '<p class="empty-preview">No message will be sent to the applicant.</p>';
   updateSubmissionActions();

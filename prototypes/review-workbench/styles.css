@@ -717,6 +717,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .submission-field textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--line-strong); border-radius: 4px; background: #fff; color: var(--ink); font: inherit; font-size: 12px; line-height: 1.5; resize: vertical; outline: 0; }
 .submission-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(36,87,214,.1); }
 .applicant-message-preview { padding: 0 0 4px; color: var(--muted); font-size: 11px; }
+.applicant-message-preview.has-content { padding: 14px 16px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-soft); }
 .applicant-message-preview p { margin: 0; }
 .applicant-message-preview ol { margin: 10px 0 0; padding-left: 20px; }
 .applicant-message-preview li { margin-top: 7px; color: var(--ink); line-height: 1.5; }
