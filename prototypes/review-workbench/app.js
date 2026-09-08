@@ -1297,8 +1297,6 @@ document.querySelector('#load-demo-case').addEventListener('click', async functi
   try {
     const [prepared, models] = await Promise.all([prepareDemoCase(), loadDemoAgentModels()]);
     renderDemoAgentModels(models);
-    setDemoPreview(prepared);
-    document.querySelector('#run-agent-review').hidden = true;
     const created = await startDemoCase(prepared, models.default_model, fetch, false);
     for (let attempt = 0; attempt < 120; attempt += 1) {
       const response = await fetch(created.status_url);
