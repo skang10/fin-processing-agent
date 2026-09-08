@@ -1595,9 +1595,13 @@ function reportFailureMessage(reason) {
 }
 
 function renderApiReport(report) {
+  const securityObservationText = 'Instruction-like document content was observed, treated as untrusted, and not followed.';
+  const hasSecurityObservation = report.availability !== 'unavailable' && Boolean(report.summary?.includes(securityObservationText));
+  const summary = hasSecurityObservation ? report.summary.replace(securityObservationText, '').trim() : report.summary;
   document.querySelector('.report-copy').textContent = report.availability === 'unavailable'
     ? 'Agent report unavailable. Reason: ' + reportFailureMessage(report.failure_reason) + ' System-generated review issues remain available for manual review.'
-    : (report.summary || 'Agent report unavailable.');
+    : (summary || 'Agent report unavailable.');
+  document.querySelector('.security-observation').hidden = !hasSecurityObservation;
   document.querySelector('.report-links').innerHTML = issues.map(function (issue, index) { return { issue, index }; })
     .filter(function (entry) {
       return report.availability === 'unavailable' ? entry.issue.origin === 'system' : entry.issue.origin === 'agent';
