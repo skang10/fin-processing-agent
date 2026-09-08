@@ -785,11 +785,11 @@ function issueDetail(issue) {
     const value = item.value;
     const evidence = item.reference ? apiEvidenceByReference[item.reference] : undefined;
     const isApplication = evidence?.evidence_type === 'structured_input' || item.role === 'Application data';
-    const evidenceControl = item.reference
-      ? '<button class="evidence-link active" data-evidence-reference="' + encodeURIComponent(item.reference) + '" aria-label="' + escapeHtml(item.source) + '">Open →</button>'
-      : '<button class="evidence-link ' + (item.evidence ? 'active' : '') + '" data-legacy-evidence="' + Boolean(item.evidence) + '">Open →</button>';
-    return '<article class="claim-card"><div class="claim-copy"><span>' + (isApplication ? 'Application data' : 'Document') + '</span><strong title="' + escapeHtml(item.role) + '">' + escapeHtml(item.label) + '</strong>' +
-      '</div><strong class="evidence-value">' + escapeHtml(value) + '</strong>' + evidenceControl + '</article>';
+    const evidenceTarget = item.reference
+      ? 'data-evidence-reference="' + encodeURIComponent(item.reference) + '"'
+      : 'data-legacy-evidence="' + Boolean(item.evidence) + '"';
+    return '<button type="button" class="claim-card interactive-evidence" ' + evidenceTarget + ' aria-label="' + escapeHtml(item.source) + '"><span class="claim-copy"><span>' + (isApplication ? 'Application data' : 'Document') + '</span><strong title="' + escapeHtml(item.role) + '">' + escapeHtml(item.label) + '</strong>' +
+      '</span><strong class="evidence-value">' + escapeHtml(value) + '</strong><span class="evidence-arrow" aria-hidden="true">→</span></button>';
   }).join('');
   const reviewedEvidence = values || '<article class="claim-card evidence-note"><div class="claim-copy"><span>No page evidence</span>' +
     '<strong>' + escapeHtml(issue.noReferenceReason || 'No supporting evidence was provided.') + '</strong></div></article>';
@@ -1017,7 +1017,7 @@ function wireIssueActions() {
       showReviewError(error, 'Issue could not be saved');
     }
   });
-  document.querySelectorAll('.evidence-link').forEach(function (button) {
+  document.querySelectorAll('.interactive-evidence').forEach(function (button) {
     button.addEventListener('click', function () {
       if (button.dataset.evidenceReference) {
         openEvidenceReference(decodeURIComponent(button.dataset.evidenceReference));

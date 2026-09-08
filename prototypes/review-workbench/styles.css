@@ -611,6 +611,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .block-label small { color: var(--quiet); font-size: 8px; }
 .claim-card { min-height: 58px; padding: 9px 2px; border-bottom: 1px solid var(--line); background: #fff; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; }
 .claim-card:first-of-type { border-top: 1px solid var(--line); }
+.claim-card.interactive-evidence { width: 100%; border: 0; border-bottom: 1px solid var(--line); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.claim-card.interactive-evidence:first-of-type { border-top: 1px solid var(--line); }
+.claim-card.interactive-evidence:hover { background: var(--accent-soft); }
 .claim-copy { min-width: 0; display: grid; gap: 3px; }
 .claim-copy > span { color: var(--muted); font-size: 8px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .claim-head { display: flex; justify-content: space-between; align-items: center; }
@@ -622,9 +625,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .claim-card.evidence-note { min-height: 0; padding: 11px 12px; grid-template-columns: minmax(0, 1fr); background: var(--surface-soft); }
 .claim-card.evidence-note .claim-copy > strong { color: #3f4f5b; font-size: 11px; font-weight: 500; line-height: 1.5; white-space: normal; }
 .comparison-divider { margin: 9px 0 2px; color: var(--quiet); font-size: 9px; text-align: center; }
-.evidence-link { padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 9px; cursor: pointer; }
-.evidence-link span { margin-right: 5px; }
-.evidence-link.active { color: var(--accent); font-weight: 600; }
+.evidence-arrow { color: var(--accent); font-size: 11px; font-weight: 650; }
 .review-actions { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .review-actions .link-button { grid-column: 1 / -1; }
 .link-button { padding: 7px; border: 0; background: transparent; color: var(--muted); font-size: 9px; cursor: pointer; }
@@ -924,7 +925,7 @@ body { font-size: 14px; }
 .block-label small { font-size: 10px; }
 .claim-head span, .claim-head small { font-size: 9px; }
 .claim-copy > strong { font-size: 11px; }
-.evidence-link, .link-button { font-size: 10px; }
+.link-button { font-size: 10px; }
 .recorded-outcome strong { font-size: 11px; }
 .recorded-outcome small, .recorded-outcome button { font-size: 10px; }
 .revision-context span, .revision-context small { font-size: 9px; }

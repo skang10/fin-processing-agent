@@ -392,6 +392,7 @@ It is archived source material only and is marked `Superseded`. The approved own
 95. Evidence metadata labels such as `Application data`, `Document`, and `No page evidence` now render in their source sentence case instead of forced uppercase, with normal letter spacing and lighter emphasis.
 96. The zero-issue view now presents one concise empty state—`No issues found` with guidance to continue or add an issue manually—instead of leaving the detail area visually empty or repeating a second footer message.
 97. Agent-report summaries that contain the verified instruction-content safety statement now separate it into a prominent amber `Security observation` block instead of burying it in summary prose; it remains non-issue metadata and does not affect the issue count. The document/application source switch now uses explicit grid sizing and border-box buttons so both segments align cleanly inside their shared border.
+98. Each referenced row under `Evidence reviewed` is now one full-width accessible button. Reviewers can click the source label, field/page label, extracted value, arrow, or surrounding row space to open the page or application field; the former small `Open →` target was removed, while an arrow and hover state preserve discoverability.
 
 ## Target Specification Set
 
