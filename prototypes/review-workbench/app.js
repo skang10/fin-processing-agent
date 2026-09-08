@@ -533,12 +533,14 @@ function render() {
 
 function renderIssueFooter() {
   const footer = document.querySelector('#issue-footer-actions');
+  const formOpen = editing || confirming || ignoring;
+  document.querySelector('.issue-footer').classList.toggle('form-open', formOpen);
   if (issues.length === 0) {
     footer.innerHTML = '<div class="footer-outcome">No issues to review</div>';
     return;
   }
-  if (editing || confirming || ignoring) {
-    footer.innerHTML = '<div class="footer-outcome">' + (editing ? 'Editing issue' : confirming ? 'Confirming issue' : 'Ignoring issue') + '</div>';
+  if (formOpen) {
+    footer.innerHTML = '';
     return;
   }
   const outcome = decisions[current];
@@ -677,7 +679,7 @@ function renderIssueList() {
     return '<div class="issue-list-item ' + (index === current ? 'active' : '') + '"><button class="issue-open" data-index="' + index + '">' +
       '<span class="issue-state ' + decision + '">' + marker + '</span><span class="issue-list-title"><strong>' + escapeHtml(issue.title) + '</strong><small>' +
       (issue.origin === 'human' ? 'Human created' : 'System generated') + '</small></span><em>' + state + '</em></button>' +
-      (caseReadOnly || decision === 'dismissed' ? '' : '<button class="issue-edit" data-edit-index="' + index + '" aria-label="' + (decision === 'confirmed' ? 'Edit requested change for ' : 'Edit ') + escapeHtml(issue.title) + '">' + (decision === 'confirmed' ? 'Edit request' : 'Edit') + '</button>') + '</div>';
+      (caseReadOnly || decision === 'dismissed' || ((editing || confirming || ignoring) && index === current) ? '' : '<button class="issue-edit" data-edit-index="' + index + '" aria-label="' + (decision === 'confirmed' ? 'Edit requested change for ' : 'Edit ') + escapeHtml(issue.title) + '">' + (decision === 'confirmed' ? 'Edit request' : 'Edit') + '</button>') + '</div>';
   }).join('');
   document.querySelectorAll('.issue-open').forEach(function (button) {
     button.addEventListener('click', function () {
@@ -771,9 +773,7 @@ function issueDetail(issue) {
 
 function confirmationForm(issue) {
   const note = reviewNotes[current] || issue.recommendation || 'Please describe what information or document you need the applicant to provide.';
-  return '<div class="issue-heading"><button class="inline-back" id="cancel-confirm">← Back to issue</button>' +
-    '<div class="issue-kicker"><span class="finding-tone neutral">Confirm issue</span></div></div>' +
-    '<form id="confirmation-form" class="correct-form"><label>Requested change<textarea rows="5" required>' + escapeHtml(note) + '</textarea></label>' +
+  return '<form id="confirmation-form" class="correct-form"><label>Requested change<textarea rows="5" required>' + escapeHtml(note) + '</textarea></label>' +
     '<div class="revision-note"><strong>Applicant-facing draft</strong><span>Review and edit this message before confirming the issue. It is used only if you request changes.</span></div>' +
     '<div class="form-actions"><button type="button" class="button quiet" id="cancel-confirm-bottom">Cancel</button><button class="button primary">' + (decisions[current] === 'confirmed' ? 'Save requested change' : 'Save confirmation') + '</button></div></form>';
 }
@@ -819,18 +819,14 @@ function evidencePicker(issue) {
 }
 
 function correctionForm(issue) {
-  return '<div class="issue-heading"><button class="inline-back" id="cancel">← Back to issue</button>' +
-    '<div class="issue-kicker"><span class="finding-tone neutral">Edit issue</span></div></div>' +
-    '<form id="inline-form" class="correct-form"><label>Issue title<input value="' + escapeHtml(issue.title) + '" required></label>' +
+  return '<form id="inline-form" class="correct-form"><label>Issue title<input value="' + escapeHtml(issue.title) + '" required></label>' +
     '<label>Issue description<textarea rows="4" required>' + escapeHtml(issue.why) + '</textarea></label>' +
     '<label>Requested change<textarea rows="4" required>' + escapeHtml(issue.recommendation || '') + '</textarea></label>' + evidencePicker(issue) +
     '<div class="form-actions"><button type="button" class="button quiet" id="cancel-bottom">Cancel</button><button class="button primary">Save issue</button></div></form>';
 }
 
 function ignoreForm() {
-  return '<div class="issue-heading"><button class="inline-back" id="cancel-ignore">← Back to issue</button>' +
-    '<div class="issue-kicker"><span class="finding-tone neutral">Ignore issue</span></div></div>' +
-    '<form id="ignore-form" class="correct-form"><label>Note <span class="optional-label">Optional</span><textarea rows="4" placeholder="Add context for other reviewers"></textarea></label>' +
+  return '<form id="ignore-form" class="correct-form"><label>Note <span class="optional-label">Optional</span><textarea rows="4" placeholder="Add context for other reviewers"></textarea></label>' +
     '<div class="revision-note"><strong>Internal review record</strong><span>This note is not included in the applicant message.</span></div>' +
     '<div class="form-actions"><button type="button" class="button quiet" id="cancel-ignore-bottom">Cancel</button><button class="button primary">Save and ignore</button></div></form>';
 }
@@ -961,6 +957,7 @@ function wireIssueActions() {
       issue.recommendation = recommendation;
       issue.supportingReferences = supportingReferences;
       issue.noReferenceReason = noReferenceReason;
+      issue.values = supportingReferences.map(function (reference) { return evidencePresentation(reference); });
       creatingIssue = false;
       editing = false;
       render();

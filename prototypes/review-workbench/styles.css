@@ -576,13 +576,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .issue-state.confirmed, .issue-state.edited { border-color: #b9ddc7; background: var(--success-soft); color: var(--success); }
 .issue-state.dismissed { border-color: #d7dde1; background: var(--surface-soft); color: var(--muted); }
 .issue-scroll { min-height: 0; overflow-y: auto; padding: 22px 24px 28px; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.issue-heading { padding-bottom: 20px; border-bottom: 1px solid var(--line); }
-.issue-kicker { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 9px; }
 .finding-tone { min-height: 21px; padding: 0 7px; border-radius: 3px; display: inline-flex; align-items: center; font-weight: 700; }
 .finding-tone.failed { background: var(--danger-soft); color: var(--danger); }
 .finding-tone.warning { background: var(--warning-soft); color: var(--warning); }
 .finding-tone.neutral { background: var(--accent-soft); color: var(--accent); }
-.inline-back { margin: -4px 0 18px; padding: 0; border: 0; background: transparent; color: var(--accent); font-size: 10px; cursor: pointer; }
 .review-prompt { padding: 15px 16px; margin-bottom: 20px; border-left: 3px solid var(--accent); background: var(--accent-soft); }
 .review-prompt strong { display: block; font-size: 14px; line-height: 1.35; }
 .review-prompt p { margin: 0; color: #3f4f5b; font-size: 11px; line-height: 1.5; }
@@ -612,6 +609,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .recorded-outcome button { min-height: 30px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 4px; background: #fff; color: var(--muted); font-size: 9px; cursor: pointer; }
 .recorded-outcome button:hover { border-color: var(--accent); color: var(--accent); }
 .issue-footer { position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; min-height: 58px; padding: 8px 16px; border-top: 1px solid var(--line); background: #fafbfb; display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px; align-items: center; gap: 10px; box-shadow: 0 -5px 14px rgba(20,28,33,.04); }
+.issue-footer.form-open { display: none; }
 #issue-footer-actions { min-width: 0; }
 #issue-footer-actions .review-actions { margin: 0; }
 .footer-outcome { color: var(--muted); font-size: 10px; font-weight: 650; text-align: center; }
@@ -887,8 +885,6 @@ body { font-size: 14px; }
 .issue-list-toggle small { font-size: 10px; }
 .issue-open strong { font-size: 12px; }
 .issue-open em, .issue-state, .issue-edit { font-size: 9px; }
-.issue-kicker { font-size: 10px; }
-.inline-back { font-size: 11px; }
 .review-prompt p { font-size: 12px; }
 .block-label span, .block-label small { font-size: 10px; }
 .claim-head span, .claim-head small { font-size: 9px; }
