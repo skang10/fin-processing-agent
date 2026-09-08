@@ -358,6 +358,8 @@ It is archived source material only and is marked `Superseded`. The approved own
 
 64. The optional-review hint was subsequently removed, leaving `Not run` as the sole Agent-state label. The launch selector and button now share a bottom baseline. The preprocessing event copy now reports preparation and routing without implying completed recognition: `Prepared N pages; M require[s] text recognition.`; when no page is routed it reports only `Prepared N pages.` Browser verification reused `FD-2026-0055`, confirmed aligned controls and the no-routing form, and did not start a paid model. `pnpm check` passed 208 tests, the root and Review Web builds passed, the two targeted Docker-backed integration files passed all 16 tests, and `git diff --check` passed.
 
+65. Preprocessing remains part of the durable Agent audit, but the workbench no longer presents its event beneath an Agent that has not run. The pre-run view relies on the completed `Documents prepared` workflow stage; once an Agent run begins, the system preprocessing event appears as the first timeline entry. Browser verification reused `FD-2026-0055` and confirmed the pre-run Agent Log contains only its launch controls and `Not run` metadata. No paid model was started. `pnpm check` passed 208 tests, the Review Web build passed, and `git diff --check` passed.
+
 ## Target Specification Set
 
 ```text

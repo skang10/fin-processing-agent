@@ -393,15 +393,16 @@ async function requestAgentRestart(caseId, button) {
   }
 }
 
-function agentRunMarkup(log, modelLabel, state, costLabel, includeRequested = true) {
+function agentRunMarkup(log, modelLabel, state, costLabel, includeRequested = true, includeTimeline = true) {
   const events = log?.events || [];
   const acceptedEvent = includeRequested
     ? '<div class="agent-run-event' + (!events.length && state === 'Running' ? ' current' : '') + '"><i></i><div><strong>Agent review requested</strong><small>Case accepted and persisted</small></div></div>'
     : '';
-  return '<header class="agent-run-header"><div class="agent-run-identity"><span class="agent-run-state"><i></i>' + escapeHtml(state) + '</span><strong>Agent review</strong></div>' +
+  const header = '<header class="agent-run-header"><div class="agent-run-identity"><span class="agent-run-state"><i></i>' + escapeHtml(state) + '</span><strong>Agent review</strong></div>' +
     '<div class="agent-run-summary"><div><span>Model</span><strong title="' + escapeHtml(modelLabel) + '">' + escapeHtml(modelLabel) + '</strong></div>' +
-    '<div><span>Cost</span><strong>' + escapeHtml(costLabel || 'Calculating') + '</strong></div></div></header>' +
-    '<div class="agent-run-timeline">' + acceptedEvent + (events.length ? events.map(function (event, index) {
+    '<div><span>Cost</span><strong>' + escapeHtml(costLabel || 'Calculating') + '</strong></div></div></header>';
+  if (!includeTimeline) return header;
+  return header + '<div class="agent-run-timeline">' + acceptedEvent + (events.length ? events.map(function (event, index) {
       const latest = index === events.length - 1 && state === 'Running';
       return '<div class="agent-run-event' + (latest ? ' current' : '') + '"><i></i><div><strong>' + escapeHtml(formatPendingAgentActivity(event)) + '</strong>' +
         (event.tool_label ? '<small>' + escapeHtml(event.tool_label) + '</small>' : '') + '</div></div>';
@@ -1562,7 +1563,7 @@ function renderAgentLog() {
       escapeHtml(reportFailureMessage(apiReport.failure_reason)) + '</small></div>'
     : apiReport && apiReport.availability === 'ready'
       ? '<div class="agent-log-outcome ready"><span>Report ready</span></div>' : '';
-  const eventMarkup = agentRunMarkup(apiAgentLog, modelLabel, state, cost, !notRun) + reportOutcome +
+  const eventMarkup = agentRunMarkup(apiAgentLog, modelLabel, state, cost, !notRun, !notRun) + reportOutcome +
     (apiCaseRecord?.lifecycle === 'processing' ? '<button class="button quiet agent-stop inline-agent-stop">Stop Agent review</button>' : '');
   document.querySelectorAll('.agent-run-events').forEach(function (element) { replaceAgentRunMarkup(element, eventMarkup); });
   document.querySelectorAll('.inline-agent-stop').forEach(function (button) {
