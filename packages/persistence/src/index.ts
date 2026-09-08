@@ -103,7 +103,7 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
         id: accepted.runId,
         caseId: accepted.caseId,
         inputRevisionId,
-        workflowVersion: WORKFLOW_VERSION,
+        workflowVersion: command.startAgentReview === false ? "manual-review-preparation-v1" : WORKFLOW_VERSION,
         agentModel: command.agentModel,
         status: "created",
       });
@@ -158,6 +158,33 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
         result: accepted,
       });
       return accepted;
+    });
+  }
+
+  async startAgentReview(caseId: string, agentModel: string): Promise<{ caseId: string; runId: string; started: boolean }> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${caseId}, 0))`);
+      const [record] = await tx.select({ lifecycle: cases.lifecycle, runId: cases.currentRunId })
+        .from(cases).where(eq(cases.id, caseId)).limit(1);
+      if (!record?.runId) throw new CaseNotFoundError();
+      const [prior] = await tx.select({ inputRevisionId: processingRuns.inputRevisionId, workflowVersion: processingRuns.workflowVersion })
+        .from(processingRuns).where(eq(processingRuns.id, record.runId)).limit(1);
+      const [issue] = await tx.select({ id: reviewIssues.id }).from(reviewIssues).where(eq(reviewIssues.caseId, caseId)).limit(1);
+      const [finalReview] = await tx.select({ id: finalReviews.id }).from(finalReviews).where(eq(finalReviews.caseId, caseId)).limit(1);
+      if (record.lifecycle !== "ready_for_review" || prior?.workflowVersion !== "manual-review-preparation-v1" || issue || finalReview) {
+        return { caseId, runId: record.runId, started: false };
+      }
+      const runId = randomUUID();
+      await tx.insert(processingRuns).values({ id: runId, caseId, inputRevisionId: prior.inputRevisionId,
+        workflowVersion: WORKFLOW_VERSION, agentModel, status: "created" });
+      await tx.insert(processingRunTransitions).values({ id: randomUUID(), runId, priorStatus: null,
+        newStatus: "created", reason: "reviewer_started_agent" });
+      await tx.update(cases).set({ currentRunId: runId, lifecycle: "processing", version: sql`${cases.version} + 1` }).where(eq(cases.id, caseId));
+      await tx.insert(caseStateTransitions).values({ id: randomUUID(), caseId, runId, priorState: "ready_for_review",
+        newState: "processing", reason: "reviewer_started_agent", actor: this.actorId });
+      await tx.insert(outboxEvents).values({ id: randomUUID(), eventType: "case_processing_requested",
+        aggregateId: caseId, payload: { case_id: caseId, run_id: runId } });
+      return { caseId, runId, started: true };
     });
   }
 
@@ -483,7 +510,8 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       const vlmOutput = vlmInvocation?.safeOutput && typeof vlmInvocation.safeOutput === "object"
         ? vlmInvocation.safeOutput as Record<string, unknown> : undefined;
       const vlmModelLabel = typeof vlmOutput?.["model_label"] === "string" ? vlmOutput["model_label"] : undefined;
-      const reviewMethod: QueueCaseView["reviewMethod"] = !session || session.modelRoute === "fake" ? "deterministic"
+      const reviewMethod: QueueCaseView["reviewMethod"] = report?.summary?.startsWith("No Agent review has been run") ? "manual"
+        : !session || session.modelRoute === "fake" ? "deterministic"
         : session.vlmCalls > 0 ? "agent_vlm" : "agent";
       return {
         caseId: record.caseId, caseCode: caseCode(record.createdAt, record.displayNumber), applicantDisplayName: record.applicantDisplayName,
@@ -605,6 +633,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
     if (!caseRecord) throw new CaseNotFoundError();
     const [report] = await this.db.select({
       availability: agentReports.availability, modelLabel: agentReports.modelLabel,
+      failureReason: agentReports.verificationFailureReason,
       estimatedCost: agentReports.estimatedCost, checkedFacts: agentReports.checkedFacts,
       issueLinks: agentReports.issueLinks, createdAt: agentReports.createdAt, sessionId: agentReports.sessionId, runId: agentReports.runId,
     }).from(agentReports).where(eq(agentReports.caseId, caseId)).orderBy(sql`${agentReports.createdAt} desc`).limit(1);
@@ -657,7 +686,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       ...(session.completedAt ? { durationMs: Math.max(0, session.completedAt.getTime() - session.startedAt.getTime()) } : {}),
     });
     const currentSession = sessions.find((session) => session.id === report?.sessionId) ?? sessions.at(-1);
-    const reportEvents = report
+    const reportEvents = report && report.failureReason !== "agent_not_run"
       ? [
         { timestamp: report.createdAt.toISOString(), activity: `Checked ${(report.checkedFacts as unknown[]).length} facts` },
         { timestamp: report.createdAt.toISOString(), activity: `Created ${(report.issueLinks as unknown[]).length} review issues` },
@@ -969,6 +998,7 @@ export function hashIntake(command: CaseIntakeCommand): string {
       applicant_display_name: command.applicantDisplayName,
       application_data: command.applicationData,
       agent_model: command.agentModel,
+      start_agent_review: command.startAgentReview !== false,
       documents: (command.documents ?? []).map((document) => ({
         filename: document.submittedFilename,
         sha256: document.artifact.sha256,
@@ -1057,6 +1087,60 @@ export class PostgresWorkflowCoordinator {
       .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
     if (!run) throw new Error("Processing run does not exist");
     return run.agentModel;
+  }
+
+  async isManualPreparation(caseId: string, runId: string): Promise<boolean> {
+    const [run] = await this.db.select({ workflowVersion: processingRuns.workflowVersion }).from(processingRuns)
+      .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
+    if (!run) throw new Error("Processing run does not exist");
+    return run.workflowVersion === "manual-review-preparation-v1";
+  }
+
+  async completeManualPreparation(caseId: string, runId: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${runId}, 0))`);
+      const [run] = await tx.select({ status: processingRuns.status, inputRevisionId: processingRuns.inputRevisionId,
+        agentModel: processingRuns.agentModel }).from(processingRuns)
+        .where(and(eq(processingRuns.id, runId), eq(processingRuns.caseId, caseId))).limit(1);
+      if (!run) throw new CaseNotFoundError();
+      if (run.status === "completed") return;
+      if (run.status !== "running") throw new Error("Manual preparation run must be running before completion");
+      const completedAt = new Date();
+      const resultRevisionId = randomUUID();
+      const [input] = await tx.select({ applicationSnapshotId: inputRevisions.applicationSnapshotId,
+        applicationContent: applicationSnapshots.content }).from(inputRevisions)
+        .innerJoin(applicationSnapshots, eq(inputRevisions.applicationSnapshotId, applicationSnapshots.id))
+        .where(eq(inputRevisions.id, run.inputRevisionId)).limit(1);
+      if (!input) throw new Error("Manual preparation input revision is unavailable");
+      const preparedPages = await tx.select({ documentVersionId: pages.documentVersionId, pageNumber: pages.pageNumber })
+        .from(pages).innerJoin(documentInspections, eq(pages.documentInspectionId, documentInspections.id))
+        .where(eq(documentInspections.runId, runId));
+      const structuredPointers = ["/applicant_display_name", "/employment/employer", "/income/monthly_net"]
+        .filter((pointer) => jsonPointerExists(input.applicationContent, pointer));
+      await tx.insert(evidenceRecords).values([
+        ...preparedPages.map((page) => ({ id: randomUUID(), runId, evidenceType: "page_level",
+          documentVersionId: page.documentVersionId, pageNumber: page.pageNumber,
+          extractionMethod: "pdf_inspector_inspection", processorVersion: "manual-review-preparation-1.0.0" })),
+        ...structuredPointers.map((jsonPointer) => ({ id: randomUUID(), runId, evidenceType: "structured_input",
+          applicationSnapshotId: input.applicationSnapshotId, jsonPointer,
+          extractionMethod: "structured_input", processorVersion: "application-schema-1.0.0" })),
+      ]);
+      await tx.insert(resultRevisions).values({ id: resultRevisionId, caseId, runId,
+        inputRevisionId: run.inputRevisionId, revision: 1, revisionType: "human_review", sealedAt: completedAt });
+      await tx.insert(recommendedDispositions).values({ id: randomUUID(), resultRevisionId,
+        policyId: "manual-document-review-baseline", policyVersion: "1.0.0",
+        disposition: "human_review_required", reasonCodes: ["agent_not_run"] });
+      await tx.insert(agentReports).values({ id: randomUUID(), caseId, runId, resultRevisionId, sessionId: null,
+        availability: "unavailable", verificationStatus: null, verificationFailureReason: "agent_not_run",
+        summary: "No Agent review has been run. Human review can continue from the submitted application and documents.",
+        issueLinks: [], checkedFacts: [], originalSubmission: null, modelLabel: run.agentModel, estimatedCost: null });
+      await tx.update(processingRuns).set({ status: "completed", completedAt }).where(eq(processingRuns.id, runId));
+      await tx.insert(processingRunTransitions).values({ id: randomUUID(), runId, priorStatus: "running",
+        newStatus: "completed", reason: "manual_review_prepared" });
+      await tx.update(cases).set({ lifecycle: "ready_for_review", version: sql`${cases.version} + 1` }).where(eq(cases.id, caseId));
+      await tx.insert(caseStateTransitions).values({ id: randomUUID(), caseId, runId, priorState: "processing",
+        newState: "ready_for_review", reason: "manual_review_prepared", actor: "workflow_coordinator" });
+    });
   }
 
   async loadApplicant(caseId: string, runId: string): Promise<string> {

@@ -60,6 +60,8 @@ The project is in Stage Two implementation. The pnpm monorepo contains separate 
 
 Declared requirements now expose stable semantic roles and bounded extraction guidance, including the distinction between a salary-payment counterparty and the account-holding bank. Report submission and the deterministic Report Verifier share the same closed candidate schema. PDF Inspector `needsOcr` is the interim deterministic routing signal; a routed page must be visually inspected by the Agent before OCR or VLM, while a project-owned quality router remains deferred until evidence justifies it. One clear native-text case and one scanned synthetic case have completed the live Agent route with verified reports; the scanned case has also completed separate end-to-end live-VLM and real-OCR acceptance routes. These are bounded orchestration and synthetic recognition evidence only; corpus-level quality and real-world fitness remain unproven.
 
+The synthetic workbench supports an explicit exception to the ordinary processable-case path: `Generate demo case` requests a durable Agent-optional preparation run that inspects and renders the documents, seals an `agent_not_run` human-review baseline, and permits human review immediately. A later Agent review creates a new run over the same input and is allowed only before human review activity.
+
 Add commands, configuration, generated artifacts, and deployment instructions only when their implementation exists and this guide is updated in the same change.
 
 ## Working Rules

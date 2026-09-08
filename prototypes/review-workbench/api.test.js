@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createIssue, editIssue, formatPendingAgentActivity, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, normalizeEvidenceProjection, prepareDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, stopAgentReview, submitDemoCase, submitFinalReview } from './api.js';
+import { createIssue, editIssue, formatPendingAgentActivity, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, normalizeEvidenceProjection, prepareDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, startDemoCase, startPersistedAgentReview, stopAgentReview, submitDemoCase, submitFinalReview } from './api.js';
 
 describe('normalizeEvidenceProjection', () => {
   it('corrects only legacy native-text regions persisted with a bottom-left Y axis', () => {
@@ -139,6 +139,22 @@ describe('loadDemoCase', () => {
     expect(fetcher.mock.calls[0][0]).toBe('/api/v1/cases');
     expect(fetcher.mock.calls[0][1]).toMatchObject({ method: 'POST' });
     expect(fetcher.mock.calls[0][1].body.get('agent_model')).toBe('fake');
+    expect(fetcher.mock.calls[0][1].body.get('start_agent_review')).toBe('true');
+  });
+
+  it('persists a generated case without starting Agent review', async () => {
+    const fetcher = vi.fn(async () => ({ ok: true, json: async () => ({ case_id: 'case-1' }) }));
+    const prepared = { caseId: 'golden-001-native-clear', documentBytes: new ArrayBuffer(8), applicationData: { synthetic_data: true } };
+    await startDemoCase(prepared, 'openai/gpt-5.6-terra', fetcher, false);
+    expect(fetcher.mock.calls[0][1].body.get('start_agent_review')).toBe('false');
+  });
+
+  it('starts an Agent run for an already persisted case', async () => {
+    const fetcher = vi.fn(async () => ({ ok: true, json: async () => ({ started: true }) }));
+    await expect(startPersistedAgentReview('case/1', 'openai/gpt-5.6-terra', fetcher)).resolves.toEqual({ started: true });
+    expect(fetcher).toHaveBeenCalledWith('/api/v1/cases/case%2F1/agent-review/start', expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ agent_model: 'openai/gpt-5.6-terra' }),
+    }));
   });
 
   it('submits the bundled synthetic document and waits for review readiness', async () => {

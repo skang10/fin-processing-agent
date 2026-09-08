@@ -2,7 +2,7 @@
 
 Document ID: `API`
 
-Version: 1.11.0
+Version: 1.12.0
 
 Status: Approved
 
@@ -128,6 +128,7 @@ POST /api/v1/cases
 GET  /api/v1/cases
 GET  /api/v1/cases/{case_id}
 POST /api/v1/cases/{case_id}/runs
+POST /api/v1/cases/{case_id}/agent-review/start
 GET  /api/v1/cases/{case_id}/events
 ```
 
@@ -154,6 +155,10 @@ GET  /api/v1/cases/{case_id}/events
 `API-REQ-103` `POST /cases/{case_id}/agent-review/stop` must request cooperative termination through the Workflow Coordinator and return the bound `case_id`, `run_id`, and whether this request stopped an active run. Repeating the command after terminal state must be safe and return `stopped: false`; the API must not claim that an already in-flight provider request was interrupted.
 
 `API-REQ-104` `POST /cases/{case_id}/agent-review/restart` must create and enqueue a new run only when the current run was reviewer-stopped and no human issue or final review has been recorded. It returns the new `run_id`, `status_url`, and `restarted`; an incompatible repeat returns `restarted: false` without mutating either run.
+
+`API-REQ-105` Synthetic multipart intake may request document preparation without Agent execution. The accepted asynchronous preparation must persist the case, input and source documents, produce reviewable page representations, and converge to `ready_for_review` with an explicit `agent_not_run` human-review baseline.
+
+`API-REQ-106` `POST /cases/{case_id}/agent-review/start` must accept one configuration-allowlisted Agent model and create a new immutable run over the prepared input only before any human issue or final review exists. It must return `202 Accepted` with `started`, `run_id`, and `status_url`; it must not invoke or charge a model in the request handler.
 
 ## 9. Case Review Query Routes
 
@@ -350,6 +355,7 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.12.0 | 2026-09-08 | Approved | Added durable Agent-optional demo intake and the guarded start-Agent command for a prepared case. |
 | 1.11.0 | 2026-09-08 | Approved | Added the guarded new-run restart command for a reviewer-stopped Agent review. |
 | 1.10.0 | 2026-09-08 | Approved | Added the idempotent case-scoped command for cooperative Agent-review stopping. |
 | 1.9.0 | 2026-09-08 | Approved | Added bounded synthetic-demo Agent-model discovery and immutable allowlisted model selection at case intake. |

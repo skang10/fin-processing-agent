@@ -556,6 +556,7 @@ export interface CaseIntakeCommand {
   readonly idempotencyKey: string;
   readonly applicationData: Readonly<Record<string, unknown>>;
   readonly agentModel: string;
+  readonly startAgentReview?: boolean;
   readonly documents?: readonly IntakeDocument[];
 }
 
@@ -575,6 +576,7 @@ export interface CaseCommandService {
 }
 
 export interface AgentReviewCommandService {
+  startAgentReview(caseId: CaseId, agentModel: string): Promise<{ readonly caseId: CaseId; readonly runId: RunId; readonly started: boolean }>;
   stopAgentReview(caseId: CaseId): Promise<{ readonly caseId: CaseId; readonly runId: RunId; readonly stopped: boolean }>;
   restartAgentReview(caseId: CaseId): Promise<{ readonly caseId: CaseId; readonly runId: RunId; readonly restarted: boolean }>;
 }
@@ -643,7 +645,7 @@ export interface QueueCaseView {
   readonly caseCode: string;
   readonly applicantDisplayName: string;
   readonly summary: string;
-  readonly reviewMethod: "deterministic" | "agent" | "agent_vlm";
+  readonly reviewMethod: "manual" | "deterministic" | "agent" | "agent_vlm";
   readonly agentModelLabel?: string;
   readonly vlmModelLabel?: string;
   readonly issueCount: number;

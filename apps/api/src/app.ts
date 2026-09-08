@@ -28,7 +28,7 @@ import {
   ResolveIssueCommandSchema,
   ResolveIssueResultSchema,
   ReviewIssuesSchema,
-  StopAgentReviewResultSchema, RestartAgentReviewResultSchema,
+  StopAgentReviewResultSchema, RestartAgentReviewResultSchema, StartAgentReviewCommandSchema, StartAgentReviewResultSchema,
 } from "@findoc/contracts";
 import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AgentReviewCommandService, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService, type IntakeDocument, type ObjectStore, type ReviewCommandService, type SourceArtifactIntake, type AgentLogSessionView } from "@findoc/core";
 import { DocumentSizeLimitError, EmptyDocumentError, readObjectBytes, UnsupportedDocumentMediaError } from "@findoc/storage";
@@ -266,6 +266,18 @@ export function buildApp(
     const { case_id: caseId } = request.params as { case_id: string };
     const result = await agentReviewCommands.stopAgentReview(caseId);
     return { case_id: result.caseId, run_id: result.runId, stopped: result.stopped };
+  });
+
+  app.post("/api/v1/cases/:case_id/agent-review/start", {
+    schema: { body: StartAgentReviewCommandSchema, response: { 202: StartAgentReviewResultSchema, 400: ProblemDetailsSchema, 404: ProblemDetailsSchema } },
+  }, async (request, reply) => {
+    if (!agentReviewCommands) throw new CaseNotFoundError();
+    const { case_id: caseId } = request.params as { case_id: string };
+    const { agent_model: agentModel } = request.body as { agent_model: string };
+    if (!demoAgentModels.models.some((model) => model.id === agentModel)) throw new IntakeRequestError("agent_model is not allowed");
+    const result = await agentReviewCommands.startAgentReview(caseId, agentModel);
+    return reply.code(202).send({ case_id: result.caseId, run_id: result.runId, started: result.started,
+      status_url: `/api/v1/cases/${result.caseId}` });
   });
 
   app.post("/api/v1/cases/:case_id/agent-review/restart", {
@@ -540,6 +552,7 @@ export function buildApp(
       let applicantDisplayName: string;
       let applicationData: Readonly<Record<string, unknown>>;
       let requestedAgentModel: string | undefined;
+      let startAgentReview = true;
       const documents: IntakeDocument[] = [];
       try {
         if (request.isMultipart()) {
@@ -559,6 +572,8 @@ export function buildApp(
               }
             } else if (part.fieldname === "agent_model") {
               requestedAgentModel = String(part.value);
+            } else if (part.fieldname === "start_agent_review") {
+              startAgentReview = String(part.value) !== "false";
             }
           }
           if (documents.length === 0) throw new IntakeRequestError("Multipart intake requires at least one document");
@@ -570,7 +585,8 @@ export function buildApp(
         }
         const agentModel = requestedAgentModel ?? demoAgentModels.defaultModel;
         if (!demoAgentModels.models.some((model) => model.id === agentModel)) throw new IntakeRequestError("agent_model is not allowed");
-        const accepted = await caseCommands.accept({ applicantDisplayName, applicationData, agentModel, idempotencyKey: key, documents });
+        const accepted = await caseCommands.accept({ applicantDisplayName, applicationData, agentModel,
+          startAgentReview, idempotencyKey: key, documents });
         if (accepted.replayed) await discardUploads(sourceIntake, documents, request.log);
         const requestId = request.id || randomUUID();
         return reply.code(202).send({

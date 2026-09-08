@@ -127,6 +127,7 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
   try {
   if (!isCaseProcessingJob(job.data)) throw new Error("Invalid case-processing job payload");
   const selectedAgentModel = await coordinator.loadAgentModel(job.data.case_id, job.data.run_id);
+  const manualPreparation = await coordinator.isManualPreparation(job.data.case_id, job.data.run_id);
   logger.info({ case_id: job.data.case_id, run_id: job.data.run_id }, "case processing claimed");
   await coordinator.markRunRunning(job.data.case_id, job.data.run_id);
   if (!await coordinator.hasInputDocuments(job.data.case_id, job.data.run_id)) {
@@ -197,6 +198,11 @@ await boss.work<CaseProcessingJob>(CASE_PROCESSING_QUEUE, async ([job]) => {
         logicalDocuments: groupLogicalDocuments(demoAnalysis.classifications, demoAnalysis.boundaries),
       } : {}),
     });
+  }
+  if (manualPreparation) {
+    await coordinator.completeManualPreparation(job.data.case_id, job.data.run_id);
+    logger.info({ case_id: job.data.case_id, run_id: job.data.run_id }, "manual review case prepared");
+    return;
   }
   const stage = await processAgentLedCaseReview({
     coordinator, selectHarness: (fixtureId) => selectAgentHarness(fixtureId, selectedAgentModel), logger,

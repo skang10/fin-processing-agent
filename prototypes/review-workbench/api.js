@@ -59,16 +59,25 @@ export function formatPendingAgentActivity(event) {
   return event?.activity || 'Agent activity';
 }
 
-export async function startDemoCase(prepared, agentModel, fetcher = fetch) {
+export async function startDemoCase(prepared, agentModel, fetcher = fetch, startAgentReview = true) {
   const form = new FormData();
   form.set('application_data', JSON.stringify(prepared.applicationData));
   form.set('agent_model', agentModel);
+  form.set('start_agent_review', String(startAgentReview));
   form.set('documents', new Blob([prepared.documentBytes], { type: 'application/pdf' }), prepared.caseId + '.pdf');
   const createdResponse = await fetcher('/api/v1/cases', {
     method: 'POST', headers: { 'Idempotency-Key': 'demo-' + crypto.randomUUID() }, body: form,
   });
   if (!createdResponse.ok) throw new Error('Demo case could not be submitted');
   return createdResponse.json();
+}
+
+export async function startPersistedAgentReview(caseId, agentModel, fetcher = fetch) {
+  const response = await fetcher('/api/v1/cases/' + encodeURIComponent(caseId) + '/agent-review/start', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agent_model: agentModel }),
+  });
+  if (!response.ok) throw new Error('Agent review could not be started');
+  return response.json();
 }
 
 export async function stopAgentReview(caseId, fetcher = fetch) {

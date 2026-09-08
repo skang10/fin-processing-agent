@@ -1,4 +1,4 @@
-import { createIssue, editIssue, formatPendingAgentActivity, loadCaseBundle, loadCaseQueue, loadDemoAgentModels, prepareDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, startDemoCase, stopAgentReview, submitFinalReview } from './api.js';
+import { createIssue, editIssue, formatPendingAgentActivity, loadCaseBundle, loadCaseQueue, loadDemoAgentModels, prepareDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, startDemoCase, startPersistedAgentReview, stopAgentReview, submitFinalReview } from './api.js';
 import { presentIssue } from './issue-presentation.js';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -151,9 +151,11 @@ async function refreshQueue(view = activeQueueView, updateLocation = true) {
     cases = payload.cases.map(function (record) {
       const status = record.workflow_status === 'ready_for_review' ? 'ready' : record.workflow_status === 'processing' ? 'in-progress' : record.workflow_status.replaceAll('_', '-');
       const labels = { processing: 'In progress', ready_for_review: 'Ready for review', escalated: 'Escalated', changes_requested: 'Changes requested', ready_for_handoff: 'Ready for handoff' };
-      const methodTitle = record.review_method === 'deterministic' ? 'Deterministic workflow'
+      const methodTitle = record.review_method === 'manual' ? 'Human review'
+        : record.review_method === 'deterministic' ? 'Deterministic workflow'
         : record.review_method === 'agent_vlm' ? 'Agent + VLM' : 'Agent';
-      const methodDetail = record.review_method === 'deterministic' ? 'Demo only'
+      const methodDetail = record.review_method === 'manual' ? 'Agent not run'
+        : record.review_method === 'deterministic' ? 'Demo only'
         : [record.agent_model_label, record.vlm_model_label].filter(function (label) { return label; }).join(' · ') || 'Model unavailable';
       return { name: record.applicant_display_name, id: record.case_code, routeId: record.case_id, methodTitle, methodDetail,
         status, statusLabel: labels[record.workflow_status], issues: record.issue_count, waiting: waitingLabel(record.waiting_since) };
@@ -264,11 +266,11 @@ function setCaseTabsAvailability(reportAvailable, humanReviewAvailable = reportA
 
 function updateWorkflowProgress(stage) {
   const order = ['submitted', 'prepared', 'agent', 'human', 'outcome'];
-  const activeIndex = { generated: 0, preparing: 1, processing: 2, stopped: 3, review: 3, outcome: 4, stopped_outcome: 4 }[stage] ?? 3;
+  const activeIndex = { generated: 0, preparing: 1, processing: 2, stopped: 3, manual_review: 3, review: 3, outcome: 4, stopped_outcome: 4 }[stage] ?? 3;
   order.forEach(function (name, index) {
     const step = document.querySelector('[data-progress-step="' + name + '"]') || (name === 'outcome' ? document.querySelector('#outcome-step') : null);
     if (!step) return;
-    const agentSkipped = (stage === 'stopped' || stage === 'stopped_outcome') && name === 'agent';
+    const agentSkipped = (stage === 'stopped' || stage === 'stopped_outcome' || stage === 'manual_review') && name === 'agent';
     step.className = 'progress-step ' + (agentSkipped ? 'skipped' : index < activeIndex ? 'complete' : index === activeIndex ? 'active' : 'pending');
     step.querySelector('i').textContent = agentSkipped ? '–' : index < activeIndex ? '✓' : '';
   });
@@ -399,9 +401,11 @@ async function requestAgentRestart(caseId, button) {
   }
 }
 
-function agentRunMarkup(log, modelLabel, state, costLabel) {
+function agentRunMarkup(log, modelLabel, state, costLabel, includeRequested = true) {
   const events = log?.events || [];
-  const acceptedEvent = '<div class="agent-run-event' + (!events.length && state === 'Running' ? ' current' : '') + '"><i></i><div><strong>Agent review requested</strong><small>Case accepted and persisted</small></div></div>';
+  const acceptedEvent = includeRequested
+    ? '<div class="agent-run-event' + (!events.length && state === 'Running' ? ' current' : '') + '"><i></i><div><strong>Agent review requested</strong><small>Case accepted and persisted</small></div></div>'
+    : '';
   return '<header class="agent-run-header"><div class="agent-run-identity"><span class="agent-run-state"><i></i>' + escapeHtml(state) + '</span><strong>Agent review</strong></div>' +
     '<div class="agent-run-summary"><div><span>Model</span><strong title="' + escapeHtml(modelLabel) + '">' + escapeHtml(modelLabel) + '</strong></div>' +
     '<div><span>Cost</span><strong>' + escapeHtml(costLabel || 'Calculating') + '</strong></div></div></header>' +
@@ -523,7 +527,9 @@ function render() {
   document.querySelector('#previous').disabled = current === 0 || issues.length === 0;
   document.querySelector('#next').disabled = current >= issues.length - 1;
   document.querySelector('#issue-content').innerHTML = issues.length === 0
-    ? '<p class="empty-state">No Agent-raised issues for this case. Its deterministic checked facts stay in the Agent report.</p>'
+    ? '<p class="empty-state">' + (apiReport?.failure_reason === 'agent_not_run'
+      ? 'No issues have been recorded. Create an issue if human review identifies one.'
+      : 'No Agent-raised issues for this case. Its deterministic checked facts stay in the Agent report.') + '</p>'
     : editing ? correctionForm(issue) : confirming ? confirmationForm(issue) : ignoring ? ignoreForm() : issueDetail(issue);
   renderIssueFooter();
   renderSource(issue);
@@ -940,6 +946,7 @@ function wireIssueActions() {
           ...(supportingReferences.length ? {} : { no_reference_reason: noReferenceReason }),
         });
         apiCaseRecord.version = result.case_version;
+        document.querySelector('#demo-launch').hidden = true;
         issue.issueId = result.issue_id;
         issue.version = result.version;
         issue.origin = 'human';
@@ -1273,15 +1280,29 @@ document.querySelector('#refresh-queue').addEventListener('click', async functio
 document.querySelector('#load-demo-case').addEventListener('click', async function (event) {
   const button = event.currentTarget;
   button.disabled = true;
-  button.textContent = 'Preparing preview…';
+  button.textContent = 'Generating case…';
   try {
     const [prepared, models] = await Promise.all([prepareDemoCase(), loadDemoAgentModels()]);
     renderDemoAgentModels(models);
     setDemoPreview(prepared);
+    document.querySelector('#run-agent-review').hidden = true;
+    const created = await startDemoCase(prepared, models.default_model, fetch, false);
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      const response = await fetch(created.status_url);
+      if (!response.ok) throw new Error('Generated case status could not be loaded');
+      const status = await response.json();
+      if (status.lifecycle === 'ready_for_review') break;
+      if (status.lifecycle !== 'processing') throw new Error('Generated case preparation failed');
+      if (attempt === 119) throw new Error('Generated case preparation timed out');
+      await new Promise(function (resolve) { setTimeout(resolve, 250); });
+    }
+    preparedDemoCase = null;
+    window.history.replaceState({}, '', '?case_id=' + encodeURIComponent(created.case_id) + '&queue_view=review');
+    await loadCaseFromApi();
     button.disabled = false;
     button.textContent = 'Generate demo case';
   } catch (error) {
-    toast(error instanceof Error ? error.message : 'Demo preview could not be loaded');
+    toast(error instanceof Error ? error.message : 'Demo case could not be generated');
     button.disabled = false;
     button.textContent = 'Generate demo case';
   }
@@ -1289,7 +1310,8 @@ document.querySelector('#load-demo-case').addEventListener('click', async functi
 
 document.querySelector('#run-agent-review').addEventListener('click', async function (event) {
   const button = event.currentTarget;
-  if (!preparedDemoCase) return;
+  const persistedManualCase = apiReport?.failure_reason === 'agent_not_run' ? apiCaseRecord : null;
+  if (!preparedDemoCase && !persistedManualCase) return;
   const model = selectedDemoAgentModel();
   if (!model) return;
   if (model.paid && !await confirmPaidAgentRun(model)) return;
@@ -1298,10 +1320,14 @@ document.querySelector('#run-agent-review').addEventListener('click', async func
   button.textContent = 'Agent review in progress…';
   document.querySelector('#agent-model').disabled = true;
   document.querySelector('.agent-model-field').hidden = true;
+  document.querySelector('#persisted-agent-log').hidden = true;
   document.querySelector('#demo-preview').classList.add('running');
   updateWorkflowProgress('preparing');
   try {
-    createdCase = await startDemoCase(preparedDemoCase, model.id);
+    createdCase = persistedManualCase
+      ? await startPersistedAgentReview(persistedManualCase.case_id, model.id)
+      : await startDemoCase(preparedDemoCase, model.id);
+    if (persistedManualCase && !createdCase.started) throw new Error('Agent review cannot be started after human review activity');
     button.hidden = true;
     renderPendingAgentLog(null, model.label, null, createdCase);
     await followAgentRun(createdCase, model.label);
@@ -1529,22 +1555,25 @@ function renderAgentLog() {
     ? 'Deterministic demo model'
     : (apiAgentLog.model_label || 'Unavailable');
   const stopped = apiReport?.failure_reason === 'reviewer_stopped_agent' || apiAgentLog.session?.terminal_reason === 'cancelled_by_workflow';
+  const notRun = apiReport?.failure_reason === 'agent_not_run';
   const completed = apiReport?.availability === 'ready';
-  const state = stopped ? 'Stopped' : completed ? 'Completed' : 'Running';
+  const state = notRun ? 'Not run' : stopped ? 'Stopped' : completed ? 'Completed' : 'Running';
   const cost = apiAgentLog.estimated_cost
     ? apiAgentLog.estimated_cost.currency + ' ' + apiAgentLog.estimated_cost.amount
-    : completed || stopped ? 'Cost unavailable' : '';
+    : notRun ? '—' : completed || stopped ? 'Cost unavailable' : '';
   const persisted = document.querySelector('#persisted-agent-log');
   persisted.classList.toggle('completed', completed);
   document.querySelectorAll('.agent-log-meta').forEach(function (element) { element.hidden = true; });
-  const reportOutcome = stopped
+  const reportOutcome = notRun
+    ? '<div class="agent-log-outcome"><span>Agent review is optional</span><small>You can run the Agent or continue with human review.</small></div>'
+    : stopped
     ? '<div class="agent-log-outcome stopped"><span>Agent stopped by reviewer</span><small>Human review remains available</small></div>'
     : apiReport && apiReport.availability === 'unavailable'
     ? '<div class="agent-log-outcome rejected"><span>Report rejected by verifier</span><small>' +
       escapeHtml(reportFailureMessage(apiReport.failure_reason)) + '</small></div>'
     : apiReport && apiReport.availability === 'ready'
       ? '<div class="agent-log-outcome ready"><span>Report ready</span></div>' : '';
-  const eventMarkup = agentRunMarkup(apiAgentLog, modelLabel, state, cost) + reportOutcome +
+  const eventMarkup = agentRunMarkup(apiAgentLog, modelLabel, state, cost, !notRun) + reportOutcome +
     (apiCaseRecord?.lifecycle === 'processing' ? '<button class="button quiet agent-stop inline-agent-stop">Stop Agent review</button>' : '');
   document.querySelectorAll('.agent-run-events').forEach(function (element) { replaceAgentRunMarkup(element, eventMarkup); });
   document.querySelectorAll('.inline-agent-stop').forEach(function (button) {
@@ -1627,9 +1656,18 @@ async function loadCaseFromApi() {
     renderAgentLog();
     render();
     const agentStopped = apiAgentLog.session?.terminal_reason === 'cancelled_by_workflow' || report.failure_reason === 'reviewer_stopped_agent';
+    const agentNotRun = report.failure_reason === 'agent_not_run';
     setCaseTabsAvailability(report.availability === 'ready', agentStopped || caseRecord.lifecycle === 'ready_for_review' || caseRecord.lifecycle === 'review_complete');
     if (agentStopped && !caseRecord.final_review_action) renderStoppedAgentActions(caseId);
-    updateWorkflowProgress(caseRecord.lifecycle === 'processing' ? (apiAgentLog.session ? 'processing' : 'preparing') : agentStopped ? 'stopped' : 'review');
+    if (agentNotRun && !caseRecord.final_review_action) {
+      document.querySelector('#demo-launch').hidden = false;
+      document.querySelector('.agent-model-field').hidden = false;
+      document.querySelector('#agent-model').disabled = false;
+      const runButton = document.querySelector('#run-agent-review');
+      runButton.hidden = false; runButton.disabled = false; runButton.textContent = 'Run agent review';
+    }
+    updateWorkflowProgress(caseRecord.lifecycle === 'processing' ? (apiAgentLog.session ? 'processing' : 'preparing')
+      : agentNotRun ? 'manual_review' : agentStopped ? 'stopped' : 'review');
     if (caseRecord.final_review_action) {
       applyFinalOutcome(caseRecord.final_review_action);
     }

@@ -343,6 +343,29 @@ describe("PostgresCaseCommandService", () => {
     reviewFixture = { caseId: accepted.caseId, resultRevisionId, issueId: persistedIssue.id };
   });
 
+  it("prepares a durable manual-review baseline and can start Agent before human activity", async () => {
+    const service = new PostgresCaseCommandService(connection.db, "reviewer_manual");
+    const accepted = await service.accept({ applicantDisplayName: "Manual Demo",
+      applicationData: { applicant_display_name: "Manual Demo", employment: { employer: "Demo GmbH" } },
+      idempotencyKey: "manual_case_1", agentModel: "openai/gpt-5.6-terra", startAgentReview: false });
+    const coordinator = new PostgresWorkflowCoordinator(connection.db);
+    await expect(coordinator.isManualPreparation(accepted.caseId, accepted.runId)).resolves.toBe(true);
+    await coordinator.markRunRunning(accepted.caseId, accepted.runId);
+    await coordinator.completeManualPreparation(accepted.caseId, accepted.runId);
+    const queries = new PostgresCaseQueryService(connection.db);
+    await expect(queries.get(accepted.caseId)).resolves.toMatchObject({ lifecycle: "ready_for_review", resultAvailability: "ready" });
+    await expect(queries.getAgentReport(accepted.caseId)).resolves.toMatchObject({ availability: "unavailable", failureReason: "agent_not_run" });
+    await expect(queries.listEvidence(accepted.caseId)).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ evidenceType: "structured_input", jsonPointer: "/employment/employer" }),
+    ]));
+    await expect(queries.list("review")).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ caseId: accepted.caseId, reviewMethod: "manual", issueCount: 0 }),
+    ]));
+    const started = await service.startAgentReview(accepted.caseId, "openai/gpt-5.6-terra");
+    expect(started).toMatchObject({ caseId: accepted.caseId, started: true });
+    await expect(queries.get(accepted.caseId)).resolves.toMatchObject({ lifecycle: "processing" });
+  });
+
   it("persists issue resolution, requested-change revisions, and final review atomically", async () => {
     const service = new PostgresCaseCommandService(connection.db, "reviewer_1");
     await expect(new PostgresCaseQueryService(connection.db).getDownstreamHandoff(reviewFixture.caseId))

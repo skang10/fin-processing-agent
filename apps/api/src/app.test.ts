@@ -147,7 +147,8 @@ describe("case intake", () => {
     const accept = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", replayed: false }));
     const stopAgentReview = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", stopped: true }));
     const restartAgentReview = vi.fn(async () => ({ caseId: "case_1", runId: "run_2", restarted: true }));
-    const app = buildApp({ accept }, caseQueries, undefined, undefined, undefined, undefined, { stopAgentReview, restartAgentReview });
+    const startAgentReview = vi.fn(async () => ({ caseId: "case_1", runId: "run_2", started: true }));
+    const app = buildApp({ accept }, caseQueries, undefined, undefined, undefined, undefined, { startAgentReview, stopAgentReview, restartAgentReview });
     const response = await app.inject({ method: "POST", url: "/api/v1/cases/case_1/agent-review/stop" });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ case_id: "case_1", run_id: "run_1", stopped: true });
@@ -159,11 +160,30 @@ describe("case intake", () => {
     const accept = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", replayed: false }));
     const stopAgentReview = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", stopped: false }));
     const restartAgentReview = vi.fn(async () => ({ caseId: "case_1", runId: "run_2", restarted: true }));
-    const app = buildApp({ accept }, caseQueries, undefined, undefined, undefined, undefined, { stopAgentReview, restartAgentReview });
+    const startAgentReview = vi.fn(async () => ({ caseId: "case_1", runId: "run_2", started: true }));
+    const app = buildApp({ accept }, caseQueries, undefined, undefined, undefined, undefined, { startAgentReview, stopAgentReview, restartAgentReview });
     const response = await app.inject({ method: "POST", url: "/api/v1/cases/case_1/agent-review/restart" });
     expect(response.statusCode).toBe(202);
     expect(response.json()).toEqual({ case_id: "case_1", run_id: "run_2", restarted: true, status_url: "/api/v1/cases/case_1" });
     expect(restartAgentReview).toHaveBeenCalledWith("case_1");
+    await app.close();
+  });
+
+  it("starts an allowlisted Agent model for a prepared durable case", async () => {
+    const accept = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", replayed: false }));
+    const startAgentReview = vi.fn(async () => ({ caseId: "4c816f67-5f2f-4e21-8c17-7eb1e53838bd", runId: "4c816f67-5f2f-4e21-8c17-7eb1e5383990", started: true }));
+    const stopAgentReview = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", stopped: false }));
+    const restartAgentReview = vi.fn(async () => ({ caseId: "case_1", runId: "run_1", restarted: false }));
+    const models = { defaultModel: "openai/gpt-5.6-terra", models: [
+      { id: "openai/gpt-5.6-terra", label: "openai/gpt-5.6-terra", paid: true, maximumCaseCostUsd: "0.25" },
+    ] };
+    const app = buildApp({ accept }, caseQueries, undefined, undefined, undefined, models,
+      { startAgentReview, stopAgentReview, restartAgentReview });
+    const response = await app.inject({ method: "POST", url: "/api/v1/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/agent-review/start",
+      payload: { agent_model: "openai/gpt-5.6-terra" } });
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toMatchObject({ started: true, run_id: "4c816f67-5f2f-4e21-8c17-7eb1e5383990" });
+    expect(startAgentReview).toHaveBeenCalledWith("4c816f67-5f2f-4e21-8c17-7eb1e53838bd", "openai/gpt-5.6-terra");
     await app.close();
   });
 

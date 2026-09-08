@@ -350,6 +350,8 @@ It is archived source material only and is marked `Superseded`. The approved own
 
 `specs/INDEX.md` owns the specification map. Each normative requirement has one owning specification. Other documents reference the owner rather than duplicate normative text.
 
+61. `Generate demo case` now creates a durable Agent-optional case instead of a browser-only preview. The Worker performs local document inspection/rendering, seals an empty `human_review` result plus `human_review_required` disposition with explicit `agent_not_run` provenance, and exposes page-level and allowlisted structured-input evidence without creating an Agent session, finding, Checked Fact, usage, or cost. The workbench defaults to Agent Log with the Agent stage grey, enables Issues and Review & submit, and offers an allowlisted model selector that creates a new Agent run only before human issue/final-review activity. Browser verification created `FD-2026-0055` (`9e69c2c9-94ff-42ba-a73f-87f049233976`), confirmed three durable PDF pages after reopening the URL, `Not run`, cost `—`, disabled Agent Report, and accessible human-review tabs. No paid model was started.
+
 ## Target Specification Set
 
 ```text

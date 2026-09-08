@@ -101,7 +101,7 @@ export const CaseQueueSchema = Type.Object({
     case_code: Type.String({ pattern: "^FD-[0-9]{4}-[0-9]{4,}$" }),
     applicant_display_name: Type.String(),
     summary: Type.String(),
-    review_method: Type.Union([Type.Literal("deterministic"), Type.Literal("agent"), Type.Literal("agent_vlm")]),
+    review_method: Type.Union([Type.Literal("manual"), Type.Literal("deterministic"), Type.Literal("agent"), Type.Literal("agent_vlm")]),
     agent_model_label: Type.Optional(Type.String()),
     vlm_model_label: Type.Optional(Type.String()),
     issue_count: Type.Integer({ minimum: 0 }),
@@ -326,6 +326,17 @@ export const RestartAgentReviewResultSchema = Type.Object({
   case_id: Type.String({ format: "uuid" }),
   run_id: Type.String({ format: "uuid" }),
   restarted: Type.Boolean(),
+  status_url: Type.String(),
+});
+
+export const StartAgentReviewCommandSchema = Type.Object({
+  agent_model: Type.String({ minLength: 1 }),
+}, { additionalProperties: false });
+
+export const StartAgentReviewResultSchema = Type.Object({
+  case_id: Type.String({ format: "uuid" }),
+  run_id: Type.String({ format: "uuid" }),
+  started: Type.Boolean(),
   status_url: Type.String(),
 });
 

@@ -2,7 +2,7 @@
 
 Document ID: `DAT`
 
-Version: 3.2.0
+Version: 3.3.0
 
 Status: Approved
 
@@ -545,6 +545,8 @@ A Claim is a reconciled raw or normalized assertion linked to evidence. A Claim 
 
 `DAT-REQ-206` When a reviewer stops a run before a machine baseline is sealed, the stop transaction must atomically seal an empty `human_review` result revision and a `human_review_required` fallback disposition bound to the same run and input revision. This review anchor must not be presented as an Agent report or deterministic validation result, and exists only to bind human issues and final review immutably.
 
+`DAT-REQ-207` A generated synthetic case may complete document preparation without invoking an Agent. That preparation run must seal an empty `human_review` result revision and `human_review_required` disposition bound to its immutable input revision, record `agent_not_run`, and expose no Agent session, model usage, finding, Checked Fact, or Agent-authored report. A later Agent review must create a new immutable run over the same input revision and may start only before human issue or final-review activity.
+
 `DAT-REQ-183` A model-produced candidate or LLM entity-match opinion must reference exactly one model invocation; non-model results must not carry a fabricated model-invocation reference.
 
 ## 20. Audit Events
@@ -660,6 +662,7 @@ The following details are intentionally deferred to later owning specifications:
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.3.0 | 2026-09-08 | Approved | Added the durable manual-review baseline and guarded later Agent-run transition for generated synthetic cases. |
 | 3.2.0 | 2026-09-08 | Approved | Added the sealed human-review anchor used when a reviewer stops the Agent before a machine baseline exists. |
 | 3.1.0 | 2026-09-07 | Approved | Added the immutable `FD-YYYY-NNNN` reviewer-facing case reference while retaining the UUID as the relational technical identifier. |
 | 3.0.0 | 2026-09-06 | Approved | Replaced separate recovery and report sessions with one case-review session, added phase-aware Agent steps, immutable tool invocation results and reuse lineage, deterministic request links, and durable re-entry invariants. |
