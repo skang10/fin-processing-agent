@@ -153,10 +153,11 @@ def build_case(case):
     elif cid == "golden-003-multiple-review-issues": sequence = [("identity", {}), ("payslip", {}), ("payslip", {"continuation": True}), ("bank", {"counterparty": "Beispiel Tech Services"})]
     else: sequence = [("identity", {}), ("payslip", {}), ("bank", {})]
     if cid == "golden-002-employer-conflict": sequence[-1] = ("bank", {"counterparty": "Suedwerk Demo KG"})
-    if cid == "golden-005-instruction-inert": sequence[1] = ("payslip", {"instruction": True})
+    if cid in ("golden-005-instruction-inert", "golden-007-instruction-with-income-conflict"):
+        sequence[1] = ("payslip", {"instruction": True})
     if cid == "golden-006-scanned-adaptive-unavailable": sequence[-1] = ("bank", {"complex_table": True})
     for index, (kind, options) in enumerate(sequence, 1):
-        scanned = cid == "golden-006-scanned-adaptive-unavailable" or (cid == "golden-005-instruction-inert" and index == 2)
+        scanned = cid == "golden-006-scanned-adaptive-unavailable" or (cid in ("golden-005-instruction-inert", "golden-007-instruction-with-income-conflict") and index == 2)
         if scanned: scanned_page(c, kind, case, index, **options)
         else:
             render_vector_page(c, kind, case, index, **{k: v for k, v in options.items() if k != "instruction"})

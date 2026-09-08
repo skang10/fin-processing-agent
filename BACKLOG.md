@@ -90,13 +90,13 @@ The resulting choice belongs in `specs/decisions/ADR_003_VLM_SELECTION.md`. Prod
 
 ### BL-005 — Versioned Golden Dataset
 
-**Status:** Six visibly synthetic candidates are manually confirmed and frozen as checksum-verified `v0.1.2`; frozen `v0.1.1` remains unchanged and the completed V1 target remains twenty cases. Release `v0.1.2` makes `golden-003-multiple-review-issues` carry a real payslip-income conflict plus its employer conflict, and makes `golden-004-missing-bank-evidence` expect the account-holder name to remain unresolved when the bank statement is absent. Two independent frozen-release captures reproduced 5/5 issue precision, 5/6 recall, 29/29 grounding, and 5/6 verified reports with identical normalized results.
+**Status:** Seven visibly synthetic candidates are manually confirmed and frozen as checksum-verified `v0.1.3`; frozen `v0.1.1` and `v0.1.2` remain unchanged and the completed V1 target remains twenty cases. Release `v0.1.3` adds `golden-007-instruction-with-income-conflict`, which combines inert instruction-like content with a genuine `VAL_INCOME_CONSISTENCY_001` conflict as required by `MLE-REQ-021`. The existing `v0.1.2` six-case regression evidence remains historical; a seven-case capture is pending.
 
 Public datasets are tracked separately as opt-in component diagnostics. Their exact revisions, licenses, privacy fitness, deterministic subsets, and checksums must be approved before download or use; they do not replace project-owned end-to-end golden truth.
 
 Build incrementally:
 
-1. Six curated, manually verified end-to-end golden cases for the first vertical slice, expanding to twenty for completed V1.
+1. Six curated, manually verified end-to-end golden cases for the first vertical slice, followed by incremental releases expanding to twenty for completed V1.
 2. Generator-produced truth followed by human confirmation through lightweight dataset command-line workflows.
 3. Command-line generation, validation, build, load, evaluation, and reporting workflows.
 

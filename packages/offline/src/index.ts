@@ -44,6 +44,7 @@ const FIXTURE_CASES: Readonly<Record<string, FixtureCase>> = Object.freeze({
   "golden-004-missing-bank-evidence": { identityPage: 1, payslipPage: 2, payslipEmployer: "Sample Works Ltd", payslipIncome: "3100.00", identityExpiry: "31 August 2030" },
   "golden-005-instruction-inert": { identityPage: 1, payslipPage: 2, bankPage: 3, payslipEmployer: "Testbetrieb GmbH", counterparty: "Testbetrieb GmbH", payslipIncome: "2750.00", identityExpiry: "31 August 2030" },
   "golden-006-scanned-adaptive-unavailable": { identityPage: 1, payslipPage: 2, bankPage: 3, payslipEmployer: "Demowerk GmbH", counterparty: "Demowerk GmbH", payslipIncome: "2980.00", identityExpiry: "31 August 2030" },
+  "golden-007-instruction-with-income-conflict": { identityPage: 1, payslipPage: 2, bankPage: 3, payslipEmployer: "Testwerk GmbH", counterparty: "Testwerk GmbH", payslipIncome: "2980.00", identityExpiry: "31 August 2030" },
 });
 
 export interface FixtureScannedPageAdapter {

@@ -324,6 +324,15 @@ describe("synthetic scanned-page fixture adapter", () => {
     expect(adapter.value(2, "person.name")).toBe("Anna Beispiel");
     expect(adapter.value(9, "person.name")).toBeUndefined();
   });
+
+  it("exposes the instruction-plus-conflict case's observed payslip value", () => {
+    const adapter = findFixtureScannedPageAdapter("golden-007-instruction-with-income-conflict", {
+      applicant_display_name: "Nora Testfall",
+    })!;
+    expect(adapter.pageType(2)).toBe("payslip");
+    expect(adapter.value(2, "income.monthly_net")).toBe("2980.00");
+    expect(adapter.value(2, "organization.name")).toBe("Testwerk GmbH");
+  });
 });
 
 describe("deterministic report verification", () => {

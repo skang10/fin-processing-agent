@@ -147,17 +147,17 @@ describe('loadDemoCase', () => {
     expect(wait).toHaveBeenCalledTimes(1);
   });
 
-  it('selects across all six frozen synthetic cases', async () => {
+  it('selects across all seven frozen synthetic cases', async () => {
     const selectedDocuments = [];
-    for (const random of [0, 0.2, 0.4, 0.6, 0.8, 0.999]) {
+    for (const random of [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.999]) {
       const fetcher = vi.fn()
         .mockImplementationOnce(async (url) => { selectedDocuments.push(url); return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) }; })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ status_url: '/api/v1/cases/case-1' }) })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ case_id: 'case-1', lifecycle: 'ready_for_review' }) });
       await loadDemoCase(fetcher, async function () {}, function () { return random; });
     }
-    expect(new Set(selectedDocuments).size).toBe(6);
-    expect(selectedDocuments.every(function (url) { return url.includes('/v0.1.2/documents/golden-'); })).toBe(true);
+    expect(new Set(selectedDocuments).size).toBe(7);
+    expect(selectedDocuments.every(function (url) { return url.includes('/v0.1.3/documents/golden-'); })).toBe(true);
   });
 });
 

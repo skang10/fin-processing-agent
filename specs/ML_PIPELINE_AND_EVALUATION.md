@@ -2,7 +2,7 @@
 
 Document ID: `MLE`
 
-Version: 1.2.0
+Version: 1.2.1
 
 Status: Approved
 
@@ -103,9 +103,9 @@ Synthetic case package
 
 ### 5.1 Dataset purpose and size
 
-`MLE-REQ-017` The first vertical slice must contain six curated, manually verified synthetic end-to-end golden cases; the completed V1 target is twenty cases.
+`MLE-REQ-017` The first vertical slice must contain six curated, manually verified synthetic end-to-end golden cases. Later checksum-verified releases may add manually verified cases incrementally, and the completed V1 target is twenty cases.
 
-`MLE-REQ-018` The six-case initial set and twenty-case completed set form demonstration acceptance and regression sets, not statistically representative production samples.
+`MLE-REQ-018` The six-case initial set, incremental releases, and twenty-case completed set form demonstration acceptance and regression sets, not statistically representative production samples.
 
 `MLE-REQ-019` A reported metric must identify the exact frozen dataset release and compatible subset; excluded and unevaluable cases must be listed with reasons.
 
@@ -292,7 +292,7 @@ evaluate report
 
 The ML evaluation system is acceptable for implementation when automated tests demonstrate that:
 
-`MLE-REQ-079` The six-case initial release and later twenty-case completed release must each be reproducible, schema-valid, visibly synthetic, checksum-verified, and manually confirmed.
+`MLE-REQ-079` The six-case initial release, every incremental release, and the later twenty-case completed release must each be reproducible, schema-valid, visibly synthetic, checksum-verified, and manually confirmed.
 
 `MLE-REQ-080` The three acceptance paths execute with pinned PDF Inspector and OCR provenance and produce traceable inputs to the Agent.
 
@@ -314,7 +314,7 @@ The ML evaluation system is acceptable for implementation when automated tests d
 
 ## 15. Assumptions and Deferred Evidence
 
-1. Six curated cases are sufficient to start the vertical slice; twenty remain the completed V1 target. Neither supports representative statistical or production claims.
+1. Six curated cases were sufficient to start the vertical slice; incremental releases may expand coverage toward the completed twenty-case V1 target. None supports representative statistical or production claims.
 2. Exact issue-matching normalization, baseline values, regression tolerances, and default/fallback VLM selection require measured evidence.
 3. PDF Inspector remains the accepted inspection, OCR-routing, and local PP-OCRv6 Small execution foundation behind project-owned contracts; integration quality is demonstrated through focused fixtures and end-to-end report outcomes.
 4. Human-review time savings and inter-reviewer agreement are useful future studies but are outside the V1 ML evaluation.
@@ -326,6 +326,7 @@ No unresolved decision blocks review of the V1 evaluation scope. Numerical thres
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.2.1 | 2026-09-08 | Approved | Allowed manually confirmed, checksum-verified incremental golden releases between the six-case initial slice and twenty-case completed V1 target without changing evaluation scope or production-fitness limitations. |
 | 1.2.0 | 2026-09-06 | Approved | Aligned evaluation provenance with PDF Inspector 1.17.0's local PP-OCRv6 Small execution path without expanding headline evaluation scope. |
 | 1.1.1 | 2026-09-05 | Approved | Clarified the independent PDF Inspector and PP-OCRv6 adapter boundaries without changing evaluation scope. |
 | 1.1.0 | 2026-09-04 | Approved | Reduced the first vertical-slice dataset to six complete golden cases while retaining twenty as the completed V1 target. |
