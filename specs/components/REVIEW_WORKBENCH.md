@@ -2,7 +2,7 @@
 
 Document ID: `UI`
 
-Version: 3.6.0
+Version: 3.7.0
 
 Status: Approved
 
@@ -316,6 +316,8 @@ The workbench presents `clear_for_downstream` as **Complete document review** so
 
 `UI-REQ-174` While a generated demo case is processing, the workbench must offer a confirmed **Stop Agent review** action. The stopped state must retain committed Agent-log activity and explain that an already in-flight provider request may still complete and count toward recorded cost; it must not expose a report unless a verified report was committed before the stop won the terminal-state race.
 
+`UI-REQ-175` A reviewer-stopped case must keep Agent Log as its default view, show the incomplete Agent stage in neutral grey, make Issues and Review & submit available against a sealed human-review result, and offer **Restart Agent review** only before human review activity. When the human submits without an Agent report, Human review is complete in the timeline while the Agent stage remains grey.
+
 `UI-REQ-080` The reviewer workbench must not expose a separate Pipeline view; case-level processing state is represented by the compact shared progression in `UI-REQ-150`.
 
 `UI-REQ-081` Superseded for V1 by the bounded case Agent log in `UI-REQ-155`.
@@ -464,6 +466,7 @@ No unresolved Review Workbench boundary decision blocks review of this document.
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.7.0 | 2026-09-08 | Approved | Added stopped-run restart, manual-review fallback, and neutral skipped-Agent timeline presentation. |
 | 3.6.0 | 2026-09-08 | Approved | Added the confirmed cooperative stop action and durable stopped-state presentation for generated demo Agent runs. |
 | 3.5.0 | 2026-09-08 | Approved | Added the generated synthetic demo-case start flow, allowlisted pre-run Agent-model selection with paid confirmation, processing Agent Log, and post-run Agent Report transition. |
 | 3.4.0 | 2026-09-07 | Approved | Replaced visible case UUIDs with immutable `FD-YYYY-NNNN` reviewer references while retaining UUID routing. |

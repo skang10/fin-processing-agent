@@ -576,6 +576,7 @@ export interface CaseCommandService {
 
 export interface AgentReviewCommandService {
   stopAgentReview(caseId: CaseId): Promise<{ readonly caseId: CaseId; readonly runId: RunId; readonly stopped: boolean }>;
+  restartAgentReview(caseId: CaseId): Promise<{ readonly caseId: CaseId; readonly runId: RunId; readonly restarted: boolean }>;
 }
 
 export interface ReviewCommandContext {

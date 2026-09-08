@@ -1,4 +1,4 @@
-import { createIssue, editIssue, formatPendingAgentActivity, loadCaseBundle, loadCaseQueue, loadDemoAgentModels, prepareDemoCase, resolveIssue, saveRequestedChange, startDemoCase, stopAgentReview, submitFinalReview } from './api.js';
+import { createIssue, editIssue, formatPendingAgentActivity, loadCaseBundle, loadCaseQueue, loadDemoAgentModels, prepareDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, startDemoCase, stopAgentReview, submitFinalReview } from './api.js';
 import { presentIssue } from './issue-presentation.js';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -241,21 +241,22 @@ function setDemoPreview(prepared) {
   activateCaseTab('agent-log');
 }
 
-function setCaseTabsAvailability(reportAvailable) {
+function setCaseTabsAvailability(reportAvailable, humanReviewAvailable = reportAvailable) {
   document.querySelectorAll('[data-case-tab]').forEach(function (button) {
     if (button.dataset.caseTab === 'agent-log') return;
-    button.disabled = !reportAvailable;
+    button.disabled = button.dataset.caseTab === 'report' ? !reportAvailable : !humanReviewAvailable;
   });
 }
 
 function updateWorkflowProgress(stage) {
   const order = ['submitted', 'prepared', 'agent', 'human', 'outcome'];
-  const activeIndex = { generated: 0, preparing: 1, processing: 2, stopped: 2, review: 3, outcome: 4 }[stage] ?? 3;
+  const activeIndex = { generated: 0, preparing: 1, processing: 2, stopped: 3, review: 3, outcome: 4, stopped_outcome: 4 }[stage] ?? 3;
   order.forEach(function (name, index) {
     const step = document.querySelector('[data-progress-step="' + name + '"]') || (name === 'outcome' ? document.querySelector('#outcome-step') : null);
     if (!step) return;
-    step.className = 'progress-step ' + (index < activeIndex ? 'complete' : index === activeIndex ? (stage === 'stopped' ? 'stopped' : 'active') : 'pending');
-    step.querySelector('i').textContent = index < activeIndex ? '✓' : stage === 'stopped' && index === activeIndex ? '×' : '';
+    const agentSkipped = (stage === 'stopped' || stage === 'stopped_outcome') && name === 'agent';
+    step.className = 'progress-step ' + (agentSkipped ? 'skipped' : index < activeIndex ? 'complete' : index === activeIndex ? 'active' : 'pending');
+    step.querySelector('i').textContent = agentSkipped ? '–' : index < activeIndex ? '✓' : '';
   });
 }
 
@@ -301,6 +302,21 @@ async function requestAgentStop(caseId, button, onStopped) {
   }
 }
 
+async function requestAgentRestart(caseId, button) {
+  if (!window.confirm('Restart this Agent review as a new run? The previous Agent Log and recorded cost will be preserved.')) return;
+  button.disabled = true;
+  button.textContent = 'Restarting…';
+  try {
+    const result = await restartAgentReview(caseId);
+    if (!result.restarted) throw new Error('Agent review can no longer be restarted after human review activity');
+    window.location.search = '?case_id=' + encodeURIComponent(result.case_id) + '&queue_view=review';
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = 'Restart Agent review';
+    toast(error instanceof Error ? error.message : 'Agent review could not be restarted');
+  }
+}
+
 function renderPendingAgentLog(log, modelLabel, completedCase, runningCase) {
   const panel = document.querySelector('#pending-agent-log');
   panel.hidden = false;
@@ -319,6 +335,15 @@ function renderPendingAgentLog(log, modelLabel, completedCase, runningCase) {
   });
 }
 
+function renderStoppedAgentActions(caseId) {
+  const host = document.querySelector('#persisted-agent-log');
+  const actions = document.createElement('div');
+  actions.className = 'stopped-agent-actions';
+  actions.innerHTML = '<div><strong>Agent review stopped</strong><span>You can restart the Agent as a new run, or continue the human review now.</span></div><button class="button primary" id="restart-agent-review">Restart Agent review</button>';
+  host.prepend(actions);
+  document.querySelector('#restart-agent-review').addEventListener('click', function (event) { void requestAgentRestart(caseId, event.currentTarget); });
+}
+
 async function followAgentRun(created, modelLabel) {
   let latestLog = null;
   for (let attempt = 0; attempt < 240; attempt += 1) {
@@ -331,6 +356,10 @@ async function followAgentRun(created, modelLabel) {
       renderPendingAgentLog(latestLog, modelLabel, null, demoStopRequested ? null : created);
     }
     if (status.lifecycle !== 'processing') {
+      if (demoStopRequested) {
+        window.location.search = '?case_id=' + encodeURIComponent(created.case_id) + '&queue_view=review';
+        return;
+      }
       if (status.lifecycle !== 'ready_for_review') {
         if (!demoStopRequested) throw new Error('Agent review did not produce a review report');
         document.querySelector('#demo-preview').classList.remove('running');
@@ -1445,7 +1474,9 @@ function renderAgentLog() {
     return '<header><div><h3>' + title + '</h3>' + (detail ? '<span>' + escapeHtml(detail) + '</span>' : '') + '</div>' +
       '<small>' + session.iterations + ' iterations, ' + session.tool_calls + ' tool calls' + escapeHtml(resumed) + '</small></header>';
   };
-  const reportOutcome = apiReport && apiReport.availability === 'unavailable'
+  const reportOutcome = apiReport && apiReport.failure_reason === 'reviewer_stopped_agent'
+    ? '<div class="agent-log-outcome stopped"><span>Agent stopped by reviewer</span><small>Human review remains available</small></div>'
+    : apiReport && apiReport.availability === 'unavailable'
     ? '<div class="agent-log-outcome rejected"><span>Report rejected by verifier</span><small>' +
       escapeHtml(reportFailureMessage(apiReport.failure_reason)) + '</small></div>'
     : apiReport && apiReport.availability === 'ready'
@@ -1525,8 +1556,13 @@ async function loadCaseFromApi() {
     renderApiReport(report);
     renderAgentLog();
     render();
-    updateWorkflowProgress(caseRecord.lifecycle === 'processing' ? (apiAgentLog.session ? 'processing' : 'preparing') : caseRecord.lifecycle === 'processing_exception' ? 'stopped' : 'review');
-    if (caseRecord.final_review_action) applyFinalOutcome(caseRecord.final_review_action);
+    const agentStopped = apiAgentLog.session?.terminal_reason === 'cancelled_by_workflow' || report.failure_reason === 'reviewer_stopped_agent';
+    setCaseTabsAvailability(report.availability === 'ready', caseRecord.lifecycle === 'ready_for_review' || caseRecord.lifecycle === 'review_complete');
+    if (agentStopped && !caseRecord.final_review_action) renderStoppedAgentActions(caseId);
+    updateWorkflowProgress(caseRecord.lifecycle === 'processing' ? (apiAgentLog.session ? 'processing' : 'preparing') : agentStopped ? 'stopped' : 'review');
+    if (caseRecord.final_review_action) {
+      applyFinalOutcome(caseRecord.final_review_action);
+    }
     show('workspace');
     activateCaseTab(caseRecord.lifecycle === 'processing' || report.availability !== 'ready' ? 'agent-log' : 'report');
   } catch (error) {

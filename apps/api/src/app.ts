@@ -28,7 +28,7 @@ import {
   ResolveIssueCommandSchema,
   ResolveIssueResultSchema,
   ReviewIssuesSchema,
-  StopAgentReviewResultSchema,
+  StopAgentReviewResultSchema, RestartAgentReviewResultSchema,
 } from "@findoc/contracts";
 import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, type AgentReviewCommandService, type CaseCommandService, type CaseQueryService, type CaseReviewQueryService, type IntakeDocument, type ObjectStore, type ReviewCommandService, type SourceArtifactIntake, type AgentLogSessionView } from "@findoc/core";
 import { DocumentSizeLimitError, EmptyDocumentError, readObjectBytes, UnsupportedDocumentMediaError } from "@findoc/storage";
@@ -266,6 +266,16 @@ export function buildApp(
     const { case_id: caseId } = request.params as { case_id: string };
     const result = await agentReviewCommands.stopAgentReview(caseId);
     return { case_id: result.caseId, run_id: result.runId, stopped: result.stopped };
+  });
+
+  app.post("/api/v1/cases/:case_id/agent-review/restart", {
+    schema: { response: { 202: RestartAgentReviewResultSchema, 404: ProblemDetailsSchema } },
+  }, async (request, reply) => {
+    if (!agentReviewCommands) throw new CaseNotFoundError();
+    const { case_id: caseId } = request.params as { case_id: string };
+    const result = await agentReviewCommands.restartAgentReview(caseId);
+    return reply.code(202).send({ case_id: result.caseId, run_id: result.runId, restarted: result.restarted,
+      status_url: `/api/v1/cases/${result.caseId}` });
   });
 
   app.get("/api/v1/cases/:case_id/evidence/:evidence_id", {

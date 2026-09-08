@@ -191,12 +191,67 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
       await tx.insert(processingRunTransitions).values({
         id: randomUUID(), runId: record.runId, priorStatus: run.status, newStatus: "failed", reason: "reviewer_requested_agent_stop",
       });
-      await tx.update(cases).set({ lifecycle: "processing_exception", version: sql`${cases.version} + 1` }).where(eq(cases.id, caseId));
+      const [existingRevision] = await tx.select({ id: resultRevisions.id }).from(resultRevisions)
+        .where(eq(resultRevisions.runId, record.runId)).limit(1);
+      const resultRevisionId = existingRevision?.id ?? randomUUID();
+      if (!existingRevision) await tx.insert(resultRevisions).values({
+        id: resultRevisionId, caseId, runId: record.runId, inputRevisionId: (await tx.select({ id: processingRuns.inputRevisionId })
+          .from(processingRuns).where(eq(processingRuns.id, record.runId)).limit(1))[0]!.id,
+        revision: 1, revisionType: "human_review", sealedAt: completedAt,
+      });
+      if (!existingRevision) await tx.insert(recommendedDispositions).values({
+        id: randomUUID(), resultRevisionId, policyId: "manual-document-review-fallback", policyVersion: "1.0.0",
+        disposition: "human_review_required", reasonCodes: ["agent_stopped_by_reviewer"],
+      });
+      const [existingReport] = await tx.select({ id: agentReports.id }).from(agentReports)
+        .where(eq(agentReports.runId, record.runId)).limit(1);
+      if (!existingReport) await tx.insert(agentReports).values({
+        id: randomUUID(), caseId, runId: record.runId, resultRevisionId, sessionId: session?.id ?? null,
+        availability: "unavailable", verificationStatus: null, verificationFailureReason: "reviewer_stopped_agent",
+        summary: "Agent review was stopped. Human review can continue from the submitted application and documents.",
+        issueLinks: [], checkedFacts: [], originalSubmission: null,
+        modelLabel: (await tx.select({ model: processingRuns.agentModel }).from(processingRuns)
+          .where(eq(processingRuns.id, record.runId)).limit(1))[0]!.model,
+        estimatedCost: null,
+      });
+      await tx.update(cases).set({ lifecycle: "ready_for_review", version: sql`${cases.version} + 1` }).where(eq(cases.id, caseId));
       await tx.insert(caseStateTransitions).values({
         id: randomUUID(), caseId, runId: record.runId, priorState: "processing",
-        newState: "processing_exception", reason: "reviewer_requested_agent_stop", actor: this.actorId,
+        newState: "ready_for_review", reason: "reviewer_requested_agent_stop", actor: this.actorId,
       });
       return { caseId, runId: record.runId, stopped: true };
+    });
+  }
+
+  async restartAgentReview(caseId: string): Promise<{ caseId: string; runId: string; restarted: boolean }> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${caseId}, 0))`);
+      const [record] = await tx.select({ lifecycle: cases.lifecycle, runId: cases.currentRunId }).from(cases)
+        .where(eq(cases.id, caseId)).limit(1);
+      if (!record?.runId) throw new CaseNotFoundError();
+      const [prior] = await tx.select({ inputRevisionId: processingRuns.inputRevisionId, workflowVersion: processingRuns.workflowVersion,
+        agentModel: processingRuns.agentModel, status: processingRuns.status, terminalReason: agentSessions.terminalReason,
+        stopReason: agentReports.verificationFailureReason })
+        .from(processingRuns).leftJoin(agentSessions, eq(agentSessions.runId, processingRuns.id))
+        .leftJoin(agentReports, eq(agentReports.runId, processingRuns.id))
+        .where(eq(processingRuns.id, record.runId)).limit(1);
+      const [issue] = await tx.select({ id: reviewIssues.id }).from(reviewIssues).where(eq(reviewIssues.caseId, caseId)).limit(1);
+      const [finalReview] = await tx.select({ id: finalReviews.id }).from(finalReviews).where(eq(finalReviews.caseId, caseId)).limit(1);
+      if (record.lifecycle !== "ready_for_review" || prior?.status !== "failed" ||
+        (prior.terminalReason !== "cancelled_by_workflow" && prior.stopReason !== "reviewer_stopped_agent") || issue || finalReview) {
+        return { caseId, runId: record.runId, restarted: false };
+      }
+      const runId = randomUUID();
+      await tx.insert(processingRuns).values({ id: runId, caseId, inputRevisionId: prior.inputRevisionId,
+        workflowVersion: prior.workflowVersion, agentModel: prior.agentModel, status: "created" });
+      await tx.insert(processingRunTransitions).values({ id: randomUUID(), runId, priorStatus: null,
+        newStatus: "created", reason: "reviewer_restarted_agent" });
+      await tx.update(cases).set({ currentRunId: runId, lifecycle: "processing", version: sql`${cases.version} + 1` }).where(eq(cases.id, caseId));
+      await tx.insert(caseStateTransitions).values({ id: randomUUID(), caseId, runId, priorState: "ready_for_review",
+        newState: "processing", reason: "reviewer_restarted_agent", actor: this.actorId });
+      await tx.insert(outboxEvents).values({ id: randomUUID(), eventType: "case_processing_requested",
+        aggregateId: caseId, payload: { case_id: caseId, run_id: runId } });
+      return { caseId, runId, restarted: true };
     });
   }
 

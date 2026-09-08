@@ -343,6 +343,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .agent-log-outcome span { font-size: 11px; font-weight: 700; }
 .agent-log-outcome small { color: var(--muted); font-size: 9px; text-transform: capitalize; }
 .agent-log-outcome.rejected { background: #fff7f5; color: var(--danger); }
+.agent-log-outcome.stopped { background: var(--surface-soft); color: var(--muted); }
 .agent-log-outcome.ready { background: var(--success-soft); color: var(--success); place-items: center; text-align: center; }
 .agent-log-empty { margin: 0; padding: 14px; border: 1px solid var(--line); color: var(--muted); font-size: 10px; }
 @media (max-width: 560px) {
@@ -457,10 +458,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @keyframes evidencePulse { 50% { background: rgba(36,87,214,.21); } }
 
 .review-panel { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--surface); display: grid; grid-template-rows: 54px minmax(0, 1fr); }
-.demo-preview-workspace { min-height: 0; padding: clamp(28px, 5vw, 54px); overflow-y: auto; align-content: center; background: linear-gradient(180deg, #fbfcff, #fff); }
+.demo-preview-workspace { min-height: 0; padding: clamp(28px, 5vw, 54px); overflow-y: auto; align-content: start; background: linear-gradient(180deg, #fbfcff, #fff); }
 .demo-preview-workspace.active { display: grid; }
 .demo-preview-workspace #demo-launch { display: grid; }
 .demo-preview-workspace .inline-agent-log { width: 100%; }
+.stopped-agent-actions { margin-bottom: 16px; padding: 14px 16px; border: 1px solid var(--line); background: var(--surface-soft); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.stopped-agent-actions div { display: grid; gap: 4px; }
+.stopped-agent-actions strong { font-size: 12px; }
+.stopped-agent-actions span { color: var(--muted); font-size: 10px; }
 .demo-preview-workspace.running, .demo-preview-workspace.completed { align-content: start; }
 .demo-preview-workspace h2 { max-width: 360px; margin: 10px 0 12px; font-size: 24px; line-height: 1.16; }
 .demo-preview-workspace p { max-width: 430px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
@@ -692,6 +697,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .progress-step.active span { color: var(--accent); font-weight: 700; }
 .progress-step.stopped i { border-color: var(--danger); background: var(--danger); }
 .progress-step.stopped span { color: var(--danger); font-weight: 700; }
+.progress-step.skipped i { border-color: #b9c1ca; background: #eef1f4; color: #7d8791; }
+.progress-step.skipped span { color: var(--quiet); font-weight: 600; }
 .progress-step small { display: block; margin-top: 3px; color: var(--quiet); font-size: 7px; font-weight: 400; }
 .progress-step.outcome-complete i { border-color: var(--success); background: var(--success); }
 .progress-step.outcome-change i { border-color: var(--warning); background: var(--warning); }

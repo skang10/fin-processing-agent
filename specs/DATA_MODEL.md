@@ -2,7 +2,7 @@
 
 Document ID: `DAT`
 
-Version: 3.1.0
+Version: 3.2.0
 
 Status: Approved
 
@@ -543,6 +543,8 @@ A Claim is a reconciled raw or normalized assertion linked to evidence. A Claim 
 
 `DAT-REQ-191` A result revision remains reviewable when its Agent brief is unavailable, timed out, budget-exhausted, or rejected.
 
+`DAT-REQ-206` When a reviewer stops a run before a machine baseline is sealed, the stop transaction must atomically seal an empty `human_review` result revision and a `human_review_required` fallback disposition bound to the same run and input revision. This review anchor must not be presented as an Agent report or deterministic validation result, and exists only to bind human issues and final review immutably.
+
 `DAT-REQ-183` A model-produced candidate or LLM entity-match opinion must reference exactly one model invocation; non-model results must not carry a fabricated model-invocation reference.
 
 ## 20. Audit Events
@@ -658,6 +660,7 @@ The following details are intentionally deferred to later owning specifications:
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.2.0 | 2026-09-08 | Approved | Added the sealed human-review anchor used when a reviewer stops the Agent before a machine baseline exists. |
 | 3.1.0 | 2026-09-07 | Approved | Added the immutable `FD-YYYY-NNNN` reviewer-facing case reference while retaining the UUID as the relational technical identifier. |
 | 3.0.0 | 2026-09-06 | Approved | Replaced separate recovery and report sessions with one case-review session, added phase-aware Agent steps, immutable tool invocation results and reuse lineage, deterministic request links, and durable re-entry invariants. |
 | 2.3.0 | 2026-09-06 | Approved | Defined immutable page native-text artifacts and their provenance boundary. |

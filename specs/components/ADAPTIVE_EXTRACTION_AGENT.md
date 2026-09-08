@@ -2,7 +2,7 @@
 
 Document ID: `AGT`
 
-Version: 3.6.0
+Version: 3.7.0
 
 Status: Approved
 
@@ -433,6 +433,8 @@ internal_error
 
 `AGT-REQ-183` A reviewer-requested stop must be mediated by the Workflow Coordinator, durably terminalize the active session as `cancelled_by_workflow`, preserve all committed steps and cumulative usage, and prevent subsequent Agent steps or recovery attempts. An external model request already in flight may complete and its reconciled usage must remain counted; cancellation must not fabricate a report or discard paid usage.
 
+`AGT-REQ-184` A stopped Agent review may be restarted only as a new processing run over the same immutable input revision and selected model. The stopped run, Agent Log, committed tool results, and cumulative usage must remain immutable; human review activity on the stopped result prevents restart so results from different review paths cannot be mixed.
+
 ## 12. Retry and Recovery Matrix
 
 Retries operate at different layers. A lower layer must not conceal repeated work from the durable layer that owns its budget and attempt history.
@@ -595,6 +597,7 @@ Version 3.0.0 resolves Agent authority but creates dependent specification work 
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.7.0 | 2026-09-08 | Approved | Added new-run restart semantics after a reviewer-requested stop while preserving the stopped run and preventing restart after human review activity. |
 | 3.6.0 | 2026-09-08 | Approved | Added reviewer-requested cooperative stopping through the Workflow Coordinator with durable terminal state and preserved cumulative usage. |
 | 3.5.0 | 2026-09-07 | Approved | Adopted PDF Inspector `needsOcr` as the interim deterministic routing signal and required the Agent to visually inspect such a page before OCR or VLM extraction. A future quality router remains evidence-dependent. |
 | 3.4.0 | 2026-09-07 | Approved | Moved dynamic attention-reference authorization to the report tool boundary and limited report attention references to non-passing deterministic findings, allowing a live model to repair an invalid reference before session termination. |

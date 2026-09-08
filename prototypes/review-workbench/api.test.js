@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createIssue, editIssue, formatPendingAgentActivity, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, prepareDemoCase, resolveIssue, saveRequestedChange, stopAgentReview, submitDemoCase, submitFinalReview } from './api.js';
+import { createIssue, editIssue, formatPendingAgentActivity, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, prepareDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, stopAgentReview, submitDemoCase, submitFinalReview } from './api.js';
 
 describe('formatPendingAgentActivity', () => {
   it('uses the durable Agent Log activity', () => {
@@ -17,6 +17,14 @@ describe('stopAgentReview', () => {
     const fetcher = vi.fn(async () => ({ ok: true, json: async () => ({ case_id: 'case-1', run_id: 'run-1', stopped: true }) }));
     await expect(stopAgentReview('case/1', fetcher)).resolves.toMatchObject({ stopped: true });
     expect(fetcher).toHaveBeenCalledWith('/api/v1/cases/case%2F1/agent-review/stop', { method: 'POST' });
+  });
+});
+
+describe('restartAgentReview', () => {
+  it('starts a new durable run for a stopped case', async () => {
+    const fetcher = vi.fn(async () => ({ ok: true, json: async () => ({ case_id: 'case-1', run_id: 'run-2', restarted: true }) }));
+    await expect(restartAgentReview('case/1', fetcher)).resolves.toMatchObject({ restarted: true, run_id: 'run-2' });
+    expect(fetcher).toHaveBeenCalledWith('/api/v1/cases/case%2F1/agent-review/restart', { method: 'POST' });
   });
 });
 

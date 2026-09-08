@@ -322,6 +322,13 @@ export const ReviewIssueSchema = Type.Object({
   }, { additionalProperties: false })),
 });
 
+export const RestartAgentReviewResultSchema = Type.Object({
+  case_id: Type.String({ format: "uuid" }),
+  run_id: Type.String({ format: "uuid" }),
+  restarted: Type.Boolean(),
+  status_url: Type.String(),
+});
+
 export const ReviewIssuesSchema = Type.Object({ issues: Type.Array(ReviewIssueSchema) });
 
 const ReviewCommandBase = {

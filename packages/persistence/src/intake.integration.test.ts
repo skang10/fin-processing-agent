@@ -480,7 +480,39 @@ describe("PostgresCaseCommandService", () => {
     await expect(service.stopAgentReview(accepted.caseId)).resolves.toMatchObject({ stopped: true, runId: accepted.runId });
     await expect(service.stopAgentReview(accepted.caseId)).resolves.toMatchObject({ stopped: false, runId: accepted.runId });
     await expect(new PostgresCaseQueryService(connection.db).get(accepted.caseId)).resolves.toMatchObject({
-      lifecycle: "processing_exception", resultAvailability: "unavailable",
+      lifecycle: "ready_for_review", resultAvailability: "ready",
     });
+    await expect(new PostgresCaseQueryService(connection.db).getAgentReport(accepted.caseId)).resolves.toMatchObject({
+      availability: "unavailable", resultRevision: { revision: 1 }, failureReason: "reviewer_stopped_agent",
+    });
+    const restarted = await service.restartAgentReview(accepted.caseId);
+    expect(restarted).toMatchObject({ restarted: true, caseId: accepted.caseId });
+    expect(restarted.runId).not.toBe(accepted.runId);
+    await expect(new PostgresCaseQueryService(connection.db).get(accepted.caseId)).resolves.toMatchObject({ lifecycle: "processing" });
+  });
+
+  it("keeps a stopped case available for human issue creation and final review", async () => {
+    const service = new PostgresCaseCommandService(connection.db, "reviewer_manual_fallback");
+    const accepted = await service.accept({ applicantDisplayName: "Synthetic Manual Review",
+      applicationData: { applicant_display_name: "Synthetic Manual Review" }, idempotencyKey: "manual_after_stop",
+      agentModel: "fake", documents: [] });
+    const coordinator = new PostgresWorkflowCoordinator(connection.db);
+    await coordinator.markRunRunning(accepted.caseId, accepted.runId);
+    await service.stopAgentReview(accepted.caseId);
+    const queries = new PostgresCaseQueryService(connection.db);
+    const status = await queries.get(accepted.caseId);
+    const report = await queries.getAgentReport(accepted.caseId);
+    const created = await service.createIssue({ caseId: accepted.caseId, resultRevisionId: report.resultRevision!.id,
+      commandId: "manual_issue", expectedCaseVersion: status.version, title: "Manual document question",
+      description: "The reviewer identified a synthetic document question.", recommendedAction: "Confirm the submitted information.",
+      supportingReferences: [], noReferenceReason: "Reviewer observation across the submitted document set" });
+    await service.resolveIssue({ caseId: accepted.caseId, resultRevisionId: report.resultRevision!.id,
+      commandId: "manual_issue_ignore", issueId: created.issueId, expectedIssueVersion: created.issueVersion,
+      action: "dismiss_signal", reason: "Reviewed manually" });
+    await expect(service.restartAgentReview(accepted.caseId)).resolves.toMatchObject({ restarted: false, runId: accepted.runId });
+    await expect(service.submitFinalReview({ caseId: accepted.caseId, resultRevisionId: report.resultRevision!.id,
+      commandId: "manual_final", expectedCaseVersion: created.caseVersion, action: "escalate_review",
+      selectedDraftRevisionIds: [] })).resolves.toMatchObject({ action: "escalate_review" });
+    await expect(queries.get(accepted.caseId)).resolves.toMatchObject({ lifecycle: "review_complete", finalReviewAction: "escalate_review" });
   });
 });
