@@ -360,7 +360,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .agent-log-event.system { background: #f7f9fb; }
 .agent-log-outcome { min-height: 52px; padding: 10px 14px; border-top: 1px solid var(--line); display: grid; align-content: center; gap: 3px; }
 .agent-log-outcome span { font-size: 11px; font-weight: 700; }
-.agent-log-outcome small { color: var(--muted); font-size: 9px; text-transform: capitalize; }
+.agent-log-outcome small { color: var(--muted); font-size: 9px; }
 .agent-log-outcome.rejected { background: #fff7f5; color: var(--danger); }
 .agent-log-outcome.stopped { background: var(--surface-soft); color: var(--muted); }
 .agent-log-outcome.ready { min-height: 38px; padding: 8px 12px; background: var(--success-soft); color: var(--success); display: flex; align-items: center; }
@@ -487,8 +487,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .stopped-agent-actions strong { font-size: 12px; }
 .stopped-agent-actions span { color: var(--muted); font-size: 10px; }
 .demo-preview-workspace.running, .demo-preview-workspace.completed { align-content: start; }
-.demo-preview-workspace.persisted-log { padding: 0; overflow: hidden; }
-.persisted-log .inline-agent-log { height: 100%; }
+.demo-preview-workspace.persisted-log { padding: 0; overflow: hidden; grid-template-rows: auto minmax(0, 1fr); align-content: stretch; }
+.persisted-log #demo-launch { padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--surface); grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; }
+.persisted-log #demo-launch[hidden] { display: none; }
+.persisted-log #demo-launch .agent-model-field { max-width: none; }
+.persisted-log #demo-launch .button { margin: 17px 0 0; white-space: nowrap; }
+.persisted-log .inline-agent-log { height: auto; min-height: 0; }
 .persisted-log .agent-run-events { margin: 0; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
 .persisted-log .agent-run-header { border-width: 0 0 1px; border-radius: 0; padding-inline: 24px; }
 .persisted-log .agent-run-timeline { min-height: 0; max-height: none; flex: 1 1 auto; padding: 14px 24px 20px; border: 0; overflow-y: auto; }

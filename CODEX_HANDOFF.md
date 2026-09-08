@@ -352,6 +352,8 @@ It is archived source material only and is marked `Superseded`. The approved own
 
 61. `Generate demo case` now creates a durable Agent-optional case instead of a browser-only preview. The Worker performs local document inspection/rendering, seals an empty `human_review` result plus `human_review_required` disposition with explicit `agent_not_run` provenance, and exposes page-level and allowlisted structured-input evidence without creating an Agent session, finding, Checked Fact, usage, or cost. The workbench defaults to Agent Log with the Agent stage grey, enables Issues and Review & submit, and offers an allowlisted model selector that creates a new Agent run only before human issue/final-review activity. Browser verification created `FD-2026-0055` (`9e69c2c9-94ff-42ba-a73f-87f049233976`), confirmed three durable PDF pages after reopening the URL, `Not run`, cost `—`, disabled Agent Report, and accessible human-review tabs. No paid model was started.
 
+62. The persisted Agent-optional case now renders its launch controls and durable Agent Log as one bounded two-row workspace: a compact model/run toolbar followed by the status header, scrollable preprocessing activity, and optional-review outcome. This removes the conflicting full-height preview/log layouts, aligns their horizontal spacing, preserves sentence casing in the outcome copy, and keeps the model, cost, and local preprocessing evidence visible without starting the Agent. Browser verification reused `FD-2026-0055`; no paid model was started. `pnpm check` passed 208 tests, the root and Review Web builds passed, and `git diff --check` passed.
+
 ## Target Specification Set
 
 ```text
