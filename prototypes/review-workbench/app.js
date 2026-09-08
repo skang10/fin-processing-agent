@@ -1203,11 +1203,11 @@ document.querySelector('#load-demo-case').addEventListener('click', async functi
 });
 
 document.querySelector('#run-agent-review').addEventListener('click', async function (event) {
+  const button = event.currentTarget;
   if (!preparedDemoCase) return;
   const model = selectedDemoAgentModel();
   if (!model) return;
   if (model.paid && !await confirmPaidAgentRun(model)) return;
-  const button = event.currentTarget;
   let createdCase = null;
   button.disabled = true;
   button.textContent = 'Agent review in progress…';
