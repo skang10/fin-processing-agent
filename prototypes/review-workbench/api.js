@@ -44,6 +44,11 @@ export async function loadDemoAgentModels(fetcher = fetch) {
   return response.json();
 }
 
+export function formatPendingAgentActivity(event) {
+  const activity = event?.activity || 'Agent activity';
+  return event?.tool_label ? activity + ' · ' + event.tool_label : activity;
+}
+
 export async function startDemoCase(prepared, agentModel, fetcher = fetch) {
   const form = new FormData();
   form.set('application_data', JSON.stringify(prepared.applicationData));

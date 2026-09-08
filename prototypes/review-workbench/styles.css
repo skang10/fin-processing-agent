@@ -474,6 +474,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .pending-agent-log[hidden] { display: none; }
 .pending-agent-log strong { font-size: 11px; }
 .pending-agent-log span { color: var(--muted); font-size: 9px; line-height: 1.5; }
+.pending-agent-log .agent-run-complete { margin-top: 8px; padding: 12px; border-radius: 5px; background: var(--success-soft); display: grid; gap: 4px; }
+.pending-agent-log .agent-run-complete strong { color: var(--success); }
+.pending-agent-log .agent-run-complete span { color: var(--muted); }
+.pending-agent-log .button { margin-top: 4px; }
 .case-tabs { height: 54px; min-height: 54px; flex: 0 0 54px; padding: 0 12px; border-bottom: 1px solid var(--line); display: flex; align-items: stretch; gap: 4px; overflow: visible; }
 .case-tabs button { min-height: 54px; padding: 2px 8px 0; border: 0; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 650; line-height: 1.25; white-space: nowrap; cursor: pointer; }
 .case-tabs button.active { color: var(--accent); box-shadow: inset 0 -2px var(--accent); }
