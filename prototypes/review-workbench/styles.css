@@ -576,6 +576,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .issue-state.confirmed, .issue-state.edited { border-color: #b9ddc7; background: var(--success-soft); color: var(--success); }
 .issue-state.dismissed { border-color: #d7dde1; background: var(--surface-soft); color: var(--muted); }
 .issue-scroll { min-height: 0; overflow-y: auto; padding: 22px 24px 28px; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.issue-detail-context { position: sticky; z-index: 2; top: -22px; margin: -22px -24px 20px; padding: 12px 24px; border-bottom: 1px solid var(--line); background: #fafbfb; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.issue-detail-context div { min-width: 0; display: grid; gap: 3px; }
+.issue-detail-context span { color: var(--muted); font-size: 8px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.issue-detail-context strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.issue-detail-context em { color: var(--muted); font-size: 9px; font-style: normal; }
 .finding-tone { min-height: 21px; padding: 0 7px; border-radius: 3px; display: inline-flex; align-items: center; font-weight: 700; }
 .finding-tone.failed { background: var(--danger-soft); color: var(--danger); }
 .finding-tone.warning { background: var(--warning-soft); color: var(--warning); }
@@ -588,12 +593,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .block-label { padding: 15px 0 8px; display: flex; justify-content: space-between; align-items: center; }
 .block-label span { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .block-label small { color: var(--quiet); font-size: 8px; }
-.claim-card { padding: 13px 14px; margin-top: 7px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+.claim-card { min-height: 64px; padding: 10px 12px; margin-top: 7px; border: 1px solid var(--line); border-radius: 4px; background: #fff; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; }
+.claim-copy { min-width: 0; display: grid; grid-template-columns: minmax(90px, .8fr) minmax(80px, 1fr); align-items: center; gap: 4px 14px; }
 .claim-head { display: flex; justify-content: space-between; align-items: center; }
 .claim-head span { color: var(--muted); font-size: 8px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 .claim-head small { color: var(--quiet); font-size: 8px; }
-.claim-card > strong { display: block; margin: 7px 0 8px; font-size: 13px; }
-.field-name { display: block; margin-top: 10px; color: var(--muted); font-size: 9px; }
+.claim-copy > strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.field-name { display: block; color: var(--muted); font-size: 9px; }
+.claim-card.evidence-note { grid-template-columns: 1fr; }
+.claim-card.evidence-note .claim-copy { grid-template-columns: minmax(0, 1fr); }
+.claim-card.evidence-note .claim-copy > strong { white-space: normal; }
 .comparison-divider { margin: 9px 0 2px; color: var(--quiet); font-size: 9px; text-align: center; }
 .evidence-link { padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 9px; cursor: pointer; }
 .evidence-link span { margin-right: 5px; }
@@ -891,7 +900,7 @@ body { font-size: 14px; }
 .review-prompt p { font-size: 12px; }
 .block-label span, .block-label small { font-size: 10px; }
 .claim-head span, .claim-head small { font-size: 9px; }
-.claim-card > strong { font-size: 15px; }
+.claim-copy > strong { font-size: 15px; }
 .evidence-link, .link-button { font-size: 10px; }
 .recorded-outcome strong { font-size: 11px; }
 .recorded-outcome small, .recorded-outcome button { font-size: 10px; }

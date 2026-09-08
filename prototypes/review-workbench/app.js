@@ -765,16 +765,18 @@ function issueDetail(issue) {
     const evidenceControl = item.reference
       ? '<button class="evidence-link active" data-evidence-reference="' + encodeURIComponent(item.reference) + '">' + escapeHtml(item.source) + ' →</button>'
       : '<button class="evidence-link ' + (item.evidence ? 'active' : '') + '" data-legacy-evidence="' + Boolean(item.evidence) + '">View ' + escapeHtml(item.source) + '</button>';
-    return '<article class="claim-card"><div class="claim-head"><span>' + escapeHtml(item.role) + '</span></div>' +
-      '<small class="field-name">' + escapeHtml(item.label) + '</small><strong>' + escapeHtml(value) + '</strong>' + evidenceControl + '</article>';
+    return '<article class="claim-card"><div class="claim-copy"><div class="claim-head"><span>' + escapeHtml(item.role) + '</span></div>' +
+      '<small class="field-name">' + escapeHtml(item.label) + '</small><strong>' + escapeHtml(value) + '</strong></div>' + evidenceControl + '</article>';
   }).join('');
-  const reviewedEvidence = values || '<article class="claim-card"><div class="claim-head"><span>Reviewer evidence note</span></div>' +
-    '<strong>' + escapeHtml(issue.noReferenceReason || 'No supporting evidence was provided.') + '</strong></article>';
+  const reviewedEvidence = values || '<article class="claim-card evidence-note"><div class="claim-copy"><div class="claim-head"><span>Reviewer evidence note</span></div>' +
+    '<strong>' + escapeHtml(issue.noReferenceReason || 'No supporting evidence was provided.') + '</strong></div></article>';
   const outcome = decisions[current];
   const recordedOutcome = outcome === 'pending' ? '' : '<div class="recorded-outcome"><span class="outcome-icon">' +
     (outcome === 'dismissed' ? '×' : '✓') + '</span><span><small>Recorded outcome</small><strong>' + escapeHtml(outcomeLabel(outcome)) + '</strong></span>' +
     (!caseReadOnly ? '<button id="change-outcome">Reopen issue</button>' : '') + '</div>';
-  return '<div class="review-prompt"><p>' + escapeHtml(issue.why) + '</p></div>' +
+  return '<header class="issue-detail-context"><div><span>Issue ' + String(current + 1).padStart(2, '0') + ' of ' + String(issues.length).padStart(2, '0') + '</span>' +
+    '<strong>' + escapeHtml(issue.title) + '</strong></div><em>' + escapeHtml(outcomeLabel(outcome)) + '</em></header>' +
+    '<div class="review-prompt"><p>' + escapeHtml(issue.why) + '</p></div>' +
     '<div class="claim-comparison"><div class="block-label"><span>Evidence reviewed</span></div>' +
     reviewedEvidence + '</div>' + recordedOutcome;
 }
