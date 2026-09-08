@@ -1570,7 +1570,7 @@ async function loadCaseFromApi() {
     renderAgentLog();
     render();
     const agentStopped = apiAgentLog.session?.terminal_reason === 'cancelled_by_workflow' || report.failure_reason === 'reviewer_stopped_agent';
-    setCaseTabsAvailability(report.availability === 'ready', caseRecord.lifecycle === 'ready_for_review' || caseRecord.lifecycle === 'review_complete');
+    setCaseTabsAvailability(report.availability === 'ready', agentStopped || caseRecord.lifecycle === 'ready_for_review' || caseRecord.lifecycle === 'review_complete');
     if (agentStopped && !caseRecord.final_review_action) renderStoppedAgentActions(caseId);
     updateWorkflowProgress(caseRecord.lifecycle === 'processing' ? (apiAgentLog.session ? 'processing' : 'preparing') : agentStopped ? 'stopped' : 'review');
     if (caseRecord.final_review_action) {

@@ -237,7 +237,9 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
         .where(eq(processingRuns.id, record.runId)).limit(1);
       const [issue] = await tx.select({ id: reviewIssues.id }).from(reviewIssues).where(eq(reviewIssues.caseId, caseId)).limit(1);
       const [finalReview] = await tx.select({ id: finalReviews.id }).from(finalReviews).where(eq(finalReviews.caseId, caseId)).limit(1);
-      if (record.lifecycle !== "ready_for_review" || prior?.status !== "failed" ||
+      const restartableLifecycle = record.lifecycle === "ready_for_review" ||
+        (record.lifecycle === "processing_exception" && prior?.terminalReason === "cancelled_by_workflow");
+      if (!restartableLifecycle || prior?.status !== "failed" ||
         (prior.terminalReason !== "cancelled_by_workflow" && prior.stopReason !== "reviewer_stopped_agent") || issue || finalReview) {
         return { caseId, runId: record.runId, restarted: false };
       }
@@ -247,7 +249,7 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
       await tx.insert(processingRunTransitions).values({ id: randomUUID(), runId, priorStatus: null,
         newStatus: "created", reason: "reviewer_restarted_agent" });
       await tx.update(cases).set({ currentRunId: runId, lifecycle: "processing", version: sql`${cases.version} + 1` }).where(eq(cases.id, caseId));
-      await tx.insert(caseStateTransitions).values({ id: randomUUID(), caseId, runId, priorState: "ready_for_review",
+      await tx.insert(caseStateTransitions).values({ id: randomUUID(), caseId, runId, priorState: record.lifecycle,
         newState: "processing", reason: "reviewer_restarted_agent", actor: this.actorId });
       await tx.insert(outboxEvents).values({ id: randomUUID(), eventType: "case_processing_requested",
         aggregateId: caseId, payload: { case_id: caseId, run_id: runId } });
