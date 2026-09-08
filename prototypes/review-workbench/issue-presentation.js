@@ -1,9 +1,25 @@
 export function presentIssue(record, finding, index, documents, evidenceByReference) {
   const requiredDocumentMissing = finding?.reason_code === 'required_document_missing';
+  const reasonCode = finding?.reason_code;
+  const isValueMismatch = reasonCode === 'value_mismatch';
   const defaults = {
     VAL_DOC_COMPLETENESS_001: { title: requiredDocumentMissing ? 'Bank statement missing' : 'Document completeness', type: 'Document review', tone: 'warning' },
-    VAL_EMPLOYER_CONSISTENCY_001: { title: 'Employer mismatch', type: 'Cross-document conflict', tone: 'failed' },
-    VAL_INCOME_CONSISTENCY_001: { title: 'Monthly income', type: 'Evidence review', tone: 'warning' },
+    VAL_NAME_CONSISTENCY_001: {
+      title: reasonCode === 'person_name_conflict' || isValueMismatch ? 'Applicant name mismatch' : 'Applicant name could not be fully verified',
+      type: 'Identity review', tone: reasonCode === 'person_name_conflict' ? 'failed' : 'warning',
+    },
+    VAL_EMPLOYER_CONSISTENCY_001: {
+      title: reasonCode && reasonCode !== 'employer_conflict' && !isValueMismatch ? 'Employer could not be fully verified' : 'Employer mismatch',
+      type: 'Employment review', tone: reasonCode === 'employer_conflict' || isValueMismatch ? 'failed' : 'warning',
+    },
+    VAL_INCOME_CONSISTENCY_001: {
+      title: !reasonCode ? 'Monthly income' : reasonCode === 'income_conflict' || isValueMismatch ? 'Monthly income mismatch' : 'Monthly income could not be compared',
+      type: 'Income review', tone: reasonCode === 'income_conflict' || isValueMismatch ? 'failed' : 'warning',
+    },
+    VAL_ID_EXPIRY_001: {
+      title: reasonCode === 'identity_document_expired' ? 'Identity document expired' : 'Identity expiry could not be verified',
+      type: 'Identity review', tone: reasonCode === 'identity_document_expired' ? 'failed' : 'warning',
+    },
   }[record.code] || { title: 'Review issue ' + (index + 1), type: 'Agent finding', tone: 'warning' };
   const suppliedReferences = record.supporting_references?.length ? record.supporting_references : (finding?.references || []);
   const references = requiredDocumentMissing ? [] : suppliedReferences;
