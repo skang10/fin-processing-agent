@@ -161,6 +161,13 @@ interface CaseManifest {
 
 interface NativeTextResult { document_version_id: string; page_number: number; available: boolean; untrusted_document_text: string }
 interface OcrResultView { document_version_id: string; page_number: number; untrusted_lines?: { text: string }[] }
+
+const INSTRUCTION_LIKE_DOCUMENT_TEXT = /\b(?:ignore|disregard|override)\b[\s\S]{0,100}\b(?:rules?|instructions?|policy|policies|prompt)\b|\b(?:approve|reject)\b[\s\S]{0,60}\b(?:application|loan)\b/i;
+
+function observedInstructionLikeContent(texts: Iterable<string>): boolean {
+  for (const text of texts) if (INSTRUCTION_LIKE_DOCUMENT_TEXT.test(text)) return true;
+  return false;
+}
 interface RenderResultView { artifactReference: string; width: number; height: number }
 interface VlmResultView { document_version_id: string; page_number: number; gap_id: string; field_schema_id: string; value: { raw_value: string; region: { x: number; y: number; width: number; height: number } } | null }
 
@@ -344,7 +351,9 @@ export const standardCaseReviewScript: FakeModelScript = (_turn, context) => {
   if (!result) return { kind: "tool_calls", calls: [{ name: "get_current_result", args: {} }] };
   const findings: ReportFindingView[] = result.findings.map((finding) => ({ ruleId: finding.rule_id, ...(finding.rule_version ? { ruleVersion: finding.rule_version } : {}), status: finding.status, reasonCode: finding.reason_code }));
   const items = attentionItemsForFindings(findings);
-  return { kind: "tool_calls", calls: [{ name: "submit_case_review_brief", args: { brief: { schema_version: "1.0.0", result_revision_id: result.result_revision_id, report_status: "ready", summary: reviewSummary(items.length), attention_items: items } } }] };
+  const instructionObserved = observedInstructionLikeContent([...nativeByPage.values(), ...ocrByPage.values()]);
+  const summary = `${reviewSummary(items.length)}${instructionObserved ? " Instruction-like document content was observed, treated as untrusted, and not followed." : ""}`;
+  return { kind: "tool_calls", calls: [{ name: "submit_case_review_brief", args: { brief: { schema_version: "1.0.0", result_revision_id: result.result_revision_id, report_status: "ready", summary, attention_items: items } } }] };
 };
 
 export const policyViolationCaseReviewScript: FakeModelScript = (turn, context) => {

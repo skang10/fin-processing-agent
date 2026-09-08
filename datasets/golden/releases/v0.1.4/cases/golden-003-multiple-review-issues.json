@@ -1,0 +1,93 @@
+{
+  "application_data": {
+    "applicant_display_name": "Anna Beispiel",
+    "demo_fixture_id": "golden-003-multiple-review-issues",
+    "employment": {
+      "employer": "Beispieltechnik GmbH"
+    },
+    "income": {
+      "currency": "EUR",
+      "monthly_net": "3480.00"
+    },
+    "synthetic_data": true
+  },
+  "case_id": "golden-003-multiple-review-issues",
+  "coverage": [
+    "native_text",
+    "de",
+    "multiple_review_issues",
+    "multi_page_document",
+    "implemented_offline_path"
+  ],
+  "document_values": {
+    "payslip_monthly_net": "3310.00"
+  },
+  "documents": [
+    {
+      "media_type": "application/pdf",
+      "page_count": 4,
+      "path": "documents/golden-003-multiple-review-issues/golden-003-multiple-review-issues.pdf",
+      "sha256": "0bff1a6c66a787c48382850afc5c7dcbc98cc9ddd53a6ca9c4b10d77015cfe50"
+    }
+  ],
+  "generator": {
+    "template_version": "structured-a4-1.0.0",
+    "version": "findoc-golden-generator-2.0.0"
+  },
+  "schema_version": "1.0.0",
+  "seed": 1003,
+  "synthetic_data": true,
+  "truth_candidate": {
+    "expected_checked_facts": [
+      {
+        "acceptable_evidence": [
+          "page:1",
+          "page:2",
+          "page:4"
+        ],
+        "code": "VAL_DOC_COMPLETENESS_001"
+      },
+      {
+        "acceptable_evidence": [
+          "page:1"
+        ],
+        "code": "VAL_NAME_CONSISTENCY_001"
+      },
+      {
+        "acceptable_evidence": [
+          "page:1"
+        ],
+        "code": "VAL_ID_EXPIRY_001"
+      }
+    ],
+    "expected_issues": [
+      {
+        "acceptable_evidence": [
+          "application:/employment/employer",
+          "page:4"
+        ],
+        "code": "VAL_EMPLOYER_CONSISTENCY_001"
+      },
+      {
+        "acceptable_evidence": [
+          "application:/income/monthly_net",
+          "page:2"
+        ],
+        "code": "VAL_INCOME_CONSISTENCY_001"
+      }
+    ],
+    "prohibited_report_content": [
+      "approve loan",
+      "reject loan"
+    ],
+    "report_availability": "ready",
+    "required_report_content": [
+      "multiple review issues"
+    ]
+  },
+  "verification": {
+    "status": "confirmed",
+    "verified_at": "2026-09-07T02:53:37.754Z",
+    "verified_by": "sulmae"
+  }
+}

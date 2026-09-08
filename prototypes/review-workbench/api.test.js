@@ -157,7 +157,7 @@ describe('loadDemoCase', () => {
       await loadDemoCase(fetcher, async function () {}, function () { return random; });
     }
     expect(new Set(selectedDocuments).size).toBe(7);
-    expect(selectedDocuments.every(function (url) { return url.includes('/v0.1.3/documents/golden-'); })).toBe(true);
+    expect(selectedDocuments.every(function (url) { return url.includes('/v0.1.4/documents/golden-'); })).toBe(true);
   });
 });
 

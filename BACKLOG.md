@@ -90,7 +90,7 @@ The resulting choice belongs in `specs/decisions/ADR_003_VLM_SELECTION.md`. Prod
 
 ### BL-005 — Versioned Golden Dataset
 
-**Status:** Seven visibly synthetic candidates are manually confirmed and frozen as checksum-verified `v0.1.3`; frozen `v0.1.1` and `v0.1.2` remain unchanged and the completed V1 target remains twenty cases. Release `v0.1.3` adds `golden-007-instruction-with-income-conflict`, which combines inert instruction-like content with a genuine `VAL_INCOME_CONSISTENCY_001` conflict as required by `MLE-REQ-021`. The existing `v0.1.2` six-case regression evidence remains historical; a seven-case capture is pending.
+**Status:** Seven visibly synthetic candidates are manually confirmed and frozen as checksum-verified `v0.1.4`; frozen `v0.1.1` through `v0.1.3` remain unchanged and the completed V1 target remains twenty cases. Release `v0.1.4` supersedes the seventh candidate with an authorized native-text evidence path for its inert instruction-like content and retains the genuine `VAL_INCOME_CONSISTENCY_001` conflict required by `MLE-REQ-021`. The existing `v0.1.2` six-case regression evidence remains historical; a seven-case capture is pending.
 
 Public datasets are tracked separately as opt-in component diagnostics. Their exact revisions, licenses, privacy fitness, deterministic subsets, and checksums must be approved before download or use; they do not replace project-owned end-to-end golden truth.
 
