@@ -792,6 +792,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .security-observation strong { color: #6d4b0b; font-size: 11px; }
 .security-observation span { color: #5d513b; font-size: 11px; line-height: 1.45; }
 .report-links, .checked-facts { border: 1px solid var(--line); }
+.report-links.empty { border: 0; }
+.report-empty { margin: 0; color: var(--muted); font-size: 11px; }
 .report-links button, .checked-fact-summary { width: 100%; min-height: 54px; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--line); background: #fff; display: grid; align-items: center; gap: 10px; text-align: left; cursor: pointer; }
 .report-links button { grid-template-columns: 28px 1fr auto; }
 .checked-fact-summary { grid-template-columns: 22px 1fr auto; }

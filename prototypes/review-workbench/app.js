@@ -1641,7 +1641,8 @@ function renderApiReport(report) {
     ? 'Agent report unavailable. Reason: ' + reportFailureMessage(report.failure_reason) + ' System-generated review issues remain available for manual review.'
     : (summary || 'Agent report unavailable.');
   document.querySelector('.security-observation').hidden = !hasSecurityObservation;
-  document.querySelector('.report-links').innerHTML = issues.map(function (issue, index) { return { issue, index }; })
+  const reportLinks = document.querySelector('.report-links');
+  const issueLinks = issues.map(function (issue, index) { return { issue, index }; })
     .filter(function (entry) {
       return report.availability === 'unavailable' ? entry.issue.origin === 'system' : entry.issue.origin === 'agent';
     }).map(function (entry) {
@@ -1650,6 +1651,8 @@ function renderApiReport(report) {
     const originLabel = report.availability === 'unavailable' ? '<small>System detected</small>' : '';
     return '<button data-report-issue="' + index + '"><b>' + String(index + 1).padStart(2, '0') + '</b><span><strong>' + escapeHtml(issue.title) + '</strong>' + originLabel + '</span><em>→</em></button>';
   }).join('');
+  reportLinks.classList.toggle('empty', !issueLinks);
+  reportLinks.innerHTML = issueLinks || '<p class="report-empty">No issues found.</p>';
   document.querySelector('.checked-facts').innerHTML = report.checked_facts.map(function (fact, index) {
     const availableReferences = fact.references.filter(function (reference) { return apiEvidenceByReference[reference]; });
     const expanded = expandedCheckedFacts.has(index);
