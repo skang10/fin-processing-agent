@@ -1570,8 +1570,9 @@ function renderApiReport(report) {
     const sourceRows = fact.references.map(function (reference) {
       const source = evidencePresentation(reference);
       const available = Boolean(apiEvidenceByReference[reference]);
+      const sourceDetail = source.value && source.value !== '—' ? source.label + ': ' + source.value : source.label;
       return '<button class="checked-source" data-checked-reference="' + encodeURIComponent(reference) + '" ' + (available ? '' : 'disabled') + '>' +
-        '<span><strong>' + escapeHtml(source.role) + '</strong><small>' + escapeHtml(source.label + ': ' + source.value) + '</small></span><b>' + (available ? '→' : 'Unavailable') + '</b></button>';
+        '<span><strong>' + escapeHtml(source.role) + '</strong><small>' + escapeHtml(sourceDetail) + '</small></span><b>' + (available ? '→' : 'Unavailable') + '</b></button>';
     }).join('');
     return '<article class="checked-fact ' + (expanded ? 'expanded' : '') + '"><button class="checked-fact-summary" ' +
       (fact.references.length === 1 && directReference ? 'data-checked-reference="' + encodeURIComponent(directReference) + '"' : canExpand ? 'data-checked-fact-toggle="' + index + '" aria-expanded="' + expanded + '"' : 'disabled') + '>' +
