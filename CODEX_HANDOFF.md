@@ -356,6 +356,8 @@ It is archived source material only and is marked `Superseded`. The approved own
 
 63. The Agent launch toolbar no longer repeats the live/local model cost-cap helper beneath the selector; paid-model confirmation and the persisted USD 0.25 enforcement remain unchanged. The former bottom-of-log optional-review block is now the compact header hint `Optional · Run Agent or review manually`, and `agent_not_run` is excluded from verifier-rejection presentation. Browser verification reused `FD-2026-0055` and confirmed the corrected Not run state without starting a paid model. `pnpm check` passed 208 tests, the Review Web build passed, and `git diff --check` passed.
 
+64. The optional-review hint was subsequently removed, leaving `Not run` as the sole Agent-state label. The launch selector and button now share a bottom baseline. The preprocessing event copy now reports preparation and routing without implying completed recognition: `Prepared N pages; M require[s] text recognition.`; when no page is routed it reports only `Prepared N pages.` Browser verification reused `FD-2026-0055`, confirmed aligned controls and the no-routing form, and did not start a paid model. `pnpm check` passed 208 tests, the root and Review Web builds passed, the two targeted Docker-backed integration files passed all 16 tests, and `git diff --check` passed.
+
 ## Target Specification Set
 
 ```text

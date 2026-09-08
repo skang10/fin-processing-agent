@@ -224,7 +224,7 @@ describe("Worker termination during Agent-led case review", () => {
     expect(findings.filter((finding) => finding.status !== "passed").map((finding) => finding.ruleId)).toEqual(["VAL_INCOME_CONSISTENCY_001"]);
 
     const log = await new PostgresCaseQueryService(connection.db).getAgentLog(accepted.caseId);
-    expect(log.events[0]).toMatchObject({ actor: "system", activity: "System preprocessing inspected 3 pages and rendered their images, with text recognition routed for 1 of them" });
+    expect(log.events[0]).toMatchObject({ actor: "system", activity: "Prepared 3 pages; 1 requires text recognition." });
     expect(log.events.filter((event) => event.actor === "agent_document_tool")).toHaveLength(10);
     expect(log.events.map((event) => event.activity)).toContain("Started the bounded case review session");
   });

@@ -398,8 +398,7 @@ function agentRunMarkup(log, modelLabel, state, costLabel, includeRequested = tr
   const acceptedEvent = includeRequested
     ? '<div class="agent-run-event' + (!events.length && state === 'Running' ? ' current' : '') + '"><i></i><div><strong>Agent review requested</strong><small>Case accepted and persisted</small></div></div>'
     : '';
-  return '<header class="agent-run-header"><div class="agent-run-identity"><span class="agent-run-state"><i></i>' + escapeHtml(state) + '</span><strong>Agent review</strong>' +
-    (state === 'Not run' ? '<small class="agent-run-hint">Optional · Run Agent or review manually</small>' : '') + '</div>' +
+  return '<header class="agent-run-header"><div class="agent-run-identity"><span class="agent-run-state"><i></i>' + escapeHtml(state) + '</span><strong>Agent review</strong></div>' +
     '<div class="agent-run-summary"><div><span>Model</span><strong title="' + escapeHtml(modelLabel) + '">' + escapeHtml(modelLabel) + '</strong></div>' +
     '<div><span>Cost</span><strong>' + escapeHtml(costLabel || 'Calculating') + '</strong></div></div></header>' +
     '<div class="agent-run-timeline">' + acceptedEvent + (events.length ? events.map(function (event, index) {

@@ -649,6 +649,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       createdAt: documentInspections.createdAt, pageNumber: pages.pageNumber, needsOcr: pages.needsOcr,
     }).from(documentInspections).innerJoin(pages, eq(pages.documentInspectionId, documentInspections.id))
       .where(eq(documentInspections.runId, runId)).orderBy(asc(documentInspections.createdAt));
+    const recognitionPageCount = preprocessing.filter((page) => page.needsOcr).length;
     const sessionIds = sessions.map((session) => session.id);
     const [steps, attempts, resolvedGaps] = await Promise.all([
       sessionIds.length ? this.db.select().from(agentSteps).where(inArray(agentSteps.sessionId, sessionIds)).orderBy(asc(agentSteps.sequence)) : [],
@@ -707,8 +708,10 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
         ...(preprocessing.length > 0
           ? [{
             timestamp: preprocessing[0]!.createdAt.toISOString(), actor: "system" as const,
-            activity: `System preprocessing inspected ${preprocessing.length} ${preprocessing.length === 1 ? "page" : "pages"} and rendered ${preprocessing.length === 1 ? "its image" : "their images"}`
-              + `${preprocessing.some((page) => page.needsOcr) ? `, with text recognition routed for ${preprocessing.filter((page) => page.needsOcr).length} of them` : ""}`,
+            activity: `Prepared ${preprocessing.length} ${preprocessing.length === 1 ? "page" : "pages"}`
+              + `${recognitionPageCount > 0
+                ? `; ${recognitionPageCount} ${recognitionPageCount === 1 ? "requires" : "require"} text recognition`
+                : ""}.`,
           }]
           : []),
         ...sessions.flatMap((session) => [

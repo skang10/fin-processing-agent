@@ -315,7 +315,7 @@ describe("PostgresCaseCommandService", () => {
         { activity: "Listed deterministic findings", toolLabel: "list_findings", actor: "agent" },
         { activity: "Submitted a Case Review Brief", toolLabel: "submit_case_review_brief", actor: "agent" },
         { activity: "Session ended: report submitted" },
-        { activity: "System preprocessing inspected 1 page and rendered its image, with text recognition routed for 1 of them", actor: "system" },
+        { activity: "Prepared 1 page; 1 requires text recognition.", actor: "system" },
         { activity: "Deterministic reconciliation accepted the Agent's monthly net income candidate from page 1" },
         { activity: "Checked 4 facts" }, { activity: "Created 1 review issues" }, { activity: "Generated review report" },
       ],
