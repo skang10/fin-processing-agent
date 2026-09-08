@@ -354,6 +354,8 @@ It is archived source material only and is marked `Superseded`. The approved own
 
 62. The persisted Agent-optional case now renders its launch controls and durable Agent Log as one bounded two-row workspace: a compact model/run toolbar followed by the status header, scrollable preprocessing activity, and optional-review outcome. This removes the conflicting full-height preview/log layouts, aligns their horizontal spacing, preserves sentence casing in the outcome copy, and keeps the model, cost, and local preprocessing evidence visible without starting the Agent. Browser verification reused `FD-2026-0055`; no paid model was started. `pnpm check` passed 208 tests, the root and Review Web builds passed, and `git diff --check` passed.
 
+63. The Agent launch toolbar no longer repeats the live/local model cost-cap helper beneath the selector; paid-model confirmation and the persisted USD 0.25 enforcement remain unchanged. The former bottom-of-log optional-review block is now the compact header hint `Optional · Run Agent or review manually`, and `agent_not_run` is excluded from verifier-rejection presentation. Browser verification reused `FD-2026-0055` and confirmed the corrected Not run state without starting a paid model. `pnpm check` passed 208 tests, the Review Web build passed, and `git diff --check` passed.
+
 ## Target Specification Set
 
 ```text

@@ -285,18 +285,10 @@ function renderDemoAgentModels(configuration) {
   select.value = configuration.default_model;
   document.querySelector('#runtime-model-label').textContent = configuration.default_model === 'fake'
     ? 'Default · Demo Agent' : 'Default · ' + configuration.default_model.split('/').at(-1);
-  updateDemoModelCost();
 }
 
 function selectedDemoAgentModel() {
   return demoAgentModels?.models.find(function (model) { return model.id === document.querySelector('#agent-model').value; });
-}
-
-function updateDemoModelCost() {
-  const model = selectedDemoAgentModel();
-  document.querySelector('#agent-model-cost').textContent = model?.paid
-    ? 'Live model · maximum USD ' + model.maximum_case_cost_usd + ' for this case'
-    : 'Local deterministic demo model · no external-model cost';
 }
 
 function confirmPaidAgentRun(model) {
@@ -406,7 +398,8 @@ function agentRunMarkup(log, modelLabel, state, costLabel, includeRequested = tr
   const acceptedEvent = includeRequested
     ? '<div class="agent-run-event' + (!events.length && state === 'Running' ? ' current' : '') + '"><i></i><div><strong>Agent review requested</strong><small>Case accepted and persisted</small></div></div>'
     : '';
-  return '<header class="agent-run-header"><div class="agent-run-identity"><span class="agent-run-state"><i></i>' + escapeHtml(state) + '</span><strong>Agent review</strong></div>' +
+  return '<header class="agent-run-header"><div class="agent-run-identity"><span class="agent-run-state"><i></i>' + escapeHtml(state) + '</span><strong>Agent review</strong>' +
+    (state === 'Not run' ? '<small class="agent-run-hint">Optional · Run Agent or review manually</small>' : '') + '</div>' +
     '<div class="agent-run-summary"><div><span>Model</span><strong title="' + escapeHtml(modelLabel) + '">' + escapeHtml(modelLabel) + '</strong></div>' +
     '<div><span>Cost</span><strong>' + escapeHtml(costLabel || 'Calculating') + '</strong></div></div></header>' +
     '<div class="agent-run-timeline">' + acceptedEvent + (events.length ? events.map(function (event, index) {
@@ -1348,7 +1341,6 @@ document.querySelector('#run-agent-review').addEventListener('click', async func
   }
 });
 
-document.querySelector('#agent-model').addEventListener('change', updateDemoModelCost);
 
 const reportContent = document.querySelector('[data-view="report"]');
 const submitContent = document.querySelector('#summary .summary-wrap');
@@ -1564,11 +1556,9 @@ function renderAgentLog() {
   const persisted = document.querySelector('#persisted-agent-log');
   persisted.classList.toggle('completed', completed);
   document.querySelectorAll('.agent-log-meta').forEach(function (element) { element.hidden = true; });
-  const reportOutcome = notRun
-    ? '<div class="agent-log-outcome"><span>Agent review is optional</span><small>You can run the Agent or continue with human review.</small></div>'
-    : stopped
+  const reportOutcome = stopped
     ? '<div class="agent-log-outcome stopped"><span>Agent stopped by reviewer</span><small>Human review remains available</small></div>'
-    : apiReport && apiReport.availability === 'unavailable'
+    : !notRun && apiReport && apiReport.availability === 'unavailable'
     ? '<div class="agent-log-outcome rejected"><span>Report rejected by verifier</span><small>' +
       escapeHtml(reportFailureMessage(apiReport.failure_reason)) + '</small></div>'
     : apiReport && apiReport.availability === 'ready'
