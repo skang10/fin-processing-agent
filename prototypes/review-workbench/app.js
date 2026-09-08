@@ -1123,7 +1123,9 @@ async function reopenCurrentIssue() {
 function outcomeLabel(value) { return value === 'pending' ? 'Pending' : value === 'dismissed' ? 'Ignored' : value === 'edited' ? 'Edited & confirmed' : 'Confirmed'; }
 
 function renderSummary() {
-  document.querySelector('#summary-issues').innerHTML = issues.map(function (issue, index) {
+  const summaryIssues = document.querySelector('#summary-issues');
+  summaryIssues.classList.toggle('empty', issues.length === 0);
+  summaryIssues.innerHTML = issues.length === 0 ? '<div class="summary-empty">No issues recorded.</div>' : issues.map(function (issue, index) {
     const canRequest = Boolean(reviewNotes[index]) && (decisions[index] === 'confirmed' || decisions[index] === 'edited');
     const included = includedRequests[index] !== false;
     const marker = decisions[index] === 'pending' ? '!' : decisions[index] === 'dismissed' ? '×' : '✓';

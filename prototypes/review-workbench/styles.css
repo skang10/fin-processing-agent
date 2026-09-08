@@ -492,6 +492,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .persisted-log #demo-launch[hidden] { display: none; }
 .persisted-log #demo-launch .agent-model-field { max-width: none; }
 .persisted-log #demo-launch .button { margin: 0; white-space: nowrap; }
+.persisted-log #demo-launch > small { grid-column: 1 / -1; margin-top: -8px; }
 .persisted-log .inline-agent-log { height: auto; min-height: 0; }
 .persisted-log .agent-run-events { margin: 0; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
 .persisted-log .agent-run-header { border-width: 0 0 1px; border-radius: 0; padding-inline: 24px; }
@@ -654,6 +655,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .section-heading h2 { margin: 0; font-size: 12px; }
 .section-heading span { color: var(--muted); font-size: 9px; }
 .summary-issues { border: 1px solid var(--line); background: #fff; }
+.summary-issues.empty { border: 0; background: transparent; }
+.summary-issues.empty .summary-empty { min-height: 0; padding: 0 0 4px; display: block; color: var(--muted); font-size: 11px; }
 .summary-issues > div { min-height: 58px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; align-items: stretch; }
 .summary-issues > div:last-child { border-bottom: 0; }
 .summary-issue-row > button { min-width: 0; padding: 8px 12px; border: 0; background: #fff; display: grid; grid-template-columns: 27px 1fr 14px; align-items: center; gap: 10px; color: var(--ink); text-align: left; cursor: pointer; }
