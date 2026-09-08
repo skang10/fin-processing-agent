@@ -326,6 +326,7 @@ describe("case intake", () => {
       json_pointer: "/applicant_display_name",
       extraction_method: "structured_input",
       processor_version: "application-schema-1.0.0",
+      recognized_values: [],
     });
     await app.close();
   });

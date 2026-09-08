@@ -2,11 +2,11 @@
 
 Document ID: `API`
 
-Version: 1.13.0
+Version: 1.14.0
 
 Status: Approved
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 ## 1. Purpose
 
@@ -194,6 +194,8 @@ GET /api/v1/cases/{case_id}/downstream-handoff
 
 `API-REQ-044` Evidence queries must distinguish page-region, page-level, and structured-input evidence and include the coordinate, rotation, source-dimension, semantic-order, provenance, and availability fields required by the evidence viewer.
 
+`API-REQ-107` An evidence projection may include zero or more normalized values from accepted claims in the case's current run, identified by field-schema ID and value type, so reviewers can compare the value supported by a page with submitted application data. It must not expose raw model output, infer a value from display text, include a superseded-run claim, or present an invented corrected value.
+
 `API-REQ-096` `GET /evidence` must list only evidence belonging to the case's current run so that a reviewer can select structured-input fields or document pages as supporting references without discovering evidence from another case or superseded run.
 
 `API-REQ-095` `GET /findings` must return the current result revision's deterministic finding identifiers, registered rule and version, status, reason code, and authorized evidence references so that human review remains possible when the Agent report is unavailable.
@@ -358,6 +360,7 @@ No unresolved transport-authority or V1 review-command decision blocks review of
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 1.14.0 | 2026-09-09 | Approved | Added current-run accepted claim values to evidence projections for reviewer comparison. |
 | 1.13.0 | 2026-09-08 | Approved | Added the idempotent, append-only reopen-issue command with optimistic concurrency. |
 | 1.12.0 | 2026-09-08 | Approved | Added durable Agent-optional demo intake and the guarded start-Agent command for a prepared case. |
 | 1.11.0 | 2026-09-08 | Approved | Added the guarded new-run restart command for a reviewer-stopped Agent review. |

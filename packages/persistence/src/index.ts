@@ -787,22 +787,27 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       originalRegion: evidenceRecords.originalRegion, coordinateUnit: evidenceRecords.coordinateUnit, coordinateOrigin: evidenceRecords.coordinateOrigin,
       extractionMethod: evidenceRecords.extractionMethod,
       processorVersion: evidenceRecords.processorVersion,
+      runId: evidenceRecords.runId,
     }).from(evidenceRecords)
       .innerJoin(processingRuns, eq(evidenceRecords.runId, processingRuns.id))
       .where(and(eq(processingRuns.caseId, caseId), eq(evidenceRecords.id, evidenceId))).limit(1);
     if (!record) throw new CaseNotFoundError();
+    const recognizedValues = await this.db.select({
+      fieldSchemaId: claimRecords.fieldSchemaId, valueType: claimRecords.valueType, normalizedValue: claimRecords.normalizedValue,
+    }).from(claimEvidenceLinks).innerJoin(claimRecords, eq(claimEvidenceLinks.claimId, claimRecords.id))
+      .where(and(eq(claimEvidenceLinks.evidenceId, evidenceId), eq(claimRecords.runId, record.runId)));
     if (record.evidenceType === "structured_input" && record.jsonPointer) {
       return {
         evidenceId: record.evidenceId, evidenceType: "structured_input",
         jsonPointer: record.jsonPointer, extractionMethod: record.extractionMethod,
-        processorVersion: record.processorVersion,
+        processorVersion: record.processorVersion, recognizedValues,
       };
     }
     if (record.evidenceType === "page_level" && record.documentVersionId && record.pageNumber !== null) {
       return {
         evidenceId: record.evidenceId, evidenceType: "page_level",
         documentVersionId: record.documentVersionId, pageNumber: record.pageNumber,
-        extractionMethod: record.extractionMethod, processorVersion: record.processorVersion,
+        extractionMethod: record.extractionMethod, processorVersion: record.processorVersion, recognizedValues,
       };
     }
     if (record.evidenceType === "page_region" && record.documentVersionId && record.pageNumber !== null
@@ -812,7 +817,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
         pageNumber: record.pageNumber, pageWidth: record.pageWidth, pageHeight: record.pageHeight, pageRotation: record.pageRotation,
         normalizedRegion: record.normalizedRegion, originalRegion: record.originalRegion,
         coordinateUnit: "render_pixel", coordinateOrigin: "top_left",
-        extractionMethod: record.extractionMethod, processorVersion: record.processorVersion };
+        extractionMethod: record.extractionMethod, processorVersion: record.processorVersion, recognizedValues };
     }
     throw new Error("Persisted evidence subtype is invalid");
   }
@@ -833,14 +838,21 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
       .innerJoin(processingRuns, eq(evidenceRecords.runId, processingRuns.id))
       .innerJoin(cases, eq(processingRuns.id, cases.currentRunId))
       .where(eq(cases.id, caseId));
+    const recognizedRows = records.length === 0 ? [] : await this.db.select({
+      evidenceId: claimEvidenceLinks.evidenceId, fieldSchemaId: claimRecords.fieldSchemaId,
+      valueType: claimRecords.valueType, normalizedValue: claimRecords.normalizedValue,
+    }).from(claimEvidenceLinks).innerJoin(claimRecords, eq(claimEvidenceLinks.claimId, claimRecords.id))
+      .where(inArray(claimEvidenceLinks.evidenceId, records.map((record) => record.evidenceId)));
+    const recognizedValues = (evidenceId: string) => recognizedRows.filter((value) => value.evidenceId === evidenceId)
+      .map(({ fieldSchemaId, valueType, normalizedValue }) => ({ fieldSchemaId, valueType, normalizedValue }));
     return records.flatMap((record): EvidenceView[] => {
       if (record.evidenceType === "structured_input" && record.jsonPointer) return [{
         evidenceId: record.evidenceId, evidenceType: "structured_input", jsonPointer: record.jsonPointer,
-        extractionMethod: record.extractionMethod, processorVersion: record.processorVersion,
+        extractionMethod: record.extractionMethod, processorVersion: record.processorVersion, recognizedValues: recognizedValues(record.evidenceId),
       }];
       if (record.evidenceType === "page_level" && record.documentVersionId && record.pageNumber !== null) return [{
         evidenceId: record.evidenceId, evidenceType: "page_level", documentVersionId: record.documentVersionId,
-        pageNumber: record.pageNumber, extractionMethod: record.extractionMethod, processorVersion: record.processorVersion,
+        pageNumber: record.pageNumber, extractionMethod: record.extractionMethod, processorVersion: record.processorVersion, recognizedValues: recognizedValues(record.evidenceId),
       }];
       if (record.evidenceType === "page_region" && record.documentVersionId && record.pageNumber !== null
         && record.pageWidth && record.pageHeight && record.pageRotation !== null && validNormalizedRegion(record.normalizedRegion)
@@ -848,7 +860,7 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
         evidenceId: record.evidenceId, evidenceType: "page_region", documentVersionId: record.documentVersionId,
         pageNumber: record.pageNumber, pageWidth: record.pageWidth, pageHeight: record.pageHeight, pageRotation: record.pageRotation,
         normalizedRegion: record.normalizedRegion, extractionMethod: record.extractionMethod, processorVersion: record.processorVersion,
-        originalRegion: record.originalRegion, coordinateUnit: "render_pixel", coordinateOrigin: "top_left",
+        originalRegion: record.originalRegion, coordinateUnit: "render_pixel", coordinateOrigin: "top_left", recognizedValues: recognizedValues(record.evidenceId),
       }];
       return [];
     });

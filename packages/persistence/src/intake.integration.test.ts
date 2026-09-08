@@ -300,6 +300,7 @@ describe("PostgresCaseCommandService", () => {
     expect([reconciliationCount?.value, reconciliationCandidateCount?.value]).toEqual([1, 1]);
     await expect(queries.getEvidence(accepted.caseId, evidenceId)).resolves.toMatchObject({
       evidenceType: "page_level", documentVersionId: document.documentVersionId, pageNumber: 1,
+      recognizedValues: [{ fieldSchemaId: "fixture.field", valueType: "string", normalizedValue: "fixture" }],
     });
     await expect(queries.getEvidence("4c816f67-5f2f-4e21-8c17-7eb1e5383000", evidenceId)).rejects.toBeInstanceOf(CaseNotFoundError);
     const report = await queries.getAgentReport(accepted.caseId);

@@ -210,6 +210,9 @@ const EvidenceBase = {
   evidence_id: Type.String({ format: "uuid" }),
   extraction_method: Type.String(),
   processor_version: Type.String(),
+  recognized_values: Type.Array(Type.Object({
+    field_schema_id: Type.String(), value_type: Type.String(), normalized_value: Type.Unknown(),
+  }, { additionalProperties: false })),
 };
 
 export const EvidenceProjectionSchema = Type.Union([

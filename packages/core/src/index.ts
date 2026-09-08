@@ -702,6 +702,7 @@ export type EvidenceView =
       readonly jsonPointer: string;
       readonly extractionMethod: string;
       readonly processorVersion: string;
+      readonly recognizedValues?: readonly EvidenceRecognizedValue[];
     }
   | {
       readonly evidenceId: string;
@@ -710,6 +711,7 @@ export type EvidenceView =
       readonly pageNumber: number;
       readonly extractionMethod: string;
       readonly processorVersion: string;
+      readonly recognizedValues?: readonly EvidenceRecognizedValue[];
     }
   | {
       readonly evidenceId: string;
@@ -725,7 +727,14 @@ export type EvidenceView =
       readonly coordinateOrigin: "top_left";
       readonly extractionMethod: string;
       readonly processorVersion: string;
+      readonly recognizedValues?: readonly EvidenceRecognizedValue[];
     };
+
+export interface EvidenceRecognizedValue {
+  readonly fieldSchemaId: string;
+  readonly valueType: string;
+  readonly normalizedValue: unknown;
+}
 
 export interface ApplicationDataView {
   readonly groups: readonly {

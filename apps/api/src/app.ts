@@ -296,11 +296,14 @@ export function buildApp(
   }, async (request) => {
     const { case_id: caseId, evidence_id: evidenceId } = request.params as { case_id: string; evidence_id: string };
     const evidence = await caseQueries.getEvidence(caseId, evidenceId);
+    const recognized_values = (evidence.recognizedValues ?? []).map((value) => ({
+      field_schema_id: value.fieldSchemaId, value_type: value.valueType, normalized_value: value.normalizedValue,
+    }));
     if (evidence.evidenceType === "structured_input") {
       return {
         evidence_id: evidence.evidenceId, evidence_type: evidence.evidenceType,
         json_pointer: evidence.jsonPointer, extraction_method: evidence.extractionMethod,
-        processor_version: evidence.processorVersion,
+        processor_version: evidence.processorVersion, recognized_values,
       };
     }
     if (evidence.evidenceType === "page_region") return {
@@ -309,12 +312,12 @@ export function buildApp(
       page_width: evidence.pageWidth, page_height: evidence.pageHeight, page_rotation: evidence.pageRotation,
       normalized_region: evidence.normalizedRegion,
       original_region: evidence.originalRegion, coordinate_unit: evidence.coordinateUnit, coordinate_origin: evidence.coordinateOrigin,
-      extraction_method: evidence.extractionMethod, processor_version: evidence.processorVersion,
+      extraction_method: evidence.extractionMethod, processor_version: evidence.processorVersion, recognized_values,
     };
     return {
       evidence_id: evidence.evidenceId, evidence_type: evidence.evidenceType,
       document_version_id: evidence.documentVersionId, page_number: evidence.pageNumber,
-      extraction_method: evidence.extractionMethod, processor_version: evidence.processorVersion,
+      extraction_method: evidence.extractionMethod, processor_version: evidence.processorVersion, recognized_values,
     };
   });
 
@@ -323,18 +326,23 @@ export function buildApp(
   }, async (request) => {
     const { case_id: caseId } = request.params as { case_id: string };
     const evidence = await caseQueries.listEvidence(caseId);
-    return { evidence: evidence.map((item) => item.evidenceType === "structured_input" ? {
+    return { evidence: evidence.map((item) => {
+      const recognized_values = (item.recognizedValues ?? []).map((value) => ({
+        field_schema_id: value.fieldSchemaId, value_type: value.valueType, normalized_value: value.normalizedValue,
+      }));
+      return item.evidenceType === "structured_input" ? {
       evidence_id: item.evidenceId, evidence_type: item.evidenceType, json_pointer: item.jsonPointer,
-      extraction_method: item.extractionMethod, processor_version: item.processorVersion,
+      extraction_method: item.extractionMethod, processor_version: item.processorVersion, recognized_values,
     } : item.evidenceType === "page_region" ? {
       evidence_id: item.evidenceId, evidence_type: item.evidenceType, document_version_id: item.documentVersionId,
       page_number: item.pageNumber, page_width: item.pageWidth, page_height: item.pageHeight,
       page_rotation: item.pageRotation, normalized_region: item.normalizedRegion,
       original_region: item.originalRegion, coordinate_unit: item.coordinateUnit, coordinate_origin: item.coordinateOrigin,
-      extraction_method: item.extractionMethod, processor_version: item.processorVersion,
+      extraction_method: item.extractionMethod, processor_version: item.processorVersion, recognized_values,
     } : {
       evidence_id: item.evidenceId, evidence_type: item.evidenceType, document_version_id: item.documentVersionId,
-      page_number: item.pageNumber, extraction_method: item.extractionMethod, processor_version: item.processorVersion,
+      page_number: item.pageNumber, extraction_method: item.extractionMethod, processor_version: item.processorVersion, recognized_values,
+    };
     }) };
   });
 

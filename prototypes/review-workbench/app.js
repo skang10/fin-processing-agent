@@ -283,8 +283,6 @@ function renderDemoAgentModels(configuration) {
     return '<option value="' + escapeHtml(model.id) + '">' + escapeHtml(model.label) + '</option>';
   }).join('');
   select.value = configuration.default_model;
-  document.querySelector('#runtime-model-label').textContent = configuration.default_model === 'fake'
-    ? 'Default · Demo Agent' : 'Default · ' + configuration.default_model.split('/').at(-1);
 }
 
 function selectedDemoAgentModel() {
@@ -755,7 +753,7 @@ function issueDetail(issue) {
     const evidenceControl = item.reference
       ? '<button class="evidence-link active" data-evidence-reference="' + encodeURIComponent(item.reference) + '" aria-label="' + escapeHtml(item.source) + '">Open →</button>'
       : '<button class="evidence-link ' + (item.evidence ? 'active' : '') + '" data-legacy-evidence="' + Boolean(item.evidence) + '">Open →</button>';
-    return '<article class="claim-card"><div class="claim-copy"><span>' + (isApplication ? 'Application data' : 'Document') + '</span><strong>' + escapeHtml(isApplication ? item.label : item.role) + '</strong>' +
+    return '<article class="claim-card"><div class="claim-copy"><span>' + (isApplication ? 'Application data' : 'Document') + '</span><strong title="' + escapeHtml(item.role) + '">' + escapeHtml(item.label) + '</strong>' +
       '</div><strong class="evidence-value">' + escapeHtml(value) + '</strong>' + evidenceControl + '</article>';
   }).join('');
   const reviewedEvidence = values || '<article class="claim-card evidence-note"><div class="claim-copy"><span>Reviewer evidence note</span>' +
@@ -1500,12 +1498,12 @@ function issuePresentation(record, finding, index) {
     pageNumber: presentation.pageNumber, paper: presentation.pageNumber ? pagePaperKind(presentation.pageNumber) : 'boundary',
     value: '', valueLabel: '',
     values: references.map(function (reference) {
-      return evidencePresentation(reference);
+      return evidencePresentation(reference, record.code);
     }),
   };
 }
 
-function evidencePresentation(reference) {
+function evidencePresentation(reference, ruleCode) {
   const evidence = apiEvidenceByReference[reference];
   if (!evidence) return { label: 'Source unavailable', role: 'Evidence', value: 'Unavailable', source: 'Evidence unavailable', reference: reference };
   if (evidence.evidence_type === 'structured_input') {
@@ -1517,9 +1515,22 @@ function evidencePresentation(reference) {
     };
   }
   const documentRecord = apiDocuments.find(function (item) { return item.document_id === evidence.document_version_id; }) || apiDocuments[0];
+  const fieldByRule = {
+    VAL_NAME_CONSISTENCY_001: 'person.name',
+    VAL_EMPLOYER_CONSISTENCY_001: 'organization.name',
+    VAL_INCOME_CONSISTENCY_001: 'income.monthly_net',
+    VAL_ID_EXPIRY_001: 'identity.expiry_date',
+  };
+  const recognizedEntry = evidence.recognized_values?.find(function (entry) {
+    return entry.field_schema_id === fieldByRule[ruleCode];
+  }) || evidence.recognized_values?.[0];
+  const recognized = recognizedEntry?.normalized_value;
+  const recognizedValue = recognized && typeof recognized === 'object' && 'amount' in recognized
+    ? String(recognized.amount) + (recognized.currency ? ' ' + String(recognized.currency) : '')
+    : recognized === undefined || recognized === null ? undefined : String(recognized);
   return {
-    label: 'Document evidence', role: documentRecord ? documentRecord.submitted_filename : 'Submitted document',
-    value: 'Page ' + evidence.page_number, source: 'Open page ' + evidence.page_number, reference: reference,
+    label: 'Page ' + evidence.page_number, role: documentRecord ? documentRecord.submitted_filename : 'Submitted document',
+    value: recognizedValue || '—', source: 'Open page ' + evidence.page_number, reference: reference,
   };
 }
 

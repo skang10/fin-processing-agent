@@ -2,11 +2,11 @@
 
 Document ID: `IDX`
 
-Version: 3.15.0
+Version: 3.16.0
 
 Status: Approved
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 ## 1. Purpose
 
@@ -41,7 +41,7 @@ The following order applies when project documents conflict:
 
 ### 2.3 Current authority state
 
-All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.1, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.3.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.7.0, `components/REVIEW_WORKBENCH.md` version 3.9.0, and `API_CONTRACTS.md` version 1.12.0. All four ADRs are accepted; ADR-003 selects the opt-in live default and fallback from bounded synthetic benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
+All owning specifications in the catalog are approved, including `PRODUCT_AND_SCOPE.md` version 4.0.1, `SYSTEM_ARCHITECTURE.md` version 3.1.0, `DATA_MODEL.md` version 3.4.0, `components/DOCUMENT_PROCESSING.md` version 2.1.0, `components/ADAPTIVE_EXTRACTION_AGENT.md` version 3.7.0, `components/REVIEW_WORKBENCH.md` version 3.10.0, and `API_CONTRACTS.md` version 1.14.0. All four ADRs are accepted; ADR-003 selects the opt-in live default and fallback from bounded synthetic benchmark evidence. The migration source is superseded and is no longer an active behavioral authority.
 
 ## 3. Product Baseline
 
@@ -367,6 +367,7 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.16.0 | 2026-09-09 | Approved | Registered API Contracts 1.14.0 for current-run accepted claim values in reviewer evidence projections. |
 | 3.15.0 | 2026-09-08 | Approved | Registered append-only review-issue reopening across Data Model 3.4.0, API Contracts 1.13.0, and Review Workbench 3.10.0. |
 | 3.14.0 | 2026-09-08 | Approved | Registered durable Agent-optional demo intake, immediate human review, and guarded later Agent start. |
 | 3.13.1 | 2026-09-08 | Approved | Registered Review Workbench 3.8.1 live Agent-log follow and reviewer-scroll behavior. |
