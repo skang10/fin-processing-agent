@@ -601,16 +601,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .block-label { padding: 15px 0 8px; display: flex; justify-content: space-between; align-items: center; }
 .block-label span { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .block-label small { color: var(--quiet); font-size: 8px; }
-.claim-card { min-height: 58px; padding: 9px 2px; border-bottom: 1px solid var(--line); background: #fff; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; }
+.claim-card { min-height: 58px; padding: 9px 2px; border-bottom: 1px solid var(--line); background: #fff; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; }
 .claim-card:first-of-type { border-top: 1px solid var(--line); }
-.claim-copy { min-width: 0; display: grid; grid-template-columns: minmax(90px, .8fr) minmax(80px, 1fr); align-items: center; gap: 4px 14px; }
+.evidence-source-mark { width: 26px; height: 26px; border-radius: 4px; background: var(--surface-soft); color: #61707a; display: grid; place-items: center; font-size: 8px; font-weight: 750; }
+.claim-copy { min-width: 0; display: grid; gap: 3px; }
+.claim-copy > span { color: var(--muted); font-size: 8px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .claim-head { display: flex; justify-content: space-between; align-items: center; }
 .claim-head span { color: var(--muted); font-size: 8px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 .claim-head small { color: var(--quiet); font-size: 8px; }
 .claim-copy > strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.evidence-value { font-size: 11px; white-space: nowrap; }
 .field-name { display: block; color: var(--muted); font-size: 9px; }
-.claim-card.evidence-note { grid-template-columns: 1fr; }
-.claim-card.evidence-note .claim-copy { grid-template-columns: minmax(0, 1fr); }
+.claim-card.evidence-note { grid-template-columns: 30px minmax(0, 1fr); }
 .claim-card.evidence-note .claim-copy > strong { white-space: normal; }
 .comparison-divider { margin: 9px 0 2px; color: var(--quiet); font-size: 9px; text-align: center; }
 .evidence-link { padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 9px; cursor: pointer; }

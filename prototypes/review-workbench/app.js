@@ -748,15 +748,18 @@ async function renderThumbnailPreview(documentRecord, pageNumber, sequence) {
 }
 
 function issueDetail(issue) {
-  const values = issue.values.map(function (item, index) {
+  const values = issue.values.map(function (item) {
     const value = item.value;
+    const evidence = item.reference ? apiEvidenceByReference[item.reference] : undefined;
+    const isApplication = evidence?.evidence_type === 'structured_input' || item.role === 'Application data';
     const evidenceControl = item.reference
-      ? '<button class="evidence-link active" data-evidence-reference="' + encodeURIComponent(item.reference) + '">' + escapeHtml(item.source) + ' →</button>'
-      : '<button class="evidence-link ' + (item.evidence ? 'active' : '') + '" data-legacy-evidence="' + Boolean(item.evidence) + '">View ' + escapeHtml(item.source) + '</button>';
-    return '<article class="claim-card"><div class="claim-copy"><div class="claim-head"><span>' + escapeHtml(item.role) + '</span></div>' +
-      '<small class="field-name">' + escapeHtml(item.label) + '</small><strong>' + escapeHtml(value) + '</strong></div>' + evidenceControl + '</article>';
+      ? '<button class="evidence-link active" data-evidence-reference="' + encodeURIComponent(item.reference) + '" aria-label="' + escapeHtml(item.source) + '">Open →</button>'
+      : '<button class="evidence-link ' + (item.evidence ? 'active' : '') + '" data-legacy-evidence="' + Boolean(item.evidence) + '">Open →</button>';
+    return '<article class="claim-card"><span class="evidence-source-mark">' + (isApplication ? 'A' : 'P' + escapeHtml(String(evidence?.page_number || ''))) + '</span>' +
+      '<div class="claim-copy"><span>' + (isApplication ? 'Application data' : 'Document') + '</span><strong>' + escapeHtml(isApplication ? item.label : item.role) + '</strong>' +
+      '</div><strong class="evidence-value">' + escapeHtml(value) + '</strong>' + evidenceControl + '</article>';
   }).join('');
-  const reviewedEvidence = values || '<article class="claim-card evidence-note"><div class="claim-copy"><div class="claim-head"><span>Reviewer evidence note</span></div>' +
+  const reviewedEvidence = values || '<article class="claim-card evidence-note"><span class="evidence-source-mark">–</span><div class="claim-copy"><span>Reviewer evidence note</span>' +
     '<strong>' + escapeHtml(issue.noReferenceReason || 'No supporting evidence was provided.') + '</strong></div></article>';
   const outcome = decisions[current];
   const recordedOutcome = outcome === 'pending' ? '' : '<div class="recorded-outcome"><span class="outcome-icon">' +
