@@ -478,7 +478,7 @@ function renderPendingAgentLog(log, modelLabel, completedCase, runningCase) {
   const cost = log?.estimated_cost ? log.estimated_cost.currency + ' ' + log.estimated_cost.amount : '';
   replaceAgentRunMarkup(panel, agentRunMarkup(log, modelLabel, completedCase ? 'Completed' : 'Running', completedCase ? cost : '') +
     (completedCase ? '<div class="agent-run-complete"><i>✓</i><strong>Report ready</strong></div>' : '') +
-    (runningCase ? '<button class="button quiet agent-stop" id="stop-agent-review">Stop Agent review</button>' : ''));
+    (runningCase ? '<div class="agent-stop-row"><button class="button quiet agent-stop" id="stop-agent-review">Stop Agent review</button></div>' : ''));
   if (runningCase) document.querySelector('#stop-agent-review').addEventListener('click', async function (event) {
     await requestAgentStop(runningCase.case_id, event.currentTarget, function () { demoStopRequested = true; });
   });
@@ -624,7 +624,9 @@ function renderSource(issue) {
   const paper = document.querySelector('#paper');
   const application = sourceView === 'application';
   document.querySelector('#document-name').textContent = application ? 'Application data' : sourceOverride ? sourceOverride.name : issue.doc;
-  document.querySelector('#page-name').textContent = application ? 'Submitted values' : sourceOverride ? sourceOverride.page : issue.page;
+  const pageName = document.querySelector('#page-name');
+  pageName.hidden = application;
+  pageName.textContent = application ? '' : sourceOverride ? sourceOverride.page : issue.page;
   document.querySelector('#thumbnails').hidden = application;
   document.querySelector('.document-tools').hidden = application;
   document.querySelector('.document-body').classList.toggle('application-mode', application);
@@ -1692,7 +1694,7 @@ function renderAgentLog() {
     : apiReport && apiReport.availability === 'ready'
       ? '<div class="agent-log-outcome ready"><span>Report ready</span></div>' : '';
   const eventMarkup = agentRunMarkup(apiAgentLog, modelLabel, state, cost, !notRun, !notRun) + reportOutcome +
-    (apiCaseRecord?.lifecycle === 'processing' ? '<button class="button quiet agent-stop inline-agent-stop">Stop Agent review</button>' : '');
+    (apiCaseRecord?.lifecycle === 'processing' ? '<div class="agent-stop-row"><button class="button quiet agent-stop inline-agent-stop">Stop Agent review</button></div>' : '');
   document.querySelectorAll('.agent-run-events').forEach(function (element) { replaceAgentRunMarkup(element, eventMarkup); });
   document.querySelectorAll('.inline-agent-stop').forEach(function (button) {
     button.addEventListener('click', async function () {
