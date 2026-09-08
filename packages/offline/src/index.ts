@@ -134,6 +134,11 @@ export function defaultOfflineHarness(fixtureId?: unknown): CaseReviewAgentHarne
 function issueFromAttentionItem(item: { description: string; suggested_action: string; references: readonly string[] }) {
   const reference = item.references.find((value) => value.startsWith("finding:"));
   if (!reference) throw new Error("Agent attention item has no finding reference");
+  const code = reference.slice("finding:".length);
+  const ruleActions: Record<string, string> = {
+    VAL_EMPLOYER_CONSISTENCY_001: "Confirm the current employer and provide supporting documents that explain the employer-name difference.",
+    VAL_INCOME_CONSISTENCY_001: "Confirm the monthly net income and provide supporting documents that explain the difference between the payslip and salary credit.",
+  };
   const actions: Record<string, string> = {
     compare_claims: "Confirm the current employer and provide corrected supporting documents if needed.",
     verify_extracted_value: "Provide a legible payslip that shows the monthly net income.",
@@ -141,7 +146,7 @@ function issueFromAttentionItem(item: { description: string; suggested_action: s
     review_missing_document: "Provide the missing bank statement.",
     inspect_evidence: "Check the highlighted document evidence and provide a clearer document if the value is wrong.",
   };
-  const recommendedAction = actions[item.suggested_action];
+  const recommendedAction = ruleActions[code] ?? actions[item.suggested_action];
   if (!recommendedAction) throw new Error(`No applicant-readable action registered for ${item.suggested_action}`);
-  return { code: reference.slice("finding:".length), description: item.description, recommendedAction };
+  return { code, description: item.description, recommendedAction };
 }

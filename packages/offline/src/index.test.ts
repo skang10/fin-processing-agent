@@ -353,4 +353,22 @@ describe("deterministic report verification", () => {
     expect(report).toMatchObject({ reportAvailability: "ready", modelLabel: "fake-pi-harness-v1" });
     expect(report.issues).toEqual([]);
   });
+
+  it("derives distinct applicant actions from employer and income rule codes", async () => {
+    const assembly = context();
+    const result = assembleCaseResult(assembly, buildExtractionPlan(assembly), candidatesFor(assembly, {
+      ...CLEAN_VALUES, payment_counterparty_name: "Suedwerk Demo KG", payslip_monthly_net_income: "2980.00",
+    }));
+    const report = await runOfflineReport(result);
+    expect(report.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "VAL_EMPLOYER_CONSISTENCY_001",
+        recommendedAction: "Confirm the current employer and provide supporting documents that explain the employer-name difference.",
+      }),
+      expect.objectContaining({
+        code: "VAL_INCOME_CONSISTENCY_001",
+        recommendedAction: "Confirm the monthly net income and provide supporting documents that explain the difference between the payslip and salary credit.",
+      }),
+    ]));
+  });
 });
