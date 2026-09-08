@@ -549,7 +549,7 @@ function renderIssueFooter() {
     return;
   }
   if (!caseReadOnly) {
-    footer.innerHTML = '<div class="review-actions"><button class="button quiet" id="change-outcome">Reopen issue</button></div>';
+    footer.innerHTML = '';
     return;
   }
   footer.innerHTML = '<div class="footer-outcome">' + (caseReadOnly && outcome === 'pending' ? 'Not reviewed' : outcomeLabel(outcome)) + '</div>';
@@ -765,10 +765,14 @@ function issueDetail(issue) {
       '<small class="field-name">' + escapeHtml(item.label) + '</small><strong>' + escapeHtml(value) + '</strong>' + evidenceControl + '</article>';
   }).join('');
   const reviewedEvidence = values || '<article class="claim-card"><div class="claim-head"><span>Reviewer evidence note</span></div>' +
-    '<strong>' + escapeHtml(issue.noReferenceReason || 'No supporting source was provided.') + '</strong></article>';
+    '<strong>' + escapeHtml(issue.noReferenceReason || 'No supporting evidence was provided.') + '</strong></article>';
+  const outcome = decisions[current];
+  const recordedOutcome = outcome === 'pending' ? '' : '<div class="recorded-outcome"><span class="outcome-icon">' +
+    (outcome === 'dismissed' ? '×' : '✓') + '</span><span><small>Recorded outcome</small><strong>' + escapeHtml(outcomeLabel(outcome)) + '</strong></span>' +
+    (!caseReadOnly ? '<button id="change-outcome">Reopen issue</button>' : '') + '</div>';
   return '<div class="review-prompt"><p>' + escapeHtml(issue.why) + '</p></div>' +
     '<div class="claim-comparison"><div class="block-label"><span>Evidence reviewed</span></div>' +
-    reviewedEvidence + '</div>';
+    reviewedEvidence + '</div>' + recordedOutcome;
 }
 
 function confirmationForm(issue) {
@@ -812,10 +816,10 @@ function evidencePicker(issue) {
     '<option value="">Select a source</option>' +
     (applicationOptions.length ? '<optgroup label="Application data">' + applicationOptions.join('') + '</optgroup>' : '') +
     (documentOptions.length ? '<optgroup label="Documents">' + documentOptions.join('') + '</optgroup>' : '') +
-    '<option value="__none__">No source available</option></select><button type="button" class="button quiet" id="add-evidence">Add</button></div>' +
+    '<option value="__none__">No supporting evidence</option></select><button type="button" class="button quiet" id="add-evidence">Add</button></div>' +
     '<div id="selected-evidence">' + selectedEvidenceMarkup(issue.supportingReferences || []) + '</div>' +
-    '<label id="no-source-reason"' + (issue.noReferenceReason ? '' : ' hidden') + '>Why no source is available' +
-    '<textarea rows="3" placeholder="Explain why this issue has no supporting source">' + escapeHtml(issue.noReferenceReason || '') + '</textarea></label></fieldset>';
+    '<label id="no-source-reason"' + (issue.noReferenceReason ? '' : ' hidden') + '>Why no supporting evidence is available' +
+    '<textarea rows="3" placeholder="For example: the required document was not submitted">' + escapeHtml(issue.noReferenceReason || '') + '</textarea></label></fieldset>';
 }
 
 function correctionForm(issue) {
@@ -926,7 +930,7 @@ function wireIssueActions() {
     const supportingReferences = [...event.currentTarget.querySelectorAll('[data-selected-reference]')].map(function (item) { return item.dataset.selectedReference; });
     const noReferenceReason = noSourceReason?.querySelector('textarea').value.trim() || '';
     if (!supportingReferences.length && !noReferenceReason) {
-      toast('Select supporting evidence or explain why no source is available');
+      toast('Select supporting evidence or explain why none is available');
       return;
     }
     if (!apiCaseRecord || !apiReport?.result_revision) return;
