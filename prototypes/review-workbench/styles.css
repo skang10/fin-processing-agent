@@ -597,13 +597,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .finding-tone.neutral { background: var(--accent-soft); color: var(--accent); }
 .review-prompt { margin-bottom: 20px; }
 .review-prompt-head { min-height: 24px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.review-prompt-head span { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.review-prompt-head span { color: var(--ink); font-size: 12px; font-weight: 700; letter-spacing: 0; text-transform: none; }
 .review-prompt-head button { padding: 3px 0; border: 0; background: transparent; color: var(--accent); font-size: 9px; cursor: pointer; }
 .review-prompt strong { display: block; font-size: 14px; line-height: 1.35; }
 .review-prompt p { margin: 0; color: #3f4f5b; font-size: 11px; line-height: 1.55; }
 .claim-comparison { border-top: 1px solid var(--line); }
 .block-label { padding: 15px 0 8px; display: flex; justify-content: space-between; align-items: center; }
-.block-label span { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.block-label span { color: var(--ink); font-size: 12px; font-weight: 700; letter-spacing: 0; text-transform: none; }
 .block-label small { color: var(--quiet); font-size: 8px; }
 .claim-card { min-height: 58px; padding: 9px 2px; border-bottom: 1px solid var(--line); background: #fff; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; }
 .claim-card:first-of-type { border-top: 1px solid var(--line); }
@@ -913,7 +913,7 @@ body { font-size: 14px; }
 .issue-open strong { font-size: 12px; }
 .issue-open em, .issue-state, .issue-edit { font-size: 9px; }
 .review-prompt p { font-size: 12px; }
-.review-prompt-head span, .block-label span, .block-label small { font-size: 10px; }
+.block-label small { font-size: 10px; }
 .claim-head span, .claim-head small { font-size: 9px; }
 .claim-copy > strong { font-size: 15px; }
 .evidence-link, .link-button { font-size: 10px; }
