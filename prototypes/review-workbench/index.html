@@ -231,6 +231,23 @@
     </div>
   </dialog>
 
+  <dialog id="paid-run-confirmation" class="confirmation-dialog" aria-labelledby="paid-run-title">
+    <div class="confirmation-icon" aria-hidden="true">↗</div>
+    <div class="confirmation-copy">
+      <span>Live Agent review</span>
+      <h2 id="paid-run-title">Start this Agent run?</h2>
+      <p>The selected model will process only this synthetic case.</p>
+    </div>
+    <dl class="confirmation-details">
+      <div><dt>Model</dt><dd id="paid-run-model"></dd></div>
+      <div><dt>Maximum cost</dt><dd id="paid-run-cost"></dd></div>
+    </dl>
+    <div class="confirmation-actions">
+      <button class="button quiet" id="cancel-paid-run">Cancel</button>
+      <button class="button primary" id="confirm-paid-run">Run Agent</button>
+    </div>
+  </dialog>
+
   <div id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="app.js"></script>
 </body>

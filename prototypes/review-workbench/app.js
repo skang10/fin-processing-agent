@@ -280,6 +280,30 @@ function updateDemoModelCost() {
     : 'Local deterministic demo model · no external-model cost';
 }
 
+function confirmPaidAgentRun(model) {
+  const dialog = document.querySelector('#paid-run-confirmation');
+  document.querySelector('#paid-run-model').textContent = model.label;
+  document.querySelector('#paid-run-cost').textContent = 'USD ' + model.maximum_case_cost_usd;
+  return new Promise(function (resolve) {
+    const confirm = document.querySelector('#confirm-paid-run');
+    const cancel = document.querySelector('#cancel-paid-run');
+    const finish = function (accepted) {
+      confirm.removeEventListener('click', accept);
+      cancel.removeEventListener('click', decline);
+      dialog.removeEventListener('cancel', escape);
+      dialog.close();
+      resolve(accepted);
+    };
+    const accept = function () { finish(true); };
+    const decline = function () { finish(false); };
+    const escape = function (event) { event.preventDefault(); finish(false); };
+    confirm.addEventListener('click', accept);
+    cancel.addEventListener('click', decline);
+    dialog.addEventListener('cancel', escape);
+    dialog.showModal();
+  });
+}
+
 function openCompletedAgentReport(created) {
   window.location.search = '?case_id=' + encodeURIComponent(created.case_id) + '&queue_view=review';
 }
@@ -1180,7 +1204,7 @@ document.querySelector('#run-agent-review').addEventListener('click', async func
   if (!preparedDemoCase) return;
   const model = selectedDemoAgentModel();
   if (!model) return;
-  if (model.paid && !window.confirm('Run ' + model.label + ' on this synthetic case? The persisted per-case cost limit is USD ' + model.maximum_case_cost_usd + '.')) return;
+  if (model.paid && !await confirmPaidAgentRun(model)) return;
   const button = event.currentTarget;
   let createdCase = null;
   button.disabled = true;
