@@ -320,7 +320,7 @@ async function requestAgentRestart(caseId, button) {
 function renderPendingAgentLog(log, modelLabel, completedCase, runningCase) {
   const panel = document.querySelector('#pending-agent-log');
   panel.hidden = false;
-  const events = (log?.events || []).slice(-6);
+  const events = log?.events || [];
   panel.innerHTML = '<header class="agent-run-header"><div><span class="agent-run-state"><i></i>' + (completedCase ? 'Completed' : 'Running') + '</span><strong>Agent review</strong></div><small>' + escapeHtml(modelLabel) + '</small></header>' +
     '<div class="agent-run-timeline">' + (events.length ? events.map(function (event, index) {
       const latest = index === events.length - 1 && !completedCase;
