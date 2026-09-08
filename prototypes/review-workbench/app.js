@@ -709,7 +709,7 @@ function renderIssueList() {
   target.innerHTML = '<div class="issue-card-rail ' + (issues.length === 1 ? 'single' : '') + '">' + issues.map(function (issue, index) {
     const decision = decisions[index];
     const draft = issue.origin === 'human' && !issue.issueId;
-    return '<button class="issue-card ' + (index === current ? 'active' : '') + '" data-issue-card="' + index + '" aria-pressed="' + (index === current) + '">' +
+    return '<button class="issue-card ' + decision + (index === current ? ' active' : '') + '" data-issue-card="' + index + '" aria-pressed="' + (index === current) + '">' +
       '<span class="issue-card-number">' + String(index + 1).padStart(2, '0') + '</span><span class="issue-card-copy"><strong>' + escapeHtml(issue.title || 'New issue') + '</strong><small>' +
       (draft ? 'Unsaved' : issue.origin === 'human' ? 'Human created' : 'System generated') + '</small></span><em class="' + decision + '">' + (draft ? 'Draft' : escapeHtml(outcomeLabel(decision))) + '</em></button>';
   }).join('') + '</div>';
