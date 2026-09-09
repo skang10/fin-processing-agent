@@ -16,6 +16,7 @@ function multipartPayload(agentModel?: string) {
 
 describe("case intake", () => {
   const caseQueries = {
+    getLatestAgentDiagnosticCaseId: vi.fn(async () => "4c816f67-5f2f-4e21-8c17-7eb1e53838bd"),
     list: vi.fn(async () => [{
       caseId: "4c816f67-5f2f-4e21-8c17-7eb1e53838bd", caseCode: "FD-2026-0042", applicantDisplayName: "Anna Beispiel",
       summary: "Three items require review.", reviewMethod: "deterministic" as const,
@@ -52,6 +53,26 @@ describe("case intake", () => {
         { timestamp: "2026-09-01T10:04:00.000Z", activity: "Reused the previously extracted page result after processing resumed", toolLabel: "run_ocr" },
         { timestamp: "2026-09-01T10:05:00.000Z", activity: "Generated review report" },
       ],
+    })),
+    getAgentDiagnosticTrace: vi.fn(async () => ({
+      availability: "available" as const,
+      session: {
+        sessionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383aaa", modelLabel: "fake-pi-harness-v1", modelRoute: "fake" as const,
+        harness: { id: "pi-agent-led-case-review-harness", version: "0.85.1" },
+        prompt: { version: "case-review-prompt-3.6.1", hash: "prompt-hash", contentPolicy: "source_controlled_not_exposed" as const },
+        configurationVersion: "pi-harness-1.0.0", contextManifestVersion: "context-1", toolRegistryVersion: "case-review-tools-3.6.0",
+        offeredTools: ["get_case_manifest"],
+        budget: { maxAttempts: 2, maxIterations: 24, maxToolCalls: 40, maxModelCalls: 40, maxInputTokens: 100000, maxOutputTokens: 10000, maxWallClockMs: 180000, maxEstimatedCostUsd: 0.25, maxVlmCalls: 8, maxOcrPages: 8, maxConsecutiveNoProgressSteps: 3 },
+        usage: { iterations: 1, toolCalls: 1, modelCalls: 1, vlmCalls: 0, ocrPages: 0, inputTokens: 100, outputTokens: 20, costUsd: 0, usageAvailable: true },
+        terminalReason: "report_submitted" as const, startedAt: "2026-09-01T10:00:00.000Z", completedAt: "2026-09-01T10:00:05.000Z",
+      },
+      attempts: [{ attemptNumber: 1, startReason: "initial" as const, status: "completed", terminalReason: "report_submitted" as const, startedAt: "2026-09-01T10:00:00.000Z", completedAt: "2026-09-01T10:00:05.000Z" }],
+      steps: [{ sequence: 1, phase: "planning" as const, toolName: "get_case_manifest", toolVersion: "2.0.0", outcome: "succeeded" as const, summary: "Read case manifest", argumentHash: "argument-hash", output: { schemaVersion: "2.0.0", hash: "output-hash", retention: "safe_structured" as const }, producedReferences: [], reused: false, budgetState: { iterationsUsed: 1, toolCallsUsed: 1 }, startedAt: "2026-09-01T10:00:01.000Z", completedAt: "2026-09-01T10:00:02.000Z" }],
+      finalSubmission: { verificationStatus: "verified", summary: "No issues found.", issueCount: 0, checkedFactCount: 5, originalSubmissionAvailable: true },
+    })),
+    getAgentDiagnosticOcrArtifacts: vi.fn(async () => ({
+      synthetic: true,
+      artifacts: [{ pageNumber: 2, documentVersionId: "4c816f67-5f2f-4e21-8c17-7eb1e5383998", objectKey: "derived/case/ocr/page-2/hash", engine: "fixture-ocr", engineVersion: "1", modelAssetVersion: "fixture-1" }],
     })),
     getIssues: vi.fn(async () => [{
       issueId: "4c816f67-5f2f-4e21-8c17-7eb1e53838be",
@@ -241,6 +262,48 @@ describe("case intake", () => {
         { timestamp: "2026-09-01T10:05:00.000Z", activity: "Generated review report" },
       ],
     });
+    await app.close();
+  });
+
+  it("exposes the safe diagnostic trace only when explicitly enabled", async () => {
+    const disabled = buildApp({ accept: vi.fn() }, caseQueries);
+    expect((await disabled.inject({ method: "GET", url: "/api/internal/dev/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/agent-trace" })).statusCode).toBe(404);
+    await disabled.close();
+    const enabled = buildApp({ accept: vi.fn() }, caseQueries, undefined, undefined, undefined, undefined, undefined, true);
+    const response = await enabled.inject({ method: "GET", url: "/api/internal/dev/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/agent-trace" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      availability: "available",
+      session: { prompt: { version: "case-review-prompt-3.6.1", content_policy: "source_controlled_not_exposed" } },
+      steps: [{ tool_name: "get_case_manifest", argument_hash: "argument-hash", output: { retention: "safe_structured" } }],
+      final_submission: { summary: "No issues found.", original_submission_available: true },
+    });
+    expect(JSON.stringify(response.json())).not.toContain("document text");
+    await enabled.close();
+  });
+
+  it("assembles full synthetic diagnostics on demand without writing them to operational logs", async () => {
+    const artifactStore = {
+      put: vi.fn(), remove: vi.fn(),
+      get: vi.fn(async () => (async function* () { yield Buffer.from(JSON.stringify({ rawText: "SYNTHETIC OCR", spans: [] })); })()),
+    };
+    const app = buildApp({ accept: vi.fn() }, caseQueries, undefined, undefined, artifactStore, undefined, undefined, true);
+    const response = await app.inject({ method: "GET", url: "/api/internal/dev/cases/4c816f67-5f2f-4e21-8c17-7eb1e53838bd/agent-trace/full" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      diagnostic_scope: "synthetic_development_only",
+      system_prompt: expect.stringContaining("bounded Case Review Agent"),
+      ocr_calls: [{ request: { page_number: 2 }, result: { rawText: "SYNTHETIC OCR" } }],
+      unavailable_from_existing_runs: expect.arrayContaining([expect.stringContaining("raw model conversation")]),
+    });
+    await app.close();
+  });
+
+  it("resolves the latest synthetic Agent session for the diagnostic CLI", async () => {
+    const app = buildApp({ accept: vi.fn() }, caseQueries, undefined, undefined, undefined, undefined, undefined, true);
+    const response = await app.inject({ method: "GET", url: "/api/internal/dev/agent-trace/latest" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ case_id: "4c816f67-5f2f-4e21-8c17-7eb1e53838bd" });
     await app.close();
   });
 

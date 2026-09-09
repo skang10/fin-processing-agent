@@ -37,6 +37,7 @@ const app = buildApp(
       : { id, label: id, paid: true, maximumCaseCostUsd: "0.25" }),
   },
   commandService,
+  process.env["FINDOC_SYNTHETIC_DEMO"] === "true" && process.env["AGENT_DIAGNOSTICS"] === "true",
 );
 app.addHook("onClose", async () => client.end());
 

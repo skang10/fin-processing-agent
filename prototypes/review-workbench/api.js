@@ -52,6 +52,10 @@ export async function prepareSelectedDemoCase(caseId, fetcher = fetch) {
   if (!selected) throw new Error('Demo case is not available');
   const documentResponse = await fetcher(selected.documentUrl);
   if (!documentResponse.ok) throw new Error('Demo document could not be loaded');
+  const contentType = documentResponse.headers?.get?.('content-type');
+  if (contentType && !contentType.toLowerCase().includes('application/pdf')) {
+    throw new Error('Demo files were updated. Refresh the page and try again.');
+  }
   return { ...selected, documentBytes: await documentResponse.arrayBuffer() };
 }
 
@@ -63,6 +67,13 @@ export async function loadDemoAgentModels(fetcher = fetch) {
 
 export function formatPendingAgentActivity(event) {
   return event?.activity || 'Agent activity';
+}
+
+export function extractSecurityObservation(summary) {
+  if (typeof summary !== 'string') return { observed: false, summary };
+  const pattern = /instruction-like(?: document)? content was observed[^.]*treated as untrusted[^.]*not followed\.\s*/i;
+  if (!pattern.test(summary)) return { observed: false, summary };
+  return { observed: true, summary: summary.replace(pattern, '').trim() };
 }
 
 export async function startDemoCase(prepared, agentModel, fetcher = fetch, startAgentReview = true) {

@@ -12,6 +12,7 @@
     "@fastify/type-provider-typebox": "6.1.0",
     "@findoc/contracts": "workspace:*",
     "@findoc/core": "workspace:*",
+    "@findoc/agent-pi": "workspace:*",
     "@findoc/persistence": "workspace:*",
     "@findoc/storage": "workspace:*",
     "fastify": "5.12.3",

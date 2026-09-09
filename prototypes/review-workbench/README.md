@@ -16,6 +16,12 @@ python3 -m http.server 4173 --bind 127.0.0.1
 
 Then open `http://127.0.0.1:4173/`.
 
+## Developer Agent diagnostics
+
+When the API runs with `FINDOC_SYNTHETIC_DEMO=true` and `AGENT_DIAGNOSTICS=true`, developers can open the unlinked `/agent-debug.html?case_id=CASE_UUID` page. It is intentionally absent from reviewer navigation and displays only the guarded durable trace: prompt identity, run configuration, aggregate model usage, attempts, tool calls, bounded safe-result previews, references, and final verification metadata. Raw model conversations, chain-of-thought, document text, and page images are excluded.
+
+For an on-demand terminal export that also reads protected OCR results without copying them into application logs, run `pnpm agent:trace` for the latest synthetic Agent session or `pnpm agent:trace -- CASE_UUID` for a specific case. The command refuses non-synthetic cases. Existing runs expose raw OCR artifacts but cannot recover raw model turns or raw tool arguments that were never persisted.
+
 ## Included views
 
 1. Review Queue with search and workflow-state filters.

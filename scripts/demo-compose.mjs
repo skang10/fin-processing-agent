@@ -8,6 +8,11 @@ if (!allowed.has(action)) throw new Error("Expected up, load, down, reset, or ac
 const environmentPath = ".data/demo.env";
 const localEnvironmentPath = ".env";
 const agentEnvironmentKeys = new Set([
+  "OCR_MODE",
+  "OCR_MODEL_DIRECTORY",
+  "PDFIUM_LIB_PATH",
+  "ORT_DYLIB_PATH",
+  "NAPI_RS_NATIVE_LIBRARY_PATH",
   "AGENT_MODEL",
   "VLM_MODE",
   "VLM_MODEL",
@@ -46,6 +51,11 @@ if (action === "acceptance") {
 
 function run(arguments_, required = true) {
   const acceptanceEnvironment = action === "acceptance" ? {
+    OCR_MODE: "fake",
+    OCR_MODEL_DIRECTORY: "",
+    PDFIUM_LIB_PATH: "",
+    ORT_DYLIB_PATH: "",
+    NAPI_RS_NATIVE_LIBRARY_PATH: "",
     AGENT_MODEL: "fake",
     VLM_MODE: "fixture",
     VLM_MODEL: "",

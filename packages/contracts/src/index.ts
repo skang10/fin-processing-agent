@@ -200,6 +200,38 @@ export const AgentLogSchema = Type.Object({
   }, { additionalProperties: false })),
 }, { additionalProperties: false });
 
+const AgentTraceReferenceSchema = Type.Object({
+  kind: Type.String(), id: Type.String(),
+}, { additionalProperties: false });
+
+export const AgentDiagnosticTraceSchema = Type.Object({
+  availability: Type.Union([Type.Literal("pending"), Type.Literal("available")]),
+  session: Type.Optional(Type.Object({
+    session_id: Type.String({ format: "uuid" }), model_label: Type.String(), model_route: Type.Union([Type.Literal("fake"), Type.Literal("live")]),
+    harness: Type.Object({ id: Type.String(), version: Type.String() }, { additionalProperties: false }),
+    prompt: Type.Object({ version: Type.String(), hash: Type.String(), content_policy: Type.Literal("source_controlled_not_exposed") }, { additionalProperties: false }),
+    configuration_version: Type.String(), context_manifest_version: Type.Optional(Type.String()), tool_registry_version: Type.String(),
+    offered_tools: Type.Array(Type.String()), budget: Type.Unknown(), usage: Type.Unknown(), terminal_reason: Type.Optional(AgentTerminalReasonSchema),
+    started_at: Type.String(), completed_at: Type.Optional(Type.String()),
+  }, { additionalProperties: false })),
+  attempts: Type.Array(Type.Object({
+    attempt_number: Type.Integer({ minimum: 1 }), start_reason: Type.Union([Type.Literal("initial"), Type.Literal("recovery")]),
+    status: Type.String(), terminal_reason: Type.Optional(AgentTerminalReasonSchema), started_at: Type.String(), completed_at: Type.Optional(Type.String()),
+  }, { additionalProperties: false })),
+  steps: Type.Array(Type.Object({
+    sequence: Type.Integer({ minimum: 1 }), phase: Type.String(), tool_name: Type.String(), tool_version: Type.Optional(Type.String()),
+    outcome: Type.String(), summary: Type.String(), argument_hash: Type.String(),
+    output: Type.Optional(Type.Object({ schema_version: Type.String(), hash: Type.String(), retention: Type.Union([Type.Literal("safe_structured"), Type.Literal("hash_only")]), preview: Type.Optional(Type.Unknown()) }, { additionalProperties: false })),
+    produced_references: Type.Array(AgentTraceReferenceSchema), reused: Type.Boolean(), integrity_check: Type.Optional(Type.String()),
+    budget_state: Type.Object({ iterations_used: Type.Integer({ minimum: 0 }), tool_calls_used: Type.Integer({ minimum: 0 }) }, { additionalProperties: false }),
+    started_at: Type.String(), completed_at: Type.String(),
+  }, { additionalProperties: false })),
+  final_submission: Type.Optional(Type.Object({
+    verification_status: Type.Optional(Type.String()), verification_failure_reason: Type.Optional(Type.String()), summary: Type.String(),
+    issue_count: Type.Integer({ minimum: 0 }), checked_fact_count: Type.Integer({ minimum: 0 }), original_submission_available: Type.Boolean(),
+  }, { additionalProperties: false })),
+}, { additionalProperties: false });
+
 export const StopAgentReviewResultSchema = Type.Object({
   case_id: Type.String(),
   run_id: Type.String(),

@@ -7,8 +7,13 @@ x-app-environment: &app-environment
   MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
   MINIO_BUCKET: findoc-artifacts
   MAX_SOURCE_BYTES: "10000000"
-  OCR_MODE: fake
+  OCR_MODE: ${OCR_MODE:-fake}
+  OCR_MODEL_DIRECTORY: ${OCR_MODEL_DIRECTORY:-}
+  PDFIUM_LIB_PATH: ${PDFIUM_LIB_PATH:-}
+  ORT_DYLIB_PATH: ${ORT_DYLIB_PATH:-}
+  NAPI_RS_NATIVE_LIBRARY_PATH: ${NAPI_RS_NATIVE_LIBRARY_PATH:-}
   FINDOC_SYNTHETIC_DEMO: "true"
+  AGENT_DIAGNOSTICS: "true"
   AGENT_MODEL: ${AGENT_MODEL:-fake}
   VLM_MODE: ${VLM_MODE:-fixture}
   VLM_MODEL: ${VLM_MODEL:-}
@@ -79,6 +84,9 @@ services:
     environment:
       <<: *app-environment
       WORKER_HEALTH_HOST: 0.0.0.0
+    volumes:
+      - ./models:/app/models:ro
+      - ./native-libs:/app/native-libs:ro
     depends_on:
       migrate:
         condition: service_completed_successfully

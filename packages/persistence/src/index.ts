@@ -5,8 +5,8 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { CaseNotFoundError, HandoffUnavailableError, IdempotencyConflictError, ReviewConflictError, AgentAttemptSupersededError, AgentInvocationConflictError, AgentSessionIncompatibleError, AgentSessionTerminalError, AgentStepConflictError, EMPTY_AGENT_CONSUMED_BUDGET,
   addConsumedBudget, evaluateAgentSessionCompatibility,
-  type AcceptedCase, type AgentAttemptStartReason, type AgentCommittedToolResult, type AgentConsumedBudget, type AgentReviewCommandService,
-  type AgentLogSessionView, type AgentLogView, type AgentProducedReference, type AgentRecoverySnapshot,
+  type AcceptedCase, type AgentAttemptStartReason, type AgentBudgetEnvelope, type AgentCommittedToolResult, type AgentConsumedBudget, type AgentReviewCommandService,
+  type AgentDiagnosticOcrArtifactView, type AgentDiagnosticTraceView, type AgentLogSessionView, type AgentLogView, type AgentProducedReference, type AgentRecoverySnapshot,
   type AgentSessionConfiguration, type AgentSessionLifecyclePort, type AgentSessionMode, type AgentSessionStart,
   type AgentSessionTerminalResult, type AgentSessionTrace, type AgentStepOutcome, type AgentStepPhase,
   type AgentStepTrace, type AgentTerminalReason, type BeginAgentSessionInput, type CommitAgentStepInput,
@@ -15,6 +15,30 @@ import { agentEligibilityDecisions, agentReports, agentSessionAttempts, agentSes
 
 const COMMAND_TYPE = "create_case";
 const WORKFLOW_VERSION = "case-processing-v1";
+const DIAGNOSTIC_SCALAR_KEYS = new Set([
+  "accepted", "available", "status", "report_status", "page_number", "page_count", "needs_ocr",
+  "native_text_available", "document_type", "classification", "field_schema_id", "requirement_id",
+  "role", "gap_id", "result_revision_id", "model_label", "prompt_version", "schema_version",
+]);
+
+/** Produce a bounded structural preview; arbitrary strings and document-derived values are omitted. */
+function diagnosticSafePreview(value: unknown, depth = 0): unknown {
+  if (depth > 2 || value === null || typeof value !== "object") return undefined;
+  if (Array.isArray(value)) {
+    return { item_count: value.length, sample: value.slice(0, 3).map((item) => diagnosticSafePreview(item, depth + 1)).filter((item) => item !== undefined) };
+  }
+  const source = value as Record<string, unknown>;
+  const preview: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(source).slice(0, 30)) {
+    if (DIAGNOSTIC_SCALAR_KEYS.has(key) && (typeof item === "string" || typeof item === "number" || typeof item === "boolean")) preview[key] = item;
+    else if (Array.isArray(item)) preview[key] = { item_count: item.length };
+    else if (item && typeof item === "object") {
+      const nested = diagnosticSafePreview(item, depth + 1);
+      if (nested && Object.keys(nested as Record<string, unknown>).length > 0) preview[key] = nested;
+    }
+  }
+  return preview;
+}
 
 function caseCode(createdAt: Date, displayNumber: number): string {
   return `FD-${createdAt.getUTCFullYear()}-${String(displayNumber).padStart(4, "0")}`;
@@ -480,6 +504,18 @@ export class PostgresCaseCommandService implements CaseCommandService, ReviewCom
 }
 
 export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQueryService {
+  async getLatestAgentDiagnosticCaseId(): Promise<string> {
+    const records = await this.db.select({ caseId: agentSessions.caseId, application: applicationSnapshots.content })
+      .from(agentSessions)
+      .innerJoin(processingRuns, eq(agentSessions.runId, processingRuns.id))
+      .innerJoin(inputRevisions, eq(processingRuns.inputRevisionId, inputRevisions.id))
+      .innerJoin(applicationSnapshots, eq(inputRevisions.applicationSnapshotId, applicationSnapshots.id))
+      .orderBy(desc(agentSessions.createdAt));
+    const latestSynthetic = records.find((record) => (record.application as Record<string, unknown>)["synthetic_data"] === true);
+    if (!latestSynthetic) throw new CaseNotFoundError();
+    return latestSynthetic.caseId;
+  }
+
   constructor(private readonly db: ReturnType<typeof drizzle>) {}
 
   async list(view: "review" | "changes_requested" | "completed"): Promise<readonly QueueCaseView[]> {
@@ -735,6 +771,87 @@ export class PostgresCaseQueryService implements CaseQueryService, CaseReviewQue
         ...reportEvents,
       ].sort((left, right) => left.timestamp.localeCompare(right.timestamp)),
     };
+  }
+
+  async getAgentDiagnosticTrace(caseId: string): Promise<AgentDiagnosticTraceView> {
+    await this.assertCaseExists(caseId);
+    const [session] = await this.db.select().from(agentSessions)
+      .where(eq(agentSessions.caseId, caseId)).orderBy(desc(agentSessions.createdAt)).limit(1);
+    if (!session) return { availability: "pending", attempts: [], steps: [] };
+    const [attempts, steps, invocations, reports] = await Promise.all([
+      this.db.select().from(agentSessionAttempts).where(eq(agentSessionAttempts.sessionId, session.id)).orderBy(asc(agentSessionAttempts.attemptNumber)),
+      this.db.select().from(agentSteps).where(eq(agentSteps.sessionId, session.id)).orderBy(asc(agentSteps.sequence)),
+      this.db.select().from(agentToolInvocations).where(eq(agentToolInvocations.sessionId, session.id)),
+      this.db.select().from(agentReports).where(eq(agentReports.sessionId, session.id)).orderBy(desc(agentReports.createdAt)).limit(1),
+    ]);
+    const invocationById = new Map(invocations.map((invocation) => [invocation.id, invocation]));
+    const report = reports[0];
+    return {
+      availability: "available",
+      session: {
+        sessionId: session.id, modelLabel: session.modelLabel,
+        modelRoute: session.modelRoute === "live" ? "live" : "fake",
+        harness: { id: session.harnessId, version: session.harnessVersion },
+        prompt: { version: session.promptVersion, hash: session.promptHash, contentPolicy: "source_controlled_not_exposed" },
+        configurationVersion: session.configurationVersion,
+        ...(session.contextManifestVersion ? { contextManifestVersion: session.contextManifestVersion } : {}),
+        toolRegistryVersion: session.toolRegistryVersion,
+        offeredTools: session.offeredTools as string[], budget: session.budget as AgentBudgetEnvelope,
+        usage: consumedOf(session),
+        ...(session.terminalReason ? { terminalReason: session.terminalReason as AgentTerminalReason } : {}),
+        startedAt: session.startedAt.toISOString(), ...(session.completedAt ? { completedAt: session.completedAt.toISOString() } : {}),
+      },
+      attempts: attempts.map((attempt) => ({
+        attemptNumber: attempt.attemptNumber, startReason: attempt.startReason as AgentAttemptStartReason,
+        status: attempt.status, ...(attempt.terminalReason ? { terminalReason: attempt.terminalReason as AgentTerminalReason } : {}),
+        startedAt: attempt.startedAt.toISOString(), ...(attempt.completedAt ? { completedAt: attempt.completedAt.toISOString() } : {}),
+      })),
+      steps: steps.map((step) => {
+        const invocation = step.toolInvocationId ? invocationById.get(step.toolInvocationId) : undefined;
+        return {
+          sequence: step.sequence, phase: step.phase as AgentStepPhase, toolName: step.toolName,
+          ...(step.toolVersion ? { toolVersion: step.toolVersion } : {}), outcome: step.outcome as AgentStepOutcome,
+          summary: step.summary, argumentHash: step.argumentHash,
+          ...(invocation ? { output: { schemaVersion: invocation.outputSchemaVersion, hash: invocation.outputHash,
+            retention: invocation.safeOutput === null ? "hash_only" as const : "safe_structured" as const,
+            ...(invocation.safeOutput === null ? {} : { preview: diagnosticSafePreview(invocation.safeOutput) }) } } : {}),
+          producedReferences: step.producedReferences as AgentProducedReference[], reused: step.reusedInvocationId !== null,
+          ...(step.integrityCheck ? { integrityCheck: step.integrityCheck } : {}),
+          budgetState: step.budgetState as { iterationsUsed: number; toolCallsUsed: number },
+          startedAt: step.startedAt.toISOString(), completedAt: step.completedAt.toISOString(),
+        };
+      }),
+      ...(report ? { finalSubmission: {
+        ...(report.verificationStatus ? { verificationStatus: report.verificationStatus } : {}),
+        ...(report.verificationFailureReason ? { verificationFailureReason: report.verificationFailureReason } : {}),
+        summary: report.summary, issueCount: (report.issueLinks as unknown[]).length,
+        checkedFactCount: (report.checkedFacts as unknown[]).length,
+        originalSubmissionAvailable: report.originalSubmission !== null,
+      } } : {}),
+    };
+  }
+
+  async getAgentDiagnosticOcrArtifacts(caseId: string): Promise<{ readonly synthetic: boolean; readonly artifacts: readonly AgentDiagnosticOcrArtifactView[] }> {
+    const [session] = await this.db.select({ runId: agentSessions.runId }).from(agentSessions)
+      .where(eq(agentSessions.caseId, caseId)).orderBy(desc(agentSessions.createdAt)).limit(1);
+    if (!session) throw new CaseNotFoundError();
+    const [application] = await this.db.select({ content: applicationSnapshots.content })
+      .from(processingRuns)
+      .innerJoin(inputRevisions, eq(processingRuns.inputRevisionId, inputRevisions.id))
+      .innerJoin(applicationSnapshots, eq(inputRevisions.applicationSnapshotId, applicationSnapshots.id))
+      .where(and(eq(processingRuns.id, session.runId), eq(processingRuns.caseId, caseId))).limit(1);
+    if (!application) throw new CaseNotFoundError();
+    const ocrArtifacts = alias(artifacts, "diagnostic_ocr_artifacts");
+    const records = await this.db.select({
+      pageNumber: pages.pageNumber, documentVersionId: pages.documentVersionId, objectKey: ocrArtifacts.objectKey,
+      engine: pageOcrOutputs.engine, engineVersion: pageOcrOutputs.engineVersion, modelAssetVersion: pageOcrOutputs.modelAssetVersion,
+    }).from(pageOcrOutputs)
+      .innerJoin(pages, eq(pageOcrOutputs.pageId, pages.id))
+      .innerJoin(documentInspections, eq(pages.documentInspectionId, documentInspections.id))
+      .innerJoin(processingRuns, eq(documentInspections.runId, processingRuns.id))
+      .innerJoin(ocrArtifacts, eq(pageOcrOutputs.artifactId, ocrArtifacts.id))
+      .where(and(eq(processingRuns.caseId, caseId), eq(processingRuns.id, session.runId))).orderBy(asc(pages.pageNumber));
+    return { synthetic: (application.content as Record<string, unknown>)["synthetic_data"] === true, artifacts: records };
   }
 
   async getIssues(caseId: string): Promise<readonly ReviewIssueView[]> {

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import multipart from "@fastify/multipart";
+import { CASE_REVIEW_PROMPT } from "@findoc/agent-pi";
 import {
   CaseAcceptedSchema,
   CreateIssueCommandSchema,
@@ -11,6 +12,7 @@ import {
   CaseProjectionSchema,
   AgentReportSchema,
   AgentLogSchema,
+  AgentDiagnosticTraceSchema,
   EvidenceListProjectionSchema, EvidenceProjectionSchema,
   FindingsProjectionSchema,
   ApplicationDataProjectionSchema,
@@ -46,6 +48,7 @@ export function buildApp(
     defaultModel: "fake", models: [{ id: "fake", label: "Deterministic demo Agent", paid: false }],
   },
   agentReviewCommands?: AgentReviewCommandService,
+  agentDiagnosticsEnabled = false,
 ) {
   const app = Fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>();
   void app.register(multipart, { limits: { files: 10, fields: 10 } });
@@ -259,6 +262,76 @@ export function buildApp(
         ...(event.actor ? { actor: event.actor } : {}) })),
     };
   });
+
+  if (agentDiagnosticsEnabled) app.get("/api/internal/dev/cases/:case_id/agent-trace", {
+    schema: { response: { 200: AgentDiagnosticTraceSchema, 404: ProblemDetailsSchema } },
+  }, async (request) => {
+    const { case_id: caseId } = request.params as { case_id: string };
+    const trace = await caseQueries.getAgentDiagnosticTrace(caseId);
+    return {
+      availability: trace.availability,
+      ...(trace.session ? { session: {
+        session_id: trace.session.sessionId, model_label: trace.session.modelLabel, model_route: trace.session.modelRoute,
+        harness: trace.session.harness,
+        prompt: { version: trace.session.prompt.version, hash: trace.session.prompt.hash, content_policy: trace.session.prompt.contentPolicy },
+        configuration_version: trace.session.configurationVersion,
+        ...(trace.session.contextManifestVersion ? { context_manifest_version: trace.session.contextManifestVersion } : {}),
+        tool_registry_version: trace.session.toolRegistryVersion, offered_tools: [...trace.session.offeredTools],
+        budget: trace.session.budget, usage: trace.session.usage,
+        ...(trace.session.terminalReason ? { terminal_reason: trace.session.terminalReason } : {}),
+        started_at: trace.session.startedAt, ...(trace.session.completedAt ? { completed_at: trace.session.completedAt } : {}),
+      } } : {}),
+      attempts: trace.attempts.map((attempt) => ({
+        attempt_number: attempt.attemptNumber, start_reason: attempt.startReason, status: attempt.status,
+        ...(attempt.terminalReason ? { terminal_reason: attempt.terminalReason } : {}),
+        started_at: attempt.startedAt, ...(attempt.completedAt ? { completed_at: attempt.completedAt } : {}),
+      })),
+      steps: trace.steps.map((step) => ({
+        sequence: step.sequence, phase: step.phase, tool_name: step.toolName, ...(step.toolVersion ? { tool_version: step.toolVersion } : {}),
+        outcome: step.outcome, summary: step.summary, argument_hash: step.argumentHash,
+        ...(step.output ? { output: { schema_version: step.output.schemaVersion, hash: step.output.hash, retention: step.output.retention,
+          ...(step.output.preview !== undefined ? { preview: step.output.preview } : {}) } } : {}),
+        produced_references: step.producedReferences.map((reference) => ({ ...reference })), reused: step.reused,
+        ...(step.integrityCheck ? { integrity_check: step.integrityCheck } : {}),
+        budget_state: { iterations_used: step.budgetState.iterationsUsed, tool_calls_used: step.budgetState.toolCallsUsed },
+        started_at: step.startedAt, completed_at: step.completedAt,
+      })),
+      ...(trace.finalSubmission ? { final_submission: {
+        ...(trace.finalSubmission.verificationStatus ? { verification_status: trace.finalSubmission.verificationStatus } : {}),
+        ...(trace.finalSubmission.verificationFailureReason ? { verification_failure_reason: trace.finalSubmission.verificationFailureReason } : {}),
+        summary: trace.finalSubmission.summary, issue_count: trace.finalSubmission.issueCount,
+        checked_fact_count: trace.finalSubmission.checkedFactCount,
+        original_submission_available: trace.finalSubmission.originalSubmissionAvailable,
+      } } : {}),
+    };
+  });
+
+  if (agentDiagnosticsEnabled) app.get("/api/internal/dev/cases/:case_id/agent-trace/full", async (request) => {
+    if (!artifactStore) throw new CaseNotFoundError();
+    const { case_id: caseId } = request.params as { case_id: string };
+    const [trace, ocr] = await Promise.all([
+      caseQueries.getAgentDiagnosticTrace(caseId), caseQueries.getAgentDiagnosticOcrArtifacts(caseId),
+    ]);
+    if (!ocr.synthetic) throw new CaseNotFoundError();
+    const ocrCalls = await Promise.all(ocr.artifacts.map(async (artifact) => ({
+      request: { document_version_id: artifact.documentVersionId, page_number: artifact.pageNumber },
+      processor: { engine: artifact.engine, engine_version: artifact.engineVersion, model_asset_version: artifact.modelAssetVersion },
+      result: JSON.parse((await readObjectBytes(artifactStore, artifact.objectKey, 5_000_000)).toString("utf8")) as unknown,
+    })));
+    return {
+      diagnostic_scope: "synthetic_development_only",
+      system_prompt: CASE_REVIEW_PROMPT,
+      trace,
+      ocr_calls: ocrCalls,
+      unavailable_from_existing_runs: [
+        "raw model conversation turns", "raw tool arguments (only integrity hashes were persisted)",
+      ],
+    };
+  });
+
+  if (agentDiagnosticsEnabled) app.get("/api/internal/dev/agent-trace/latest", async () => ({
+    case_id: await caseQueries.getLatestAgentDiagnosticCaseId(),
+  }));
 
   app.post("/api/v1/cases/:case_id/agent-review/stop", {
     schema: { response: { 200: StopAgentReviewResultSchema, 404: ProblemDetailsSchema } },

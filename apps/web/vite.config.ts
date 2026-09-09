@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import { createRequire } from "node:module";
+import { resolve } from "node:path";
 
 const apiProxyTarget = process.env["API_PROXY_TARGET"] ?? "http://127.0.0.1:3000";
 const require = createRequire(import.meta.url);
@@ -16,6 +17,14 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ["pdfjs-dist/build/pdf.worker.min.mjs?url"],
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(import.meta.dirname, "../../prototypes/review-workbench/index.html"),
+        agentDebug: resolve(import.meta.dirname, "../../prototypes/review-workbench/agent-debug.html"),
+      },
+    },
   },
   server: {
     port: 5173,

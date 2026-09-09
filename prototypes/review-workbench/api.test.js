@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createIssue, demoCaseOptions, editIssue, formatPendingAgentActivity, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, normalizeEvidenceProjection, prepareDemoCase, prepareSelectedDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, startDemoCase, startPersistedAgentReview, stopAgentReview, submitDemoCase, submitFinalReview } from './api.js';
+import { createIssue, demoCaseOptions, editIssue, extractSecurityObservation, formatPendingAgentActivity, formatQueueSummary, loadCaseBundle, loadCaseQueue, loadDemoCase, normalizeEvidenceProjection, prepareDemoCase, prepareSelectedDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, startDemoCase, startPersistedAgentReview, stopAgentReview, submitDemoCase, submitFinalReview } from './api.js';
 
 describe('normalizeEvidenceProjection', () => {
   it('corrects only legacy native-text regions persisted with a bottom-left Y axis', () => {
@@ -20,6 +20,20 @@ describe('formatPendingAgentActivity', () => {
 
   it('uses a safe fallback only when activity is absent', () => {
     expect(formatPendingAgentActivity({})).toBe('Agent activity');
+  });
+});
+
+describe('extractSecurityObservation', () => {
+  it('recognizes equivalent verified security-summary wording', () => {
+    expect(extractSecurityObservation('All checks passed. Instruction-like content was observed on the payslip, treated as untrusted document content, and not followed.')).toEqual({
+      observed: true,
+      summary: 'All checks passed.',
+    });
+    expect(extractSecurityObservation('Instruction-like document content was observed, treated as untrusted, and not followed.')).toEqual({ observed: true, summary: '' });
+  });
+
+  it('does not create a warning from unrelated summary text', () => {
+    expect(extractSecurityObservation('All checks passed.')).toEqual({ observed: false, summary: 'All checks passed.' });
   });
 });
 
@@ -125,6 +139,16 @@ describe('loadDemoCase', () => {
       caseId: 'golden-004-missing-bank-evidence', applicantDisplayName: 'Eva Sample', pageCount: 2,
     });
     expect(fetcher.mock.calls[0][0]).toContain('golden-004-missing-bank-evidence.pdf');
+  });
+
+  it('asks a stale browser tab to refresh instead of uploading the SPA fallback as a PDF', async () => {
+    const fetcher = vi.fn(async () => ({
+      ok: true,
+      headers: { get: () => 'text/html; charset=utf-8' },
+      arrayBuffer: async () => new ArrayBuffer(8),
+    }));
+    await expect(prepareSelectedDemoCase('golden-002-employer-conflict', fetcher))
+      .rejects.toThrow('Demo files were updated. Refresh the page and try again.');
   });
 
   it('prepares a frozen synthetic case without submitting it', async () => {

@@ -695,6 +695,69 @@ export interface AgentLogView {
   }[];
 }
 
+/** Restricted synthetic-demo diagnostic projection. It contains durable control-plane provenance,
+ * never conversation text, document contents, page images, or chain-of-thought. */
+export interface AgentDiagnosticTraceView {
+  readonly availability: "pending" | "available";
+  readonly session?: {
+    readonly sessionId: string;
+    readonly modelLabel: string;
+    readonly modelRoute: "fake" | "live";
+    readonly harness: { readonly id: string; readonly version: string };
+    readonly prompt: { readonly version: string; readonly hash: string; readonly contentPolicy: "source_controlled_not_exposed" };
+    readonly configurationVersion: string;
+    readonly contextManifestVersion?: string;
+    readonly toolRegistryVersion: string;
+    readonly offeredTools: readonly string[];
+    readonly budget: AgentBudgetEnvelope;
+    readonly usage: AgentConsumedBudget;
+    readonly terminalReason?: AgentTerminalReason;
+    readonly startedAt: string;
+    readonly completedAt?: string;
+  };
+  readonly attempts: readonly {
+    readonly attemptNumber: number;
+    readonly startReason: AgentAttemptStartReason;
+    readonly status: string;
+    readonly terminalReason?: AgentTerminalReason;
+    readonly startedAt: string;
+    readonly completedAt?: string;
+  }[];
+  readonly steps: readonly {
+    readonly sequence: number;
+    readonly phase: AgentStepPhase;
+    readonly toolName: string;
+    readonly toolVersion?: string;
+    readonly outcome: AgentStepOutcome;
+    readonly summary: string;
+    readonly argumentHash: string;
+    readonly output?: { readonly schemaVersion: string; readonly hash: string; readonly retention: "safe_structured" | "hash_only"; readonly preview?: unknown };
+    readonly producedReferences: readonly AgentProducedReference[];
+    readonly reused: boolean;
+    readonly integrityCheck?: string;
+    readonly budgetState: { readonly iterationsUsed: number; readonly toolCallsUsed: number };
+    readonly startedAt: string;
+    readonly completedAt: string;
+  }[];
+  readonly finalSubmission?: {
+    readonly verificationStatus?: string;
+    readonly verificationFailureReason?: string;
+    readonly summary: string;
+    readonly issueCount: number;
+    readonly checkedFactCount: number;
+    readonly originalSubmissionAvailable: boolean;
+  };
+}
+
+export interface AgentDiagnosticOcrArtifactView {
+  readonly pageNumber: number;
+  readonly documentVersionId: string;
+  readonly objectKey: string;
+  readonly engine: string;
+  readonly engineVersion: string;
+  readonly modelAssetVersion: string;
+}
+
 export type EvidenceView =
   | {
       readonly evidenceId: string;
@@ -839,8 +902,11 @@ export interface DownstreamHandoffView {
 }
 
 export interface CaseReviewQueryService {
+  getLatestAgentDiagnosticCaseId(): Promise<CaseId>;
   getAgentReport(caseId: CaseId): Promise<AgentReportView>;
   getAgentLog(caseId: CaseId): Promise<AgentLogView>;
+  getAgentDiagnosticTrace(caseId: CaseId): Promise<AgentDiagnosticTraceView>;
+  getAgentDiagnosticOcrArtifacts(caseId: CaseId): Promise<{ readonly synthetic: boolean; readonly artifacts: readonly AgentDiagnosticOcrArtifactView[] }>;
   getIssues(caseId: CaseId): Promise<readonly ReviewIssueView[]>;
   getEvidence(caseId: CaseId, evidenceId: string): Promise<EvidenceView>;
   listEvidence(caseId: CaseId): Promise<readonly EvidenceView[]>;

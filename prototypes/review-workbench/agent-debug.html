@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Agent diagnostics</title>
+  <link rel="stylesheet" href="agent-debug.css">
+</head>
+<body>
+  <header class="topbar">
+    <div><span>Developer tools</span><h1>Agent diagnostics</h1></div>
+    <form id="case-form">
+      <label for="case-id">Case UUID</label>
+      <input id="case-id" name="case_id" autocomplete="off" required>
+      <button>Load trace</button>
+    </form>
+  </header>
+  <main id="trace"><p class="empty">Enter a case UUID to inspect its durable Agent trace.</p></main>
+  <script type="module" src="agent-debug.js"></script>
+</body>
+</html>

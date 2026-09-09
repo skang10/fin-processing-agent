@@ -1,4 +1,4 @@
-import { createIssue, demoCaseOptions, editIssue, formatPendingAgentActivity, loadCaseBundle, loadCaseQueue, loadDemoAgentModels, prepareSelectedDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, startDemoCase, startPersistedAgentReview, stopAgentReview, submitFinalReview } from './api.js';
+import { createIssue, demoCaseOptions, editIssue, extractSecurityObservation, formatPendingAgentActivity, loadCaseBundle, loadCaseQueue, loadDemoAgentModels, prepareSelectedDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, startDemoCase, startPersistedAgentReview, stopAgentReview, submitFinalReview } from './api.js';
 import { presentIssue } from './issue-presentation.js';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -1634,9 +1634,9 @@ function reportFailureMessage(reason) {
 }
 
 function renderApiReport(report) {
-  const securityObservationText = 'Instruction-like document content was observed, treated as untrusted, and not followed.';
-  const hasSecurityObservation = report.availability !== 'unavailable' && Boolean(report.summary?.includes(securityObservationText));
-  const summary = hasSecurityObservation ? report.summary.replace(securityObservationText, '').trim() : report.summary;
+  const securityObservation = extractSecurityObservation(report.summary);
+  const hasSecurityObservation = report.availability !== 'unavailable' && securityObservation.observed;
+  const summary = hasSecurityObservation ? securityObservation.summary : report.summary;
   document.querySelector('.report-copy').textContent = report.availability === 'unavailable'
     ? 'Agent report unavailable. Reason: ' + reportFailureMessage(report.failure_reason) + ' System-generated review issues remain available for manual review.'
     : (summary || 'Agent report unavailable.');
