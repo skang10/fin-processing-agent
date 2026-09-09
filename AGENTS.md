@@ -1,196 +1,114 @@
 # Repository Agent Guide
 
-## Purpose
+## Purpose and authority
 
-This file provides repository-level operating guidance for AI coding agents and human contributors working on Financial Document AI Agent.
+This file provides current implementation context and repository operating rules for coding agents and contributors. It is not a product specification.
 
-It is not a normative product specification. Approved specifications and Architecture Decision Records (ADRs) define required system behavior. If this guide conflicts with an approved owning specification or ADR, the approved specification or ADR takes precedence.
+Follow the authority order in [`specs/INDEX.md`](specs/INDEX.md): accepted ADRs, approved owning specifications, the index, [`LIMITATIONS.md`](LIMITATIONS.md), [`BACKLOG.md`](BACKLOG.md), then this guide. The migration source specification is superseded historical material.
 
-## Project Boundary
+## Product boundary
 
-Financial Document AI Agent is a production-shaped machine learning prototype for synthetic German personal-loan documents. It is not a production banking system.
+Financial Document AI Agent is a production-shaped prototype for synthetic German personal-loan documents, not a production banking system.
 
-Agents must not add or imply capabilities to:
+Do not add or imply authority to approve or reject an application, determine creditworthiness, open an account, disburse funds, contact a customer, or make a final AML/KYC decision. Do not use real personal, banking, identity, or financial data in the demo deployment.
 
-1. Approve or reject a loan application.
-2. Determine creditworthiness.
-3. Open an account or disburse funds.
-4. Contact a customer.
-5. Make a final Anti-Money Laundering (AML) or Know Your Customer (KYC) decision.
-6. Process real personal, banking, identity, or financial data in the demo deployment.
+Read [`LIMITATIONS.md`](LIMITATIONS.md) before changing product behavior, security or deployment claims, datasets, evaluations, or demonstrations.
 
-Read [`LIMITATIONS.md`](LIMITATIONS.md) before changing product behavior, security claims, deployment guidance, datasets, or demonstrations.
+## Current implementation context
 
-## Required Reading Order
+- The pnpm monorepo has separate API, Worker, and Review Web applications plus shared contract, core, persistence, storage, document-processing, validation, offline-fixture, and bounded-Agent packages.
+- PostgreSQL, Drizzle, a transactional outbox, pg-boss, and S3-compatible object storage own durable workflow and artifact state.
+- Every processable case enters one authoritative bounded Pi `case_review` session. Registered TypeBox-validated tools are its only route to case data and deterministic processing.
+- Document values enter reconciliation as Agent-submitted, evidence-linked candidates. Deterministic code owns normalization, reconciliation, claims, entity matching, the five-rule registry, recommended disposition, report verification, and workflow state.
+- Agent sessions, attempts, steps, invocation results, reuse lineage, and cumulative budgets are persisted incrementally and support compatible re-entry after Worker loss.
+- Page rendering, OCR, classification, and grouping still occur eagerly before the Agent session. Do not claim fully demand-driven execution.
+- Native-text, OCR, and VLM candidates may retain same-pass page-region geometry. Missing or full-page locations remain page-level and must not be presented with invented boxes.
+- The default demo and CI use deterministic fake/fixture model boundaries. The opt-in pinned PDF Inspector/PP-OCRv6 Small path has bounded Linux ARM64 synthetic acceptance; broader measurement, Linux x64 native execution, and hardened OS isolation remain pending.
+- The Review Workbench supports active, changes-requested, and completed queues; evidence navigation; Agent and human issues; requested-change drafts; final review; a read-only downstream projection; and bounded Agent logs.
+- Agent-optional demo preparation may seal an `agent_not_run` human-review baseline. A later Agent run is allowed only before human review activity begins.
+- Seven manually confirmed synthetic cases are frozen as dataset release `v0.1.4`; earlier releases remain immutable. A seven-case evaluation capture remains pending.
+- ADR-003 selects `openai/gpt-5.6-terra` as the opt-in live default and `openai/gpt-5.6-sol` as fallback from bounded synthetic evidence. Paid live runs require explicit authorization and enforced cost budgets.
 
-Before specification work, read:
+Treat this section as a navigation summary. Inspect code and the owning specifications before relying on volatile versions, tool counts, or workflow details. Historical measurements and run identifiers belong in [`EVALUATION_RESULTS.md`](EVALUATION_RESULTS.md); pending work belongs in [`BACKLOG.md`](BACKLOG.md).
 
-1. [`CODEX_HANDOFF.md`](CODEX_HANDOFF.md)
-2. [`LIMITATIONS.md`](LIMITATIONS.md)
-3. [`specs/INDEX.md`](specs/INDEX.md), when present
-4. The owning specification for the requested concern
-5. Directly dependent specifications and accepted ADRs
-6. [`BACKLOG.md`](BACKLOG.md) for accepted work awaiting specification or evidence
-7. The [migration source specification](Intelligent_Document_Processing_Agent_Specification.md) only when an approved owner does not yet cover the concern
+## Required reading
 
-Before implementation work, also read the approved product, architecture, data-model, relevant component, API, security, evaluation, and operations specifications. Do not implement a Draft requirement as an approved baseline without explicitly recording the provisional dependency.
+Before specification work:
 
-## Authority
+1. [`LIMITATIONS.md`](LIMITATIONS.md)
+2. [`specs/INDEX.md`](specs/INDEX.md)
+3. The owning specification
+4. Direct dependencies and accepted ADRs
+5. [`BACKLOG.md`](BACKLOG.md)
 
-Use the authority order defined by [`specs/INDEX.md`](specs/INDEX.md). In summary:
+Before implementation, also read the approved product, architecture, data-model, relevant component, API, security, evaluation, and operations owners. Do not implement a Draft requirement as an approved baseline without recording the provisional dependency.
 
-1. An accepted ADR governs its declared technical decision.
-2. An approved owning specification governs its subject.
-3. `specs/INDEX.md` governs ownership, identifiers, terminology, and lifecycle.
-4. `LIMITATIONS.md` governs production-readiness and fitness claims.
-5. `BACKLOG.md` tracks work; it is not a system specification.
-6. `CODEX_HANDOFF.md` governs specification-writing workflow.
-7. This file governs repository operation only.
-8. The migration source is temporary source material.
+## Working rules
 
-## Current Development State
+1. Work only within the requested scope and preserve unrelated changes.
+2. Identify conflicts, assumptions, missing decisions, and affected owners before normative changes.
+3. Use stable requirement identifiers and keep each normative requirement in one owning specification.
+4. Keep examples and explanatory notes non-normative.
+5. Update links, terminology, versions, last-updated dates, and document history when an approved specification changes.
+6. Do not invent missing business, policy, model, security, or compliance decisions.
+7. Record evidence-dependent work in [`BACKLOG.md`](BACKLOG.md) until measurements exist.
+8. Stop for review after one specification unless the user explicitly requests a batch.
+9. Add commands, configuration, artifacts, and deployment instructions only when their implementation exists.
+10. Inspect `package.json`, scripts, and code before documenting volatile behavior.
 
-Cases now expose immutable reviewer-facing `FD-YYYY-NNNN` references in the Review Queue and case header while retaining UUIDs for routes and relationships. The document workspace lists immutable source uploads; derived page renders remain internal representations rather than uploaded documents.
+## Architecture guardrails
 
-The bounded Pi harness can visually inspect an authorized uploaded-document page or optional real pixel crop through `render_page_region`: image bytes are transient multimodal tool content, while durable Agent state retains only safe metadata. A precise native-text, OCR, or VLM candidate region is now persisted as page-region evidence with source geometry and exposed to the Review Workbench as an original-document highlight; a missing or full-page region remains explicitly page-level. The opt-in native binding builds a source-pinned PDF Inspector compatibility patch that exposes native items already present in the initial parse and polygons already produced by the same OAR pass; evidence bounding boxes trigger neither a second PDF parse nor a second recognition pass. The Worker still generates full-page renders and selective OCR eagerly before the session, so demand-driven sandbox execution remains pending and must not be claimed as implemented.
+Preserve accepted boundaries unless an approved change supersedes them:
 
-Seven manually confirmed synthetic golden cases are frozen in immutable release `v0.1.4`; the seventh exposes inert instruction-like content through authorized native page text alongside a genuine deterministic income-consistency issue, while `v0.1.1` through `v0.1.3` remain unchanged.
-
-The project is in Stage Two implementation. The pnpm monorepo contains separate API, Worker, and Review Web entry points plus shared contract, core, offline-fixture, persistence, storage, document-processing, deterministic-validation, and bounded-Agent packages. PostgreSQL case intake, immutable application and input revisions, multipart PDF/JPEG/PNG upload, immutable artifact and document-version metadata, unreferenced-upload compensation, a transactional outbox, pg-boss relay, explicit run-state history, deterministic case assembly, the five-rule compiled registry, sealed result revisions, evidence-linked claims, extraction-candidate and reconciliation-lineage persistence, findings, recommended dispositions, evidence-backed Checked Facts, scoped evidence and findings queries, masked application-data projections, and current-run document and page-metadata queries are implemented. Every processable case enters one bounded Pi `case_review` SDK harness (`packages/agent-pi`, pinned `@earendil-works/pi-coding-agent@0.85.1`) after minimum preflight, and the Agent leads document extraction. Its fourteen registered TypeBox-validated tools expose the bounded case manifest, case-scoped page inspection, committed native text, selective OCR, page rendering, classification and boundary reads, bounded VLM extraction, candidate submission, deterministic reconciliation and validation requests, current-result retrieval, and report submission behind authorization, budget, idempotency, evidence, and no-progress controls. The system inspects, renders, and selectively OCRs the documents before the session, but it has no deterministic field parser, so every document value reaches the deterministic pipeline as an Agent candidate that cites a value an authorized tool returned for the same page. A versioned declared field-requirement set derives the explicit extraction gaps from the committed document inventory rather than from golden truth, and deterministic code still owns normalization, reconciliation, claims, entity matching, the rule set, the disposition, report verification, and workflow state. The former separately scheduled recovery and report harnesses have been removed. Explicit extraction gaps, append-only resolutions, a versioned case-review eligibility policy with persisted decisions, one authoritative Agent session per run with linked recovery attempts, incrementally committed steps, immutable tool invocation results with reuse lineage, cumulative budgets that survive recovery, durable re-entry that reuses committed work without repeating a paid or side-effecting operation, deterministic scripted fake models, runtime document-tool ports backed by committed artifacts, an explicit fixture adapter for synthetic pages that carry no native text, an opt-in pinned offline PDF Inspector PP-OCRv6 Small runtime for PDF/JPEG/PNG inputs, and an opt-in provider-neutral live VLM page extractor are implemented. Default demo and CI remain fixture-backed. ADR-003 selects `openai/gpt-5.6-terra` as the opt-in live default and `openai/gpt-5.6-sol` as fallback from a one-case frozen synthetic comparison. One synthetic scanned PDF case and one derived mixed JPEG/PNG case have completed real-OCR/fake-Agent acceptance with correct income-conflict semantics; the PDF case also proved durable restart/re-entry. A six-case frozen synthetic diagnostic now gives every accepted native-text and OCR document claim precise same-pass page-region evidence on Linux ARM64. Hardened operating-system resource isolation, broader OCR and live-VLM measurement, provider-diverse fallback evidence, and completed V1 quality evidence remain pending, so this is not the complete V1 demonstration baseline.
-
-Declared requirements now expose stable semantic roles and bounded extraction guidance, including the distinction between a salary-payment counterparty and the account-holding bank. Report submission and the deterministic Report Verifier share the same closed candidate schema. PDF Inspector `needsOcr` is the interim deterministic routing signal; a routed page must be visually inspected by the Agent before OCR or VLM, while a project-owned quality router remains deferred until evidence justifies it. One clear native-text case and one scanned synthetic case have completed the live Agent route with verified reports; the scanned case has also completed separate end-to-end live-VLM and real-OCR acceptance routes. These are bounded orchestration and synthetic recognition evidence only; corpus-level quality and real-world fitness remain unproven.
-
-The synthetic workbench supports an explicit exception to the ordinary processable-case path: `Generate demo case` requests a durable Agent-optional preparation run that inspects and renders the documents, seals an `agent_not_run` human-review baseline, and permits human review immediately. A later Agent review creates a new run over the same input and is allowed only before human review activity.
-
-Add commands, configuration, generated artifacts, and deployment instructions only when their implementation exists and this guide is updated in the same change.
-
-## Working Rules
-
-1. Work only on the file or implementation scope requested by the user.
-2. Preserve unrelated user changes.
-3. Identify conflicts, assumptions, missing decisions, and affected owners before making a normative change.
-4. Use stable requirement identifiers from the owning specification.
-5. Do not duplicate normative requirements across specifications.
-6. Keep examples and explanatory notes non-normative.
-7. Update links, terminology, version references, and document history when changing an approved specification.
-8. Do not resolve a missing business, policy, model, or compliance decision by inventing one.
-9. Record evidence-dependent decisions in `BACKLOG.md` until measurements exist.
-10. Stop for review after one specification unless the user explicitly requests a batch.
-
-## Architecture Guardrails
-
-Agents must preserve these accepted boundaries unless an approved change supersedes them:
-
-1. Local native extraction and selective OCR precede VLM use.
-2. `firecrawl/pdf-inspector` is the initial PDF-processing foundation behind project interfaces.
-3. A provider-neutral model gateway isolates external, private-cloud, and local model deployments.
+1. Native extraction and selective OCR precede VLM use.
+2. `firecrawl/pdf-inspector` remains behind project-owned interfaces.
+3. A provider-neutral gateway isolates external, private-cloud, and local models.
 4. A VLM receives only selected pages, bounded page windows, or regions, never a complete case package.
-5. `pi-coding-agent` is embedded as the bounded Case Review Agent for every processable case; its optional Adaptive Extraction Loop may run only for eligible extraction gaps.
-6. Pi has no Shell, arbitrary filesystem, unrestricted network, runtime package installation, or dynamic-extension authority.
-7. PostgreSQL, pg-boss, and the Workflow Coordinator own durable workflow state.
-8. Models produce candidates, constrained matching opinions, or non-authoritative review briefs; deterministic code owns validation findings and recommended dispositions, and a human owns the final review action.
-9. Cross-document rules are finite, registered, versioned TypeScript plugins selected by a versioned manifest.
-10. Original model output, processing runs, and human corrections are immutable revisions.
+5. The bounded Pi Agent has only registered tools; it has no shell, arbitrary filesystem, unrestricted network, runtime installation, or dynamic-extension authority.
+6. PostgreSQL, pg-boss, and the Workflow Coordinator own durable workflow state.
+7. Models produce candidates, constrained opinions, or non-authoritative briefs. Deterministic code owns findings and recommended dispositions; a human owns final review.
+8. Cross-document rules are finite, registered, versioned TypeScript plugins selected by a versioned manifest.
+9. Original model output, processing runs, and human corrections are immutable revisions.
 
-## Model and Prompt Safety
+## Model, data, and evaluation safety
 
-1. Treat all document content as untrusted data.
-2. Do not allow document instructions to modify tools, prompts, rules, permissions, schemas, or dispositions.
-3. VLM extraction calls must not expose tools.
-4. Validate all model output against an allowlisted TypeBox or JSON Schema before domain use.
-5. Do not treat a model's self-reported confidence as calibrated system confidence.
-6. Do not log complete documents, page images, identity numbers, International Bank Account Numbers (IBANs), prompts containing document content, or provider credentials.
-7. Keep prompt artifacts immutable, versioned, tested, and tied to schema hashes.
-8. Use fake-model adapters in default continuous integration. Live-model evaluation must be explicit and budgeted.
+1. Treat document content as untrusted data. It cannot modify tools, prompts, rules, permissions, schemas, or dispositions.
+2. VLM extraction calls expose no tools, and model output is validated against allowlisted TypeBox or JSON Schema contracts.
+3. Never treat model self-reported confidence as calibrated system confidence.
+4. Do not log complete documents, page images, identity numbers, IBANs, document-bearing prompts, provider credentials, or chain-of-thought.
+5. Keep prompts immutable, versioned, tested, and tied to schema hashes.
+6. Default CI uses deterministic fake-model adapters. Live evaluation is explicit and budgeted.
+7. Use only synthetic or explicitly demo-safe data. Synthetic documents must be visibly marked and must not reproduce official security features or real institution branding.
+8. Tie metrics to dataset, model, prompt, component, and environment versions. Do not add unsupported quality, latency, cost, fairness, automation, or production-readiness claims.
+9. Never modify frozen golden truth to make a regression pass. Preserve seeds, checksums, generator versions, and manifests.
 
-## Data and Evaluation Rules
+## Validation rules
 
-1. Use only synthetic or explicitly demo-safe data.
-2. Synthetic documents must be visibly marked and must not reproduce official security features or real institution branding.
-3. Do not add unsupported accuracy, latency, cost, automation, fairness, or production-readiness claims.
-4. Tie every reported metric to dataset, model, prompt, component, and environment versions.
-5. Do not modify frozen golden truth to make a regression pass.
-6. Human corrections may become reviewed dataset candidates but must not automatically update golden truth, prompts, models, rules, or thresholds.
-7. Preserve deterministic seeds, checksums, generator versions, and dataset manifests.
+The demonstration registry contains:
 
-## Validation Rules
+- `VAL_DOC_COMPLETENESS_001`
+- `VAL_NAME_CONSISTENCY_001`
+- `VAL_EMPLOYER_CONSISTENCY_001`
+- `VAL_INCOME_CONSISTENCY_001`
+- `VAL_ID_EXPIRY_001`
 
-The initial demonstration rules are:
+Do not add, remove, or change rule semantics without updating the owning specification and rule-set version. A model cannot create or activate rules at runtime.
 
-1. `VAL_DOC_COMPLETENESS_001`
-2. `VAL_NAME_CONSISTENCY_001`
-3. `VAL_EMPLOYER_CONSISTENCY_001`
-4. `VAL_INCOME_CONSISTENCY_001`
-5. `VAL_ID_EXPIRY_001`
+## Technology constraints
 
-Do not add, remove, or change the semantics of a demonstration rule without updating its owning specification and rule-set version. A model must not create or activate a rule at runtime.
-
-## Technology Baseline
-
-The accepted baseline is:
-
-1. TypeScript on Node.js 22.19 or later.
-2. pnpm workspaces and TypeScript project references.
-3. Fastify, TypeBox, and JSON Schema.
-4. PostgreSQL, Drizzle ORM, Drizzle Kit, pg-boss, and a transactional outbox.
-5. S3-compatible object storage with MinIO for local development.
-6. React, Vite, TanStack Query, React Router, PDF.js, Radix UI Primitives, CSS Modules, Lucide React, Motion, and the native system font stack.
-7. Pino and basic OpenTelemetry tracing for the first vertical slice; Prometheus-compatible metrics and Jaeger integration may follow later in V1.
-8. Vitest, Testcontainers, Playwright, synthetic golden cases, and fake-model adapters.
-9. Docker Compose for the delivered demonstration environment.
+The accepted baseline is Node.js 22.19+, TypeScript, pnpm workspaces/project references, Fastify, TypeBox, PostgreSQL, Drizzle, pg-boss, S3-compatible storage with MinIO locally, React/Vite, Vitest, Testcontainers, Playwright, and Docker Compose.
 
 Do not introduce Bun, Nx, Turborepo, Temporal, Kafka, Redis, Kubernetes, Terraform, Elasticsearch, a vector database, or a general-purpose rule DSL without an approved architectural change.
 
-## File and Change Hygiene
+## File and verification hygiene
 
-1. Prefer small, reviewable changes.
-2. Use repository formatters and generators after they exist; do not hand-edit generated artifacts.
-3. Do not commit credentials, local model caches, uploaded documents, rendered pages, database volumes, or transient evaluation output.
+1. Prefer small, reviewable changes and repository formatters or generators where they exist.
+2. Do not hand-edit generated artifacts.
+3. Do not commit credentials, local model caches, uploads, rendered pages, database volumes, or transient evaluation output.
 4. Pin critical native runtimes, model assets, and supply-chain-sensitive dependencies.
-5. When deleting generated or stored data, resolve exact targets first and prefer repository-provided cleanup commands.
-6. Report files changed, verification performed, assumptions, and unresolved issues.
+5. Resolve exact targets before deleting stored/generated data and prefer repository cleanup commands.
+6. Report files changed, checks run, assumptions, and unresolved issues.
 
-## Commands
+The authoritative command inventory is `package.json`; user-facing usage is summarized in [`README.md`](README.md). Do not duplicate that volatile list here. Formatting, linting, and a general browser-test command are not implemented.
 
-The currently authoritative commands are:
-
-1. `pnpm install` — install the frozen workspace dependencies.
-2. `pnpm typecheck` — run TypeScript project-reference checks.
-3. `pnpm test` — run the implemented unit and API contract tests.
-4. `pnpm check` — run type checking followed by tests.
-5. `pnpm test:integration` — run Docker-backed PostgreSQL integration tests.
-6. `pnpm dev:api` — run the API skeleton locally.
-7. `pnpm dev:worker` — run the Worker skeleton locally.
-8. `pnpm dev:web` — run the approved Review Workbench prototype through Vite.
-9. `pnpm build` — compile the TypeScript project references.
-10. `pnpm db:generate` — generate a version-controlled Drizzle migration from the schema; requires `DATABASE_URL` configuration for validated command startup.
-11. `pnpm db:migrate` — apply version-controlled Drizzle migrations; requires `DATABASE_URL`.
-12. `pnpm demo:up` — build and start the health-gated Docker Compose demo.
-13. `pnpm demo:load` — submit and verify the bundled synthetic case, then print its review URL.
-14. `pnpm demo:down` — stop demo services while preserving named volumes.
-15. `pnpm demo:reset` — permanently remove demo services, named volumes, and generated local credentials.
-16. `pnpm demo:acceptance` — build, start, migrate, health-check, process the synthetic case, and remove the isolated test environment.
-
-17. `pnpm dataset:documents` — generate the structured native, mixed, and scanned synthetic PDFs with the script-pinned ReportLab and Pillow environment.
-18. `pnpm dataset:generate` — regenerate documents and deterministically materialize golden candidates from the versioned blueprint.
-19. `pnpm dataset:validate` — validate candidate metadata, truth completeness, synthetic markers, references, and checksums.
-20. `pnpm dataset:inspect` — print a compact human-review inventory without freezing truth.
-21. `pnpm dataset:external` — inspect opt-in external component-diagnostic sources and their adoption gates without downloading data.
-22. `pnpm dataset:confirm -- CASE_ID REVIEWER` — record explicit human confirmation without changing candidate truth.
-23. `pnpm dataset:build -- VERSION` — build an immutable manifest only after every candidate records human confirmation.
-24. `pnpm dataset:load -- CASE_ID` — submit one synthetic golden candidate to a running demo and print its runtime result and Review Workbench URL.
-25. `pnpm evaluate:offline -- RELEASE ACTUAL_RUN_JSON` — score an explicit actual-run manifest against a frozen, checksum-verified release and write an immutable report; add explicit `--candidates` before the dataset directory only for a pre-confirmation diagnostic against pending candidates.
-26. `pnpm evaluate:capture -- RELEASE CONFIGURATION_JSON OUTPUT_JSON` — run frozen cases through the local API and Worker and write a new evidence-normalized actual-run manifest; live-model configurations require an explicit non-empty `case_ids` release subset plus `cost_budget.maximum_total_usd` and `cost_budget.maximum_per_case_usd`, reserve the delivered USD 0.25 case ceiling before each case, and stop remaining cases if the total cannot reserve another case or persisted USD cost is unavailable; add explicit `--candidates` before the dataset directory only for a pre-confirmation diagnostic against pending candidates.
-27. `pnpm ocr:setup -- PLATFORM` — download and SHA-256-verify pinned PDFium, ONNX Runtime, and PP-OCRv6 Small assets, then build the source-pinned PDF Inspector geometry compatibility binding into ignored local directories for `linux-x64` or `linux-arm64`.
-28. `pnpm ocr:build-geometry -- PLATFORM` — build only the PDF Inspector geometry binding from its checksum-verified official source and committed patch; cross-platform Linux builds use the pinned Rust Docker image.
-29. `pnpm ocr:verify -- PLATFORM` — verify installed OCR runtime assets and the presence of the geometry binding without network access.
-30. `pnpm ocr:smoke` — run the real offline OCR component smoke check in a compatible environment with the four OCR runtime paths configured and require positioned income evidence.
-31. `pnpm ocr:image-smoke` — recognize bounded synthetic JPEG and PNG inputs through the pinned offline OCR runtime and print safe aggregate evidence.
-32. `pnpm ocr:image-acceptance [CASE_ID]` — submit one derived synthetic mixed-image case to a running real-OCR demo, or re-verify an existing runtime case without resubmission.
-33. `pnpm agent:trace [-- CASE_UUID]` — print the latest synthetic Agent trace, or the specified case trace, containing the versioned system prompt, durable Agent session and tool history, protected OCR request/results, references, budgets, usage, and final report metadata; unavailable raw fields from older runs are identified explicitly. Requires the guarded developer diagnostics endpoint.
-
-Worker Agent configuration: Pi is always the harness and leads document extraction. PostgreSQL owns Agent session identity, attempts, steps, tool invocation results, and consumed budgets, so a redelivered case-processing job resumes the same session instead of starting a new one. `AGENT_MODEL` is `fake` (default, deterministic offline script) or `<provider>/<model-id>` for a live route that also requires `AGENT_MODEL_API_KEY`; `PI_OFFLINE=1` keeps the Pi model runtime from touching the network and is set automatically for the fake route. Default demo, CI, and dataset paths never call a live model.
-
-Developer Agent diagnostics are separate from the reviewer-facing Agent Log. The unlinked `/agent-debug.html?case_id=CASE_UUID` page and `/api/internal/dev/cases/{case_id}/agent-trace` endpoint exist only when both `FINDOC_SYNTHETIC_DEMO=true` and `AGENT_DIAGNOSTICS=true`. The projection contains durable prompt/configuration identity, aggregate model usage, attempts, tool-call hashes, bounded allowlisted safe-result previews, references, and verified report metadata; it never contains raw model messages, chain-of-thought, document text, page images, credentials, or unrestricted tool payloads.
-
-Formatting, linting, browser testing, and live-evaluation commands are not implemented yet. Inspect the repository rather than guessing them.
+Worker model configuration and guarded developer diagnostics are documented in [`.env.example`](.env.example) and their owning specifications. Never print or commit local provider credentials.

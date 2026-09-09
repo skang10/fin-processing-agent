@@ -2,7 +2,7 @@
 
 Document ID: `IDX`
 
-Version: 3.16.0
+Version: 3.16.1
 
 Status: Approved
 
@@ -25,9 +25,8 @@ The following order applies when project documents conflict:
 3. This index governs document ownership, terminology, identifiers, and specification process.
 4. [`LIMITATIONS.md`](../LIMITATIONS.md) governs claims about current-release fitness, production readiness, and known gaps.
 5. [`BACKLOG.md`](../BACKLOG.md) tracks accepted work not yet specified or implemented and deferred production work; it is not a normative system specification.
-6. [`CODEX_HANDOFF.md`](../CODEX_HANDOFF.md) governs the specification-writing workflow.
-7. [`AGENTS.md`](../AGENTS.md) provides repository operating guidance; it is not a normative product specification.
-8. The [migration source specification](../Intelligent_Document_Processing_Agent_Specification.md) supplies source material only and is not authoritative after a requirement has moved to an approved owning specification.
+6. [`AGENTS.md`](../AGENTS.md) provides repository operating guidance; it is not a normative product specification.
+7. The [migration source specification](../Intelligent_Document_Processing_Agent_Specification.md) supplies source material only and is not authoritative after a requirement has moved to an approved owning specification.
 
 ### 2.2 Single-owner rule
 
@@ -367,6 +366,7 @@ These open items do not change the accepted product boundary. They must not be r
 
 | Version | Date | Status | Change |
 |---|---|---|---|
+| 3.16.1 | 2026-09-09 | Approved | Removed the obsolete implementation-handoff document from the authority order without changing normative product ownership. |
 | 3.16.0 | 2026-09-09 | Approved | Registered API Contracts 1.14.0 for current-run accepted claim values in reviewer evidence projections. |
 | 3.15.0 | 2026-09-08 | Approved | Registered append-only review-issue reopening across Data Model 3.4.0, API Contracts 1.13.0, and Review Workbench 3.10.0. |
 | 3.14.0 | 2026-09-08 | Approved | Registered durable Agent-optional demo intake, immediate human review, and guarded later Agent start. |

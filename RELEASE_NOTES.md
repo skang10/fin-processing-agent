@@ -10,7 +10,7 @@ Financial Document AI Agent is a production-shaped demonstration prototype for e
 - One bounded Pi Case Review Agent session per processable case, with scoped tools, persisted steps, cumulative budgets, and compatible restart/re-entry.
 - Agent-led extraction followed by deterministic normalization, reconciliation, five registered validation rules, disposition, and report verification.
 - Original-document evidence navigation with click-activated bounding boxes from same-pass native PDF text, local OCR, or bounded VLM extraction.
-- Six manually confirmed synthetic golden cases frozen as dataset release `v0.1.2`.
+- Seven manually confirmed synthetic golden cases frozen as dataset release `v0.1.4`; earlier releases remain immutable.
 - Default offline fixture route, opt-in pinned Linux ARM64 PP-OCRv6 Small route, and explicitly budgeted live page-VLM route.
 
 ### Verified release checks
@@ -28,4 +28,4 @@ Financial Document AI Agent is a production-shaped demonstration prototype for e
 - Linux x64 native-runtime acceptance, hardened operating-system isolation, broader document variation, and representative OCR/VLM evaluation remain future work.
 - Fixture OCR/VLM defaults are deterministic orchestration fixtures and provide no model-accuracy evidence.
 
-See [`LIMITATIONS.md`](LIMITATIONS.md) for the complete boundary and [`CODEX_HANDOFF.md`](CODEX_HANDOFF.md) for exact acceptance evidence and versioned run identifiers.
+See [`LIMITATIONS.md`](LIMITATIONS.md) for the complete boundary and [`EVALUATION_RESULTS.md`](EVALUATION_RESULTS.md) for measured acceptance evidence.
