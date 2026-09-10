@@ -72,7 +72,15 @@
 
             <div class="table-wrap">
               <table class="case-table">
-                <thead><tr><th>Case</th><th>Applicant</th><th>Review method</th><th>Issues</th><th>Status</th><th>Waiting</th><th><span class="sr-only">Open</span></th></tr></thead>
+                <thead><tr>
+                  <th aria-sort="none"><button class="sort-button" data-sort="case">Case <span aria-hidden="true">↕</span></button></th>
+                  <th aria-sort="none"><button class="sort-button" data-sort="applicant">Applicant <span aria-hidden="true">↕</span></button></th>
+                  <th aria-sort="none"><button class="sort-button" data-sort="method">Review method <span aria-hidden="true">↕</span></button></th>
+                  <th aria-sort="none"><button class="sort-button" data-sort="issues">Issues <span aria-hidden="true">↕</span></button></th>
+                  <th aria-sort="none"><button class="sort-button" data-sort="status">Status <span aria-hidden="true">↕</span></button></th>
+                  <th aria-sort="none"><button class="sort-button" data-sort="waiting">Waiting <span aria-hidden="true">↕</span></button></th>
+                  <th><span class="sr-only">Open</span></th>
+                </tr></thead>
                 <tbody id="case-list"></tbody>
               </table>
               <div class="empty-state" id="empty-state" hidden>No cases match this view.</div>

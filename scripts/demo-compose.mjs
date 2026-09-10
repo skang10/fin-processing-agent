@@ -3,8 +3,8 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 const action = process.argv[2];
-const allowed = new Set(["up", "load", "down", "reset", "acceptance"]);
-if (!allowed.has(action)) throw new Error("Expected up, load, down, reset, or acceptance");
+const allowed = new Set(["up", "start", "load", "down", "reset", "acceptance"]);
+if (!allowed.has(action)) throw new Error("Expected up, start, load, down, reset, or acceptance");
 const environmentPath = ".data/demo.env";
 const localEnvironmentPath = ".env";
 const agentEnvironmentKeys = new Set([
@@ -32,6 +32,10 @@ if (action !== "reset" && !exists(environmentPath)) {
 }
 
 if (action === "up") run(["up", "--build", "--detach", "--wait"]);
+if (action === "start") {
+  assertLiveDemoConfiguration(readAllowlistedEnvironment(localEnvironmentPath));
+  run(["up", "--detach", "--wait"]);
+}
 if (action === "load") run(["--profile", "tools", "run", "--rm", "demo-loader"]);
 if (action === "down") run(["down", "--remove-orphans"]);
 if (action === "reset") {
@@ -80,6 +84,21 @@ function readAllowlistedEnvironment(path) {
     selected[match[1]] = match[2];
   }
   return selected;
+}
+
+function assertLiveDemoConfiguration(environment) {
+  const missing = [];
+  if (environment.OCR_MODE !== "pdf_inspector") missing.push("OCR_MODE=pdf_inspector");
+  for (const key of ["OCR_MODEL_DIRECTORY", "PDFIUM_LIB_PATH", "ORT_DYLIB_PATH", "NAPI_RS_NATIVE_LIBRARY_PATH"]) {
+    if (!environment[key]) missing.push(`${key}=<container path>`);
+  }
+  if (environment.VLM_MODE !== "live") missing.push("VLM_MODE=live");
+  if (!environment.VLM_MODEL || environment.VLM_MODEL === "fake") missing.push("VLM_MODEL=<live model>");
+  if (environment.PI_OFFLINE !== "0") missing.push("PI_OFFLINE=0");
+  if (!environment.VLM_MODEL_API_KEY && !environment.OPENAI_API_KEY) missing.push("VLM_MODEL_API_KEY=<credential> or OPENAI_API_KEY=<credential>");
+  if (missing.length > 0) {
+    throw new Error(`demo:start requires the real-OCR/live-VLM .env configuration:\n- ${missing.join("\n- ")}`);
+  }
 }
 
 function exists(path) {

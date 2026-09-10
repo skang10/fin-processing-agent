@@ -73,7 +73,7 @@ pnpm demo:up
 pnpm demo:load
 ```
 
-`demo:load` prints the Review Workbench URL. Stop the environment while preserving its data with `pnpm demo:down`; permanently remove its containers, volumes, and generated local credentials with `pnpm demo:reset`.
+After the images have been built once, `pnpm demo:start` starts or restarts the existing environment without rebuilding. This interview-demo command requires `.env` to explicitly select `OCR_MODE=pdf_inspector`, `VLM_MODE=live`, a live `VLM_MODEL`, the mounted OCR runtime paths, `PI_OFFLINE=0`, and a model credential; it fails instead of silently falling back to fixtures. Live VLM remains adaptive and is called only when approved local extraction is insufficient. `demo:load` prints the Review Workbench URL. Stop the environment while preserving its data with `pnpm demo:down`; permanently remove its containers, volumes, and generated local credentials with `pnpm demo:reset`.
 
 Run the isolated offline acceptance path with:
 

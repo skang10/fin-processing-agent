@@ -16,6 +16,7 @@
     "db:generate": "pnpm --filter @findoc/persistence db:generate",
     "db:migrate": "pnpm --filter @findoc/persistence db:migrate",
     "demo:up": "node scripts/demo-compose.mjs up",
+    "demo:start": "node scripts/demo-compose.mjs start",
     "demo:load": "node scripts/demo-compose.mjs load",
     "demo:down": "node scripts/demo-compose.mjs down",
     "demo:reset": "node scripts/demo-compose.mjs reset",

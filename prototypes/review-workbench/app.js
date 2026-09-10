@@ -1,5 +1,6 @@
 import { createIssue, demoCaseOptions, editIssue, extractSecurityObservation, formatPendingAgentActivity, loadCaseBundle, loadCaseQueue, loadDemoAgentModels, prepareSelectedDemoCase, resolveIssue, restartAgentReview, saveRequestedChange, startDemoCase, startPersistedAgentReview, stopAgentReview, submitFinalReview } from './api.js';
 import { presentIssue } from './issue-presentation.js';
+import { defaultSortDirections, sortQueueCases } from './queue-sort.js';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -58,6 +59,7 @@ let zoom = 92;
 let sourceView = 'document';
 let sourceOverride = null;
 let activeFilter = 'all';
+let activeQueueSort = null;
 const queuePageSize = 10;
 let currentQueuePage = 1;
 const initialQueueView = new URLSearchParams(window.location.search).get('queue_view');
@@ -92,10 +94,12 @@ function escapeHtml(value) {
 
 function renderCases() {
   const query = searchInput.value.trim().toLowerCase();
-  const visible = cases.filter(function (item) {
+  const filtered = cases.filter(function (item) {
     return (activeFilter === 'all' || item.status === activeFilter) &&
       (item.name + ' ' + item.id + ' ' + item.methodTitle + ' ' + item.methodDetail).toLowerCase().includes(query);
   });
+  const visible = sortQueueCases(filtered, activeQueueSort);
+  updateSortHeaders();
   const pageCount = Math.max(1, Math.ceil(visible.length / queuePageSize));
   currentQueuePage = Math.min(currentQueuePage, pageCount);
   const pageStart = (currentQueuePage - 1) * queuePageSize;
@@ -124,6 +128,15 @@ function renderCases() {
         openQueueCase(row.dataset.routeId);
       }
     });
+  });
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('.sort-button').forEach(function (button) {
+    const selected = activeQueueSort?.key === button.dataset.sort;
+    const direction = selected ? activeQueueSort.direction : 'none';
+    button.parentElement.setAttribute('aria-sort', direction);
+    button.querySelector('span').textContent = selected ? (direction === 'ascending' ? '↑' : '↓') : '↕';
   });
 }
 
@@ -158,7 +171,7 @@ async function refreshQueue(view = activeQueueView, updateLocation = true) {
         : record.review_method === 'deterministic' ? 'Demo only'
         : [record.agent_model_label, record.vlm_model_label].filter(function (label) { return label; }).join(' · ') || 'Model unavailable';
       return { name: record.applicant_display_name, id: record.case_code, routeId: record.case_id, methodTitle, methodDetail,
-        status, statusLabel: labels[record.workflow_status], issues: record.issue_count, waiting: waitingLabel(record.waiting_since) };
+        status, statusLabel: labels[record.workflow_status], issues: record.issue_count, waiting: waitingLabel(record.waiting_since), waitingSince: record.waiting_since };
     });
     document.querySelector('.page-heading h1').textContent = view === 'changes_requested' ? 'Changes requested' : view === 'completed' ? 'Completed' : 'Review queue';
     document.querySelector('.queue-panel').setAttribute('aria-label', document.querySelector('.page-heading h1').textContent);
@@ -1277,6 +1290,17 @@ function updateSubmissionActions() {
 }
 
 searchInput.addEventListener('input', function () { currentQueuePage = 1; renderCases(); });
+document.querySelectorAll('.sort-button').forEach(function (button) {
+  button.addEventListener('click', function () {
+    const key = button.dataset.sort;
+    const direction = activeQueueSort?.key === key
+      ? (activeQueueSort.direction === 'ascending' ? 'descending' : 'ascending')
+      : defaultSortDirections[key];
+    activeQueueSort = { key, direction };
+    currentQueuePage = 1;
+    renderCases();
+  });
+});
 document.querySelectorAll('.filter').forEach(function (button) {
   button.addEventListener('click', function () {
     document.querySelectorAll('.filter').forEach(function (item) { item.classList.remove('active'); });
