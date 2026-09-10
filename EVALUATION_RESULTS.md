@@ -1,5 +1,42 @@
 # Evaluation Results
 
+## Full live Agent comparison with real OCR — 2026-09-10
+
+With explicit paid-run approval, `openai/gpt-5.6-terra` and `openai/gpt-5.6-sol` each processed all seven frozen synthetic `v0.1.4` cases once, for 14 fresh case runs. Source revision was `7454e7d4c1445663ee60ad62f953086cd38ef454`; the environment was Docker Compose on Linux ARM64. Frozen document checksums were verified, and golden truth was not modified.
+
+Both rounds used `case-review-prompt-3.6.1`, `case-review-tools-3.8.0`, `pi-coding-agent@0.85.1;pi-harness-2.2.0;agent-budget-2.0.0`, `case-normalization-1.1.0`, rule set `demo-de-personal-loan-v1@1.0.0`, and `offline-evaluator-1.0.0`. Real OCR used PDF Inspector 1.17.0 with `pp-ocrv6-small@oar-ocr-v0.7.0`; the pinned OCR runtime used PDFium 153.0.7988.0 and ONNX Runtime 1.27.0. Page rendering was versioned separately as `@hyzyla/pdfium-2.1.13`. Live VLM extraction was enabled with the same model as the Agent in each round (`page-field-extraction-1.2.0`, `extract_with_vlm@3.2.0`), but was not called.
+
+| Metric | Terra | Sol |
+|---|---:|---:|
+| Reports completed and verified | 7/7 | 7/7 |
+| Expected issues detected | 6/7 (85.7%) | 6/7 (85.7%) |
+| False positives | 0 | 0 |
+| Issue precision | 6/6 (100%) | 6/6 (100%) |
+| Evidence references matching expected sources | 34/34 | 34/34 |
+| Average Agent session duration | 20.6 seconds | 25.3 seconds |
+| Average estimated model cost per case | USD 0.047 | USD 0.089 |
+| Total estimated model cost | USD 0.329217 | USD 0.622084 |
+| Persisted real OCR pages | 4 | 4 |
+| VLM extraction calls | 0 | 0 |
+
+The evidence-reference metric assesses whether reported issues and checked facts cite the expected supporting sources, such as a document page or application field, according to the existing evaluator. **34/34 does not establish that every extracted value is correct or that every expected issue was detected.** It is not a field-extraction or character-level OCR accuracy score.
+
+Both models missed `VAL_NAME_CONSISTENCY_001` in `golden-004-missing-bank-evidence`; neither produced an additional issue. The shared miss has not been diagnosed in this run. Both produced a verified report for `golden-006-scanned-adaptive-unavailable`, although its frozen historical unavailable-path expectation remains `expected_report: unavailable`; this difference is preserved in the reports rather than changing truth.
+
+Persisted OCR metadata confirms one real OCR page in golden-005 and three in golden-006 per round. Safe Agent session diagnostics confirm zero VLM extraction calls across all 14 runs. These results therefore measure live Agent operation with native text and real OCR, **not VLM extraction quality**.
+
+Combined estimated model cost was USD 0.951301. Authorization allowed USD 0.50 per case, USD 3.50 per model, and USD 7 total; the existing stricter runtime Agent limit remained USD 0.25 per case. Average costs divide each model's total by seven and exclude infrastructure costs. Durations measure Agent sessions, not end-to-end upload and document preprocessing. Costs are persisted usage estimates, not independently reconciled bills; provider-reported token counts retain the earlier input-token accounting caveat.
+
+Terra had the same measured issue and reference scores with lower estimated cost and mean Agent duration in this run. One run per model over seven synthetic cases does not establish statistical superiority, repeatability, real-document accuracy, or production performance.
+
+### Capture identifiers and local evidence
+
+- Terra capture: `live-real-ocr-terra-v0.1.4-1788997439652`; evaluation: `7b1a354a87b0c61309afdf1c0e440c5733b36abab743459202e17ea085bdfbf4`.
+- Sol capture: `live-real-ocr-sol-v0.1.4-1788997706967`; evaluation: `5a8a06840d00e7193d539f6d538ab5b7ee446b4b21b1e477dd3fbba0d8df5b6e`.
+- Ignored local evidence is under `.data/live-comparison-20260910/`: per-model configuration, actual-run and evaluator reports, per-case runtime mappings, `diagnostics.json`, and `ocr-metadata.json`. Generated artifacts are not committed.
+
+The Worker was restored to Terra for both Agent and VLM after the comparison. Historical measurements below remain unchanged.
+
 ## JPEG/PNG real-OCR acceptance — 2026-09-07
 
 A no-network, read-only Linux ARM64 component smoke derived the visibly synthetic payslip page from frozen `golden-006-scanned-adaptive-unavailable`, encoded it independently as JPEG and PNG, and passed both through the sandboxed `image-intake-router` and the pinned PDF Inspector 1.17.0 / PP-OCRv6 Small `oar-ocr-v0.7.0` adapter. Both inputs produced one bounded render, one OCR result, and the expected synthetic name, employer, and `2980.00` markers. The source image is content-decoded with Sharp 0.35.4, checked against its detected media type and pixel ceiling, normalized, and wrapped as a one-page in-memory PDF only at the private OCR-adapter boundary.
